@@ -38,12 +38,16 @@ on your computer. Work top to bottom; tick items off as you go.
   | `TOKEN_ENCRYPTION_KEY` | a different random secret (keep a private backup: losing it means reconnecting ad accounts) |
   | `CRON_SECRET` | a different random secret |
   | `INTERNAL_SCHEDULER` | `1` (turns on the built-in hourly sync; no external scheduler needed) |
-  | `APP_URL` | the public URL from the next step, for example `https://reports.yourdomain.com` |
+  | `APP_URL` | `https://app.<yourdomain>` (see the Domain step below) |
 
   For each random secret, generate it in the browser's developer console with
   `btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))`
   and paste the result straight into the Railway variable field.
-- [ ] **Settings → Networking → Generate Domain** gives a `*.up.railway.app` address. For your own domain, use **Custom Domain** (for example `reports.podiatrymarketing.net`) and add the CNAME record Railway shows in SiteGround's **Domain → DNS Zone Editor**. Set `APP_URL` to whichever address you'll use, then redeploy.
+- [ ] **Domain.** The app gets its own domain, separate from any client's website.
+  - Buy it before step 4: Google, Meta and Microsoft all register redirect addresses on it, so changing it later means redoing those.
+  - Use the address `app.<yourdomain>` (for example `app.adreportshq.com`).
+  - In Railway: **Settings → Networking → Custom Domain**, enter `app.<yourdomain>`, then add the CNAME record Railway shows at the domain's registrar or DNS host. Railway issues the HTTPS certificate automatically.
+  - Set `APP_URL` to `https://app.<yourdomain>` and redeploy.
 - [ ] Open the site; the sign-in page should load.
 - [ ] Create your login. On your computer, in a terminal in the repo, with `DATABASE_URL` set to the Neon value, run:
   `APP_URL=<your app address> npm run setup:owner -- --email you@youragency.com --name "Your Name" --agency "Your Agency" --timezone America/New_York`
