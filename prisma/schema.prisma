@@ -509,12 +509,17 @@ model Report {
   clientId  String?  // null = agency-wide report
   client    Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
   name      String
+  // "TEMPLATE": the agency default (clientId null) or a client's override,
+  // read through parseTemplate in src/lib/report-template.ts.
+  kind      String   @default("SAVED")
   // Widget layout and settings
   config    Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   schedules ReportSchedule[]
+
+  @@index([agencyId, kind, clientId])
 }
 
 model ReportSchedule {

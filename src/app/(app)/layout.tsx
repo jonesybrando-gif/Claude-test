@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Bell, Building2, Gauge, Plug, Settings, LogOut } from "lucide-react";
+import { BarChart3, Bell, Building2, Gauge, LineChart, Plug, Settings, LogOut } from "lucide-react";
 import { requireUser } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { visibleClientsWhere } from "@/server/access";
@@ -15,7 +15,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
   const staff = user.role !== "CLIENT_USER";
   const nav = [
-    ...(staff ? [{ href: "/dashboard", label: "Pacing dashboard", Icon: Gauge }] : []),
+    ...(staff ? [{ href: "/performance", label: "Performance", Icon: LineChart }] : []),
+    ...(staff ? [{ href: "/dashboard", label: "Budget pacing", Icon: Gauge }] : []),
     ...(staff ? [{ href: "/alerts", label: "Alerts", Icon: Bell, count: unread }] : []),
     { href: staff ? "/clients" : `/clients/${user.clientId}`, label: staff ? "Clients" : "My reports", Icon: staff ? Building2 : BarChart3 },
     ...(staff ? [{ href: "/integrations", label: "Integrations", Icon: Plug }] : []),

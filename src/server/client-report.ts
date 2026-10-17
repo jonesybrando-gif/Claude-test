@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "./db";
 import { loadPacing } from "./pacing-service";
 import { getClientPerformance } from "./reporting";
+import { getClientTemplate } from "./report-templates";
 import { comparisonRange, resolveRange, type CompareMode, type RangePreset } from "@/lib/date-ranges";
 import { addDays, monthBounds, todayInTimeZone } from "@/lib/pacing/dates";
 
@@ -26,13 +27,15 @@ export async function loadClientReport(clientId: string, params: ReportParams, n
     include: { accounts: { include: { campaigns: true, syncRuns: { orderBy: { startedAt: "desc" }, take: 1 } }, orderBy: { platform: "asc" } } },
   });
   const today = todayInTimeZone(client.timezone, now);
-  const preset: RangePreset = PRESETS.includes(params.range as RangePreset) ? (params.range as RangePreset) : "mtd";
-  const compareMode: CompareMode = COMPARE.includes(params.compare as CompareMode) ? (params.compare as CompareMode) : "previous_month";
+  const { template, custom: hasCustomTemplate } = await getClientTemplate(client.agencyId, clientId);
+  // The template sets the default range and comparison; the URL can override both.
+  const preset: RangePreset = PRESETS.includes(params.range as RangePreset) ? (params.range as RangePreset) : template.defaultRange;
+  const compareMode: CompareMode = COMPARE.includes(params.compare as CompareMode) ? (params.compare as CompareMode) : template.compare;
   let range;
   try {
     range = resolveRange(preset, today, { from: params.from, to: params.to });
   } catch {
-    range = resolveRange("mtd", today);
+    range = resolveRange(template.defaultRange, today);
   }
   const cmpRange = comparisonRange(range, compareMode);
 
@@ -48,7 +51,7 @@ export async function loadClientReport(clientId: string, params: ReportParams, n
     getClientPerformance(clientId, range),
     cmpRange ? getClientPerformance(clientId, cmpRange) : Promise.resolve(null),
   ]);
-  return { client, today, preset, compareMode, range, cmpRange, pacing, history, perf, cmpPerf };
+  return { client, today, preset, compareMode, range, cmpRange, pacing, history, perf, cmpPerf, template, hasCustomTemplate };
 }
 
 export type ClientReport = Awaited<ReturnType<typeof loadClientReport>>;

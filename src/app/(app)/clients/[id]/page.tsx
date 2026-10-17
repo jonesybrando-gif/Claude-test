@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { AlertTriangle, Settings2 } from "lucide-react";
+import { AlertTriangle, EyeOff, FileSliders, Settings2 } from "lucide-react";
 import { requireClientView } from "@/server/access";
 import type { PacingRow } from "@/server/pacing-service";
 import { loadClientReport } from "@/server/client-report";
 import { PRESET_LABEL } from "@/lib/date-ranges";
-import { derive, pctChange, type MetricTotals } from "@/lib/metrics";
+import { derive, type MetricTotals } from "@/lib/metrics";
+import { dailyKpiValue, KPI_BY_KEY, kpiValues, type KpiKey } from "@/lib/kpis";
+import type { SectionKey } from "@/lib/report-template";
 import { formatMoney, formatNumber, formatPct } from "@/lib/money";
 import { formatDate, relativeTime } from "@/lib/time";
 import { PLATFORM_LABEL } from "@/lib/platforms";
@@ -12,7 +14,7 @@ import { formatCustomerId } from "@/server/integrations/google-ads/gaql";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { buttonVariants } from "@/components/ui/button";
-import { StatTile } from "@/components/stat-tile";
+import { KpiCard } from "@/components/kpi/kpi-card";
 import { DemoBadge, NoBudgetBadge, StaleBadge, StatusBadge } from "@/components/status-badge";
 import { PlatformLabel } from "@/components/platform-badge";
 import { PacingChart } from "@/components/charts/pacing-chart";
@@ -23,17 +25,11 @@ import { ExportButtons } from "@/components/export-buttons";
 
 export const dynamic = "force-dynamic";
 
-function Delta({ cur, prev, invert, neutral }: { cur: number; prev: number | undefined; invert?: boolean; neutral?: boolean }) {
-  if (prev === undefined) return null;
-  const c = pctChange(cur, prev);
-  if (c === null) return <span className="text-text-3">no prior data</span>;
-  if (Math.abs(c) < 0.05) return <span className="text-text-2">no change vs. comparison</span>;
-  const good = invert ? c < 0 : c > 0;
-  return (
-    <span className={neutral || Math.abs(c) < 0.5 ? "text-text-2" : good ? "text-good-ink" : "text-critical-ink"}>
-      {c > 0 ? "▲" : c < 0 ? "▼" : ""} {formatPct(Math.abs(c))} vs. comparison
-    </span>
-  );
+const TREND_EXTRAS: KpiKey[] = ["spend", "conversions", "leads", "costPerLead", "clicks", "impressions", "conversionRate"];
+
+/** Shown to staff on sections the client-facing report leaves out. */
+function HiddenFromClient() {
+  return <span className="inline-flex items-center gap-1 rounded-md bg-surface-2 px-2 py-0.5 text-[11px] font-normal text-text-3"><EyeOff className="h-3 w-3" aria-hidden /> Hidden from client report</span>;
 }
 
 export default async function ClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
@@ -42,7 +38,12 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const user = await requireClientView(id);
   const staff = user.role !== "CLIENT_USER";
 
-  const { client, preset, compareMode, range, cmpRange, pacing, history, perf, cmpPerf } = await loadClientReport(id, sp);
+  const { client, preset, compareMode, range, cmpRange, pacing, history, perf, cmpPerf, template } = await loadClientReport(id, sp);
+  // Client users see only the sections the report template includes; staff
+  // see everything, with a marker on what the client won't see.
+  const show = (k: SectionKey) => staff || template.sections[k];
+  const hiddenMark = (k: SectionKey) => (staff && !template.sections[k] ? <HiddenFromClient /> : null);
+  const trendMetrics = [...new Set([...template.trendKpis, ...TREND_EXTRAS])];
 
   const total = pacing.total;
   const allLines: PacingRow[] = [...pacing.rows, ...pacing.subRows];
@@ -52,9 +53,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const shownSeries = selectedKey ? pacing.seriesByKey[selectedKey] : total?.series;
   const c = client.currency;
   const t = perf.totals;
-  const d = derive(t);
-  const ct = cmpPerf?.totals;
-  const cd = ct ? derive(ct) : null;
+  const kvs = kpiValues(template.kpis, t, cmpPerf?.totals ?? null);
   const isDemo = client.accounts.some((a) => a.isDemo);
   const lineHref = (key: string | null) => {
     const q = new URLSearchParams(Object.entries(sp).filter(([k, v]) => k !== "line" && v) as [string, string][]);
@@ -81,28 +80,46 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           <RangeControls preset={preset} compare={compareMode} from={range.from} to={range.to} />
           <ExportButtons base={`/api/reports/clients/${id}`} query={sp} internalPdf={staff} />
           {staff && (
-            <Link href={`/clients/${id}/budgets`} className={buttonVariants({ variant: "outline" })}>
-              <Settings2 className="h-4 w-4" /> Budgets
-            </Link>
+            <>
+              <Link href={`/clients/${id}/report`} className={buttonVariants({ variant: "outline" })}>
+                <FileSliders className="h-4 w-4" /> Customize report
+              </Link>
+              <Link href={`/clients/${id}/budgets`} className={buttonVariants({ variant: "outline" })}>
+                <Settings2 className="h-4 w-4" /> Budgets
+              </Link>
+            </>
           )}
         </div>
       </div>
 
-      {/* Overview */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <StatTile label={`Ad spend · ${PRESET_LABEL[preset].toLowerCase()}`} value={formatMoney(t.costMinor, c, { whole: true })} sub={<>{t.hasEstimatedCost && <span className="text-warning-ink">Includes estimated LSA cost · </span>}<Delta cur={t.costMinor} prev={ct?.costMinor} neutral /></>} />
-        <StatTile label="Monthly budget" value={total ? formatMoney(total.budgetMinor, c, { whole: true }) : "Not set"} sub={total ? <StatusBadge status={total.status} /> : <NoBudgetBadge />} />
-        <StatTile label="Conversions (platform-reported)" value={formatNumber(t.conversions, 1)} sub={<Delta cur={t.conversions} prev={ct?.conversions} />} />
-        <StatTile label="Leads" value={formatNumber(t.leads)} sub={<Delta cur={t.leads} prev={ct?.leads} />} />
-        <StatTile label="Cost per lead" value={d.costPerLeadMinor === null ? "—" : formatMoney(d.costPerLeadMinor, c)} sub={d.costPerLeadMinor !== null && cd?.costPerLeadMinor != null ? <Delta cur={d.costPerLeadMinor} prev={cd.costPerLeadMinor} invert /> : "leads from Meta & LSA"} />
-        <StatTile label="ROAS" value={d.roas === null ? "—" : `${d.roas.toFixed(2)}×`} sub={d.roas === null ? "no conversion value reported" : cd?.roas != null ? <Delta cur={d.roas} prev={cd.roas} /> : "conversion value ÷ spend"} />
-      </div>
+      {show("summary") && template.summary.trim() && (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-center gap-2"><CardTitle>Summary</CardTitle>{hiddenMark("summary")}</div>
+          </CardHeader>
+          <CardContent><p className="max-w-[80ch] whitespace-pre-line text-sm text-text-2">{template.summary.trim()}</p></CardContent>
+        </Card>
+      )}
+
+      {/* KPI scorecards */}
+      {show("kpis") && (
+        <section aria-label="Key metrics" className="flex flex-col gap-2">
+          {hiddenMark("kpis")}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            {kvs.map((kv) => <KpiCard key={kv.key} kv={kv} currency={c} trend={perf.byDate.map((d) => dailyKpiValue(d, kv.key))} note={kv.value === null && KPI_BY_KEY[kv.key].kind !== "count" ? "not reported" : undefined} />)}
+          </div>
+          {t.hasEstimatedCost && <p className="text-xs text-warning-ink">Spend includes estimated Local Services cost.</p>}
+        </section>
+      )}
 
       {/* Budget pacing */}
-      <Card>
+      {show("pacing") && <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle>Budget pacing · {formatDate(pacing.period.start, { month: "long", year: "numeric" })}</CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle>Budget pacing · {formatDate(pacing.period.start, { month: "long", year: "numeric" })}</CardTitle>
+              {hiddenMark("pacing")}
+            </div>
             {shown && <StatusBadge status={shown.status} />}
           </div>
           <CardDescription>
@@ -153,9 +170,9 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             </p>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
-      {(() => {
+      {show("pacing") && (() => {
         const caveats = [...new Set(allLines.flatMap((r) => r.warnings))];
         return caveats.length > 0 ? (
           <div className="rounded-lg border border-border bg-warning-bg px-4 py-3 text-sm text-warning-ink" role="note">
@@ -166,7 +183,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       })()}
 
       {/* Pacing lines */}
-      {allLines.length > 0 && (
+      {show("pacing") && allLines.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Budget lines</CardTitle>
@@ -204,9 +221,9 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       )}
 
       {/* Platform breakdown */}
-      <Card>
+      {show("platforms") && <Card>
         <CardHeader>
-          <CardTitle>Platform breakdown</CardTitle>
+          <div className="flex flex-wrap items-center gap-2"><CardTitle>Platform breakdown</CardTitle>{hiddenMark("platforms")}</div>
           <CardDescription>{PRESET_LABEL[preset]} · conversions are platform-reported and defined differently by each platform.</CardDescription>
         </CardHeader>
         <Table>
@@ -256,23 +273,23 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           </p>
         )}
         <div className="h-4" />
-      </Card>
+      </Card>}
 
       {/* Trends */}
-      <Card>
+      {show("trends") && <Card>
         <CardHeader>
-          <CardTitle>Performance trends</CardTitle>
+          <div className="flex flex-wrap items-center gap-2"><CardTitle>Performance trends</CardTitle>{hiddenMark("trends")}</div>
           <CardDescription>Daily values, {formatDate(range.from)} – {formatDate(range.to)}{cmpRange && " with the comparison period (dashed) aligned day-by-day"}.</CardDescription>
         </CardHeader>
         <CardContent>
-          <TrendChart current={perf.byDate} comparison={cmpPerf?.byDate ?? null} currency={c} />
+          <TrendChart current={perf.byDate} comparison={cmpPerf?.byDate ?? null} currency={c} metrics={trendMetrics} />
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Campaigns */}
-      <Card>
+      {show("campaigns") && <Card>
         <CardHeader>
-          <CardTitle>Campaigns</CardTitle>
+          <div className="flex flex-wrap items-center gap-2"><CardTitle>Campaigns</CardTitle>{hiddenMark("campaigns")}</div>
           <CardDescription>{PRESET_LABEL[preset]}</CardDescription>
         </CardHeader>
         <Table>
@@ -301,12 +318,12 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           </TBody>
         </Table>
         <div className="h-4" />
-      </Card>
+      </Card>}
 
       {/* Budget history */}
-      <Card>
+      {show("history") && <Card>
         <CardHeader>
-          <CardTitle>Historical budget performance</CardTitle>
+          <div className="flex flex-wrap items-center gap-2"><CardTitle>Historical budget performance</CardTitle>{hiddenMark("history")}</div>
           <CardDescription>Final spend against budget for previous periods.</CardDescription>
         </CardHeader>
         <Table>
@@ -330,7 +347,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           </TBody>
         </Table>
         <div className="h-4" />
-      </Card>
+      </Card>}
     </div>
   );
 }

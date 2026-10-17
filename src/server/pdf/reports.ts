@@ -2,7 +2,9 @@ import "server-only";
 import type { PacingResult, PacingSeriesPoint } from "@/lib/pacing/engine";
 import type { ClientReport } from "../client-report";
 import type { AgencySummary, ClientPacing } from "../pacing-service";
-import { derive, pctChange } from "@/lib/metrics";
+import { derive } from "@/lib/metrics";
+import { dailyKpiValue, formatKpi, KPI_BY_KEY, kpiValues, type KpiKey } from "@/lib/kpis";
+import type { DailyMetrics } from "../reporting";
 import { formatMoney, formatMoneyCompact, formatNumber, formatPct } from "@/lib/money";
 import { formatDate } from "@/lib/time";
 import { PLATFORM_LABEL } from "@/lib/platforms";
@@ -22,14 +24,6 @@ const STATUS_COLOR: Record<PacingStatus, string> = {
 
 const money = (m: number | null | undefined, c: string) => (m === null || m === undefined ? "—" : formatMoney(m, c, { whole: true }));
 const signed = (m: number, c: string) => `${m > 0 ? "+" : m < 0 ? "-" : ""}${formatMoney(Math.abs(m), c, { whole: true })}`;
-const change = (cur: number, prev: number | undefined, label = "vs. comparison") => {
-  if (prev === undefined) return undefined;
-  const p = pctChange(cur, prev);
-  if (p === null) return "no prior data";
-  if (Math.abs(p) < 0.05) return `no change ${label}`;
-  return `${p > 0 ? "up" : "down"} ${formatPct(Math.abs(p))} ${label}`;
-};
-
 /** Cumulative planned vs actual vs projected spend, with the budget line. */
 export function drawPacingChart(doc: Doc, series: PacingSeriesPoint[], budgetMinor: number, currency: string, height = 170) {
   ensureSpace(doc, height + 40);
@@ -97,6 +91,72 @@ export function drawPacingChart(doc: Doc, series: PacingSeriesPoint[], budgetMin
   doc.y = bottom + 20;
 }
 
+/** Daily values of one KPI, with the comparison period (dashed) aligned day by day. */
+export function drawTrendChart(doc: Doc, key: KpiKey, current: DailyMetrics[], comparison: DailyMetrics[] | null, currency: string, height = 95) {
+  const def = KPI_BY_KEY[key];
+  ensureSpace(doc, height + 46);
+  const left = doc.page.margins.left;
+  const w = contentWidth(doc);
+  const axisW = 46;
+  const x0 = left + axisW;
+  const plotW = w - axisW - 8;
+  doc.font("Helvetica-Bold").fontSize(9).fillColor(C.text).text(pdfText(def.label), left, doc.y, { lineBreak: false });
+  if (comparison) {
+    const lx = left + doc.widthOfString(pdfText(def.label)) + 14;
+    const y = doc.y + 5;
+    doc.save().moveTo(lx, y).lineTo(lx + 14, y).lineWidth(1.4).strokeColor(C.actual).stroke().restore();
+    doc.font("Helvetica").fontSize(7).fillColor(C.text2).text("Selected period", lx + 18, doc.y + 1, { lineBreak: false });
+    const lx2 = lx + 18 + doc.widthOfString("Selected period") + 12;
+    doc.save().moveTo(lx2, y).lineTo(lx2 + 14, y).lineWidth(1.4).strokeColor(C.planned).dash(3, { space: 2 }).stroke().restore();
+    doc.text("Comparison period", lx2 + 18, doc.y, { lineBreak: false });
+  }
+  const top = doc.y + 16;
+  const bottom = top + height;
+  const cur = current.map((d) => dailyKpiValue(d, key));
+  const prev = comparison ? current.map((_, i) => (comparison[i] ? dailyKpiValue(comparison[i], key) : null)) : [];
+  const nums = [...cur, ...prev].filter((v): v is number => v !== null && Number.isFinite(v));
+  // Round the axis up to three "nice" steps (1, 2, 2.5 or 5 × a power of ten).
+  const rawStep = (nums.length ? Math.max(...nums) : 0) / 3 || 1;
+  const mag = 10 ** Math.floor(Math.log10(rawStep));
+  const n = rawStep / mag;
+  const maxY = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag * 3;
+  const xAt = (i: number) => x0 + (cur.length <= 1 ? 0 : (i / (cur.length - 1)) * plotW);
+  const yAt = (v: number) => bottom - (v / maxY) * height;
+  const axis = (v: number) => (def.kind === "money" ? (maxY < 100000 ? formatMoney(v, currency, { whole: true }) : formatMoneyCompact(v, currency)) : def.kind === "pct" ? formatPct(v, maxY < 3 ? 1 : 0) : def.kind === "ratio" ? `${v.toFixed(1)}x` : formatNumber(v, maxY < 3 ? 1 : 0));
+
+  doc.font("Helvetica").fontSize(7).fillColor(C.text3);
+  for (let g = 0; g <= 3; g++) {
+    const v = (maxY / 3) * g;
+    const y = yAt(v);
+    doc.moveTo(x0, y).lineTo(x0 + plotW, y).lineWidth(0.4).strokeColor(C.border).stroke();
+    doc.text(pdfText(axis(v)), left, y - 4, { width: axisW - 6, align: "right", lineBreak: false });
+  }
+  const step = Math.max(1, Math.ceil(current.length / 8));
+  current.forEach((p, i) => {
+    if (i === 0 || i === current.length - 1 || (i % step === 0 && current.length - 1 - i >= step / 2)) {
+      doc.fontSize(7).fillColor(C.text3).text(formatDate(p.date), xAt(i) - 20, bottom + 4, { width: 40, align: "center", lineBreak: false });
+    }
+  });
+  const line = (values: (number | null)[], color: string, dashed: boolean) => {
+    let started = false;
+    doc.save().lineWidth(1.4).strokeColor(color);
+    if (dashed) doc.dash(3, { space: 2 });
+    values.forEach((v, i) => {
+      if (v === null || !Number.isFinite(v)) return;
+      if (!started) {
+        doc.moveTo(xAt(i), yAt(v));
+        started = true;
+      } else doc.lineTo(xAt(i), yAt(v));
+    });
+    if (started) doc.stroke();
+    doc.restore();
+  };
+  if (comparison) line(prev, C.planned, true);
+  line(cur, C.actual, false);
+  doc.x = left;
+  doc.y = bottom + 22;
+}
+
 function pacingFacts(r: PacingResult, currency: string): string[][] {
   return [
     ["Spent to date", money(r.actualToDateMinor, currency), "Expected to date", money(r.expectedToDateMinor, currency)],
@@ -107,20 +167,18 @@ function pacingFacts(r: PacingResult, currency: string): string[][] {
 }
 
 export async function renderClientReportPdf(rep: ClientReport, brand: Brand, opts: { internal: boolean; compress?: boolean; generatedAt?: Date }) {
-  const { client, pacing, perf, cmpPerf, range, cmpRange, preset, history } = rep;
+  const { client, pacing, perf, cmpPerf, range, cmpRange, preset, history, template } = rep;
+  const on = template.sections;
   const c = client.currency;
-  const doc = newDoc({ title: `${client.name} advertising report`, author: brand.name, compress: opts.compress });
+  const doc = newDoc({ title: `${client.name} · ${template.title}`, author: brand.name, compress: opts.compress });
   const isDemo = client.accounts.some((a) => a.isDemo);
   const total = pacing.total;
   const t = perf.totals;
-  const d = derive(t);
-  const ct = cmpPerf?.totals;
-  const cd = ct ? derive(ct) : null;
 
   // Title
   doc.font("Helvetica-Bold").fontSize(20).fillColor(C.text).text(pdfText(client.name), doc.page.margins.left, doc.page.margins.top);
   doc.font("Helvetica").fontSize(10).fillColor(C.text2).text(
-    pdfText(`Advertising report · ${PRESET_LABEL[preset]}: ${formatDate(range.from, { month: "short", day: "numeric", year: "numeric" })} - ${formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}` +
+    pdfText(`${template.title} · ${PRESET_LABEL[preset]}: ${formatDate(range.from, { month: "short", day: "numeric", year: "numeric" })} - ${formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}` +
       (cmpRange ? ` · compared with ${formatDate(cmpRange.from)} - ${formatDate(cmpRange.to)}` : "")),
   );
   if (isDemo) {
@@ -129,17 +187,39 @@ export async function renderClientReportPdf(rep: ClientReport, brand: Brand, opt
   }
   doc.moveDown(0.8);
 
-  tiles(doc, [
-    { label: "Ad spend", value: money(t.costMinor, c), sub: [t.hasEstimatedCost ? "incl. estimated" : null, change(t.costMinor, ct?.costMinor)].filter(Boolean).join(" · ") || undefined },
-    { label: "Monthly budget", value: total ? money(total.budgetMinor, c) : "Not set", sub: total ? STATUS_LABEL[total.status] : undefined, subColor: total ? STATUS_COLOR[total.status] : undefined },
-    { label: "Conversions (platform-reported)", value: formatNumber(t.conversions, 1), sub: change(t.conversions, ct?.conversions) },
-    { label: "Leads", value: formatNumber(t.leads), sub: change(t.leads, ct?.leads) },
-    { label: "Cost per lead", value: d.costPerLeadMinor === null ? "—" : formatMoney(d.costPerLeadMinor, c), sub: d.costPerLeadMinor !== null && cd?.costPerLeadMinor != null ? change(d.costPerLeadMinor, cd.costPerLeadMinor) : undefined },
-    { label: "ROAS", value: d.roas === null ? "—" : `${d.roas.toFixed(2)}x`, sub: d.roas === null ? "no conversion value reported" : cd?.roas != null ? change(d.roas, cd.roas) : "conversion value / spend" },
-  ]);
+  if (on.summary && template.summary.trim()) {
+    sectionTitle(doc, "Summary");
+    paragraph(doc, template.summary.trim());
+    doc.moveDown(0.8);
+  }
+
+  if (on.kpis && template.kpis.length) {
+    const toneColor = { good: C.good, bad: C.critical, neutral: C.text2 } as const;
+    tiles(
+      doc,
+      kpiValues(template.kpis, t, cmpPerf?.totals ?? null).map((kv) => {
+        const parts = [
+          kv.key === "spend" && t.hasEstimatedCost ? "incl. estimated" : null,
+          kv.changePct === null
+            ? kv.value === null ? "not reported" : cmpPerf ? "no comparison data" : null
+            : Math.abs(kv.changePct) < 0.05 ? "no change" : `${kv.changePct > 0 ? "up" : "down"} ${formatPct(Math.abs(kv.changePct))} vs ${formatKpi(kv.key, kv.previous, c)}`,
+        ];
+        return { label: KPI_BY_KEY[kv.key].label, value: formatKpi(kv.key, kv.value, c), sub: parts.filter(Boolean).join(" · ") || undefined, subColor: kv.tone ? toneColor[kv.tone] : undefined };
+      }),
+      4,
+    );
+  }
+
+  if (on.trends && template.trendKpis.length) {
+    sectionTitle(doc, "Trends", `Daily values${cmpRange ? "; the dashed line is the comparison period, aligned day by day" : ""}.`);
+    for (const k of template.trendKpis) drawTrendChart(doc, k, perf.byDate, cmpPerf?.byDate ?? null, c);
+  }
 
   // Pacing
-  if (total) {
+  if (!on.pacing) {
+    // left out by the report template
+  } else if (total) {
+    ensureSpace(doc, 260); // keep the heading with its chart
     sectionTitle(doc, `Budget pacing · ${formatDate(pacing.period.start, { month: "long", year: "numeric" })}`, total.asOf ? `Complete data through ${formatDate(total.asOf)}. Status: ${STATUS_LABEL[total.status]}.` : "No complete days of data in this period yet.");
     drawPacingChart(doc, total.series, total.budgetMinor, c);
     table(doc, [{ header: "", width: 0.25 }, { header: "", width: 0.25, align: "right" }, { header: "", width: 0.27 }, { header: "", width: 0.23, align: "right" }], pacingFacts(total, c), { noHeader: true });
@@ -181,44 +261,46 @@ export async function renderClientReportPdf(rep: ClientReport, brand: Brand, opt
   }
 
   // Platforms
-  sectionTitle(doc, "Platform breakdown", `${PRESET_LABEL[preset]} · conversions are platform-reported and defined differently by each platform.`);
-  table(
-    doc,
-    [
-      { header: "Account", width: 0.26 },
-      { header: "Spend", width: 0.11, align: "right" },
-      { header: "Impr.", width: 0.1, align: "right" },
-      { header: "Clicks", width: 0.08, align: "right" },
-      { header: "CTR", width: 0.07, align: "right" },
-      { header: "CPC", width: 0.08, align: "right" },
-      { header: "Conv.", width: 0.07, align: "right" },
-      { header: "Cost/conv.", width: 0.09, align: "right" },
-      { header: "Leads", width: 0.07, align: "right" },
-      { header: "ROAS", width: 0.07, align: "right" },
-    ],
-    client.accounts.map((a) => {
-      const m = perf.byAccount[a.id];
-      const x = m ? derive(m) : null;
-      const lsa = a.platform === "GOOGLE_LSA";
-      return [
-        `${PLATFORM_LABEL[a.platform]}\n${a.name}`,
-        m ? `${money(m.costMinor, c)}${a.spendIsVerified ? "" : "*"}` : "—",
-        lsa ? "n/a" : m ? formatNumber(m.impressions) : "—",
-        lsa ? "n/a" : m ? formatNumber(m.clicks) : "—",
-        lsa ? "n/a" : formatPct(x?.ctr ?? null, 2),
-        lsa || x?.cpcMinor == null ? (lsa ? "n/a" : "—") : formatMoney(x.cpcMinor, c),
-        m ? formatNumber(m.conversions, 1) : "—",
-        x?.costPerConversionMinor == null ? "—" : formatMoney(x.costPerConversionMinor, c),
-        m?.leads ? formatNumber(m.leads) : "—",
-        x?.roas == null || lsa ? "—" : `${x.roas.toFixed(2)}x`,
-      ];
-    }),
-  );
-  if (client.accounts.some((a) => !a.spendIsVerified)) paragraph(doc, "* Spend is estimated or incomplete for this account (see data notes).", { size: 7.5 });
+  if (on.platforms) {
+    sectionTitle(doc, "Platform breakdown", `${PRESET_LABEL[preset]} · conversions are platform-reported and defined differently by each platform.`);
+    table(
+      doc,
+      [
+        { header: "Account", width: 0.26 },
+        { header: "Spend", width: 0.11, align: "right" },
+        { header: "Impr.", width: 0.1, align: "right" },
+        { header: "Clicks", width: 0.08, align: "right" },
+        { header: "CTR", width: 0.07, align: "right" },
+        { header: "CPC", width: 0.08, align: "right" },
+        { header: "Conv.", width: 0.07, align: "right" },
+        { header: "Cost/conv.", width: 0.09, align: "right" },
+        { header: "Leads", width: 0.07, align: "right" },
+        { header: "ROAS", width: 0.07, align: "right" },
+      ],
+      client.accounts.map((a) => {
+        const m = perf.byAccount[a.id];
+        const x = m ? derive(m) : null;
+        const lsa = a.platform === "GOOGLE_LSA";
+        return [
+          `${PLATFORM_LABEL[a.platform]}\n${a.name}`,
+          m ? `${money(m.costMinor, c)}${a.spendIsVerified ? "" : "*"}` : "—",
+          lsa ? "n/a" : m ? formatNumber(m.impressions) : "—",
+          lsa ? "n/a" : m ? formatNumber(m.clicks) : "—",
+          lsa ? "n/a" : formatPct(x?.ctr ?? null, 2),
+          lsa || x?.cpcMinor == null ? (lsa ? "n/a" : "—") : formatMoney(x.cpcMinor, c),
+          m ? formatNumber(m.conversions, 1) : "—",
+          x?.costPerConversionMinor == null ? "—" : formatMoney(x.costPerConversionMinor, c),
+          m?.leads ? formatNumber(m.leads) : "—",
+          x?.roas == null || lsa ? "—" : `${x.roas.toFixed(2)}x`,
+        ];
+      }),
+    );
+    if (client.accounts.some((a) => !a.spendIsVerified)) paragraph(doc, "* Spend is estimated or incomplete for this account (see data notes).", { size: 7.5 });
+  }
 
   // Campaigns
   const campaigns = client.accounts.flatMap((a) => a.campaigns.map((cmp) => ({ a, cmp, m: perf.byCampaign[cmp.id] }))).filter((x) => x.m && x.m.costMinor > 0);
-  if (campaigns.length) {
+  if (on.campaigns && campaigns.length) {
     sectionTitle(doc, "Campaigns", PRESET_LABEL[preset]);
     table(
       doc,
@@ -241,42 +323,48 @@ export async function renderClientReportPdf(rep: ClientReport, brand: Brand, opt
   }
 
   // History
-  sectionTitle(doc, "Historical budget performance");
-  table(
-    doc,
-    [
-      { header: "Period", width: 0.28 },
-      { header: "Budget", width: 0.16, align: "right" },
-      { header: "Spent", width: 0.16, align: "right" },
-      { header: "Variance", width: 0.14, align: "right" },
-      { header: "Used", width: 0.1, align: "right" },
-      { header: "Result", width: 0.16 },
-    ],
-    history.map((h) => {
-      const r = h.total;
-      return [
-        formatDate(h.period.start, { month: "long", year: "numeric" }),
-        money(r?.budgetMinor, c),
-        money(r?.actualToDateMinor, c),
-        r ? signed(r.actualToDateMinor - r.budgetMinor, c) : "—",
-        r ? formatPct(r.pctBudgetConsumed) : "—",
-        r ? STATUS_LABEL[r.status] : "No budget",
-      ];
-    }),
-    { colors: history.map((h) => [undefined, undefined, undefined, undefined, undefined, h.total ? STATUS_COLOR[h.total.status] : C.text3]) },
-  );
+  if (on.history) {
+    sectionTitle(doc, "Historical budget performance");
+    table(
+      doc,
+      [
+        { header: "Period", width: 0.28 },
+        { header: "Budget", width: 0.16, align: "right" },
+        { header: "Spent", width: 0.16, align: "right" },
+        { header: "Variance", width: 0.14, align: "right" },
+        { header: "Used", width: 0.1, align: "right" },
+        { header: "Result", width: 0.16 },
+      ],
+      history.map((h) => {
+        const r = h.total;
+        return [
+          formatDate(h.period.start, { month: "long", year: "numeric" }),
+          money(r?.budgetMinor, c),
+          money(r?.actualToDateMinor, c),
+          r ? signed(r.actualToDateMinor - r.budgetMinor, c) : "—",
+          r ? formatPct(r.pctBudgetConsumed) : "—",
+          r ? STATUS_LABEL[r.status] : "No budget",
+        ];
+      }),
+      { colors: history.map((h) => [undefined, undefined, undefined, undefined, undefined, h.total ? STATUS_COLOR[h.total.status] : C.text3]) },
+    );
+  }
 
   // Notes
-  const notes = [...new Set([...pacing.rows, ...pacing.subRows].flatMap((r) => r.warnings))];
-  sectionTitle(doc, "Notes");
-  paragraph(
-    doc,
-    [
-      "Pacing compares spend to date with the planned spend to date (actual / expected). Today's partial spend is excluded.",
-      "Conversions and conversion value are as reported by each ad platform under its own attribution settings.",
-      ...notes,
-    ].map((n) => `- ${n}`).join("\n"),
-  );
+  if (on.notes) {
+    const notes = [...new Set([...pacing.rows, ...pacing.subRows].flatMap((r) => r.warnings))];
+    const defs = template.kpis.filter((k) => KPI_BY_KEY[k].kind !== "count" && k !== "spend" && k !== "conversionValue").map((k) => `${KPI_BY_KEY[k].label}: ${KPI_BY_KEY[k].description}`);
+    sectionTitle(doc, "Notes");
+    paragraph(
+      doc,
+      [
+        "Pacing compares spend to date with the planned spend to date (actual / expected). Today's partial spend is excluded.",
+        "Conversions and conversion value are as reported by each ad platform under its own attribution settings.",
+        ...defs,
+        ...notes,
+      ].map((n) => `- ${n}`).join("\n"),
+    );
+  }
 
   const generated = (opts.generatedAt ?? new Date()).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: client.timezone });
   decoratePages(doc, brand, `${client.name} · generated ${generated}${isDemo ? " · demo data" : ""}`);

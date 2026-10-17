@@ -6,6 +6,8 @@ import { loadClientReport } from "../client-report";
 import { clientDailyCsv } from "../exports";
 import { renderAgencyReportPdf, renderClientReportPdf } from "../pdf/reports";
 import { loadPacing, summarize } from "../pacing-service";
+import { getClientTemplate, resetClientTemplate, saveTemplate } from "../report-templates";
+import { DEFAULT_TEMPLATE } from "@/lib/report-template";
 import { addDays, eachDay, isoToDate, monthBounds, todayInTimeZone } from "@/lib/pacing/dates";
 
 const hasDb = !!process.env.DATABASE_URL;
@@ -76,5 +78,35 @@ describe.skipIf(!hasDb)("reports (database)", () => {
     expect(lines[1]).toContain('"Café Plumbing, Inc."');
     expect(lines[1]).toContain(`"'=HYPERLINK(""http://x"",""click"")"`);
     expect(lines[1]).toContain(",123.45,no,1000,50,5,2.47,2,400,61.73,,3.24,yes");
+  });
+
+  it("resolves templates: client override, then agency default, then built-in", async () => {
+    expect((await getClientTemplate(agencyId, clientId)).template).toEqual(DEFAULT_TEMPLATE);
+    await saveTemplate(agencyId, null, { ...DEFAULT_TEMPLATE, title: "Agency layout", defaultRange: "last_30" });
+    let r = await getClientTemplate(agencyId, clientId);
+    expect(r.custom).toBe(false);
+    expect(r.template.title).toBe("Agency layout");
+    // The template's default range applies when the URL doesn't choose one.
+    expect((await loadClientReport(clientId, {})).preset).toBe("last_30");
+
+    await saveTemplate(agencyId, clientId, { ...DEFAULT_TEMPLATE, title: "Client layout", kpis: ["clicks"], compare: "none" });
+    await saveTemplate(agencyId, clientId, { ...DEFAULT_TEMPLATE, title: "Client layout v2", kpis: ["clicks"], compare: "none" }); // updates, doesn't duplicate
+    r = await getClientTemplate(agencyId, clientId);
+    expect(r).toMatchObject({ custom: true, template: { title: "Client layout v2", kpis: ["clicks"] } });
+    expect(await prisma.report.count({ where: { agencyId, kind: "TEMPLATE" } })).toBe(2);
+    const rep = await loadClientReport(clientId, { range: "last_7" });
+    expect(rep.cmpRange).toBeNull();
+
+    await resetClientTemplate(agencyId, clientId);
+    expect((await getClientTemplate(agencyId, clientId)).template.title).toBe("Agency layout");
+  });
+
+  it("leaves sections out of the PDF when the template turns them off", async () => {
+    const rep = await loadClientReport(clientId, { range: "last_30", compare: "previous_period" });
+    const full = await renderClientReportPdf({ ...rep, template: { ...DEFAULT_TEMPLATE, summary: "A note for the client." } }, brand, { internal: false, compress: false });
+    const none = Object.fromEntries(Object.keys(DEFAULT_TEMPLATE.sections).map((k) => [k, false])) as typeof DEFAULT_TEMPLATE.sections;
+    const bare = await renderClientReportPdf({ ...rep, template: { ...DEFAULT_TEMPLATE, sections: none } }, brand, { internal: false, compress: false });
+    expect(bare.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(bare.length).toBeLessThan(full.length / 2);
   });
 });
