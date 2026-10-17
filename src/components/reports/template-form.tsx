@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
+import { Sparkles } from "lucide-react";
 import { useFormSubmit } from "@/components/use-form-submit";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
@@ -50,12 +51,35 @@ function Checks({ name, keys, picked, setPicked, max }: { name: string; keys: Kp
   );
 }
 
-export function TemplateForm({ template, action, submitLabel = "Save report layout" }: { template: ReportTemplate; action: (prev: TemplateFormState, form: FormData) => Promise<TemplateFormState>; submitLabel?: string }) {
+export function TemplateForm({
+  template,
+  action,
+  submitLabel = "Save report layout",
+  draftSummary,
+}: {
+  template: ReportTemplate;
+  action: (prev: TemplateFormState, form: FormData) => Promise<TemplateFormState>;
+  submitLabel?: string;
+  /** When set, offers an AI-drafted summary from the client's data. */
+  draftSummary?: () => Promise<{ summary?: string; error?: string }>;
+}) {
   const [state, dispatch, pending] = useActionState(action, undefined);
   const form = useFormSubmit(dispatch);
   const [kpis, setKpis] = useState<KpiKey[]>(template.kpis);
   const [trends, setTrends] = useState<KpiKey[]>(template.trendKpis);
   const all = KPIS.map((k) => k.key);
+  const summaryRef = useRef<HTMLTextAreaElement>(null);
+  const [drafting, startDraft] = useTransition();
+  const [draftNote, setDraftNote] = useState<{ ok?: boolean; text: string } | null>(null);
+  const onDraft = () =>
+    startDraft(async () => {
+      setDraftNote(null);
+      const r = await draftSummary!();
+      if (r.summary && summaryRef.current) {
+        summaryRef.current.value = r.summary;
+        setDraftNote({ ok: true, text: "AI draft inserted. Check the figures, edit as needed, then save." });
+      } else setDraftNote({ text: r.error ?? "No draft was returned." });
+    });
   return (
     <form {...form} className="flex flex-col gap-6">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -103,8 +127,16 @@ export function TemplateForm({ template, action, submitLabel = "Save report layo
       </fieldset>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="summary">Written summary</Label>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Label htmlFor="summary">Written summary</Label>
+          {draftSummary && (
+            <Button type="button" variant="outline" size="sm" onClick={onDraft} disabled={drafting}>
+              <Sparkles className="h-3.5 w-3.5" aria-hidden /> {drafting ? "Drafting…" : "Draft with AI"}
+            </Button>
+          )}
+        </div>
         <textarea
+          ref={summaryRef}
           id="summary"
           name="summary"
           defaultValue={template.summary}
@@ -113,7 +145,8 @@ export function TemplateForm({ template, action, submitLabel = "Save report layo
           placeholder="Optional. A note for the client, such as what changed this month and what's next."
           className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
         />
-        <p className="text-xs text-text-3">Shown as written; it isn&apos;t generated from the data.</p>
+        {draftNote && <p className={`text-xs ${draftNote.ok ? "text-good-ink" : "text-critical-ink"}`} role={draftNote.ok ? "status" : "alert"}>{draftNote.text}</p>}
+        <p className="text-xs text-text-3">Shown exactly as saved. {draftSummary ? "An AI draft uses this client's figures for the default date range; it isn't updated automatically afterwards." : "It isn't generated from the data."}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

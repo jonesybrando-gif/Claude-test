@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { AlertTriangle, EyeOff, FileSliders, Settings2 } from "lucide-react";
+import { AlertTriangle, EyeOff, FileSliders, Mail, Settings2 } from "lucide-react";
+import { AiSuggestionsCard } from "@/components/ai/suggestions-card";
 import { requireClientView } from "@/server/access";
 import type { PacingRow } from "@/server/pacing-service";
 import { loadClientReport } from "@/server/client-report";
@@ -81,6 +82,9 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           <ExportButtons base={`/api/reports/clients/${id}`} query={sp} internalPdf={staff} />
           {staff && (
             <>
+              <Link href={`/clients/${id}/email`} className={buttonVariants({ variant: "outline" })}>
+                <Mail className="h-4 w-4" /> Email client
+              </Link>
               <Link href={`/clients/${id}/report`} className={buttonVariants({ variant: "outline" })}>
                 <FileSliders className="h-4 w-4" /> Customize report
               </Link>
@@ -111,6 +115,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           {t.hasEstimatedCost && <p className="text-xs text-warning-ink">Spend includes estimated Local Services cost.</p>}
         </section>
       )}
+
+      {staff && <AiSuggestionsCard clientId={id} query={sp} />}
 
       {/* Budget pacing */}
       {show("pacing") && <Card>

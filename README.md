@@ -1,6 +1,10 @@
 # Budget Pacing Monitor
 
-A multi-tenant advertising reporting and **budget pacing** app for agencies. Enter each client's monthly budget, and the app works out whether campaigns are spending too fast, too slow, or on target, forecasts month-end spend, and tells account managers exactly what daily spend to aim for.
+A multi-tenant advertising reporting and **budget pacing** app for agencies.
+
+- **Reporting:** KPI dashboards (spend, impressions, clicks, CTR, CPC, conversions, CPA, leads, ROAS and more) across Google Ads, Meta, Microsoft Advertising and Local Services Ads, with branded client reports you can customize per client.
+- **Budget pacing:** enter each client's monthly budget. The app works out whether campaigns are spending too fast, too slow or on target, forecasts month-end spend, and tells account managers exactly what daily spend to aim for.
+- **AI assistant:** proactive suggestions, report summaries and client email drafts, written only from the app's own data and always reviewed by a person before anything goes out.
 
 > **Status:** Phase 1 (core application) is built and tested with demo data. Phases 2–3 (Google Ads, Meta Ads, Microsoft Advertising and Google Local Services Ads integrations, plus background sync) are built and tested against each platform's documented API, but **none has yet been run against a real ad account**. Setup guides: [Google Ads + LSA](docs/google-ads-setup.md), [Meta Ads](docs/meta-ads-setup.md), [Microsoft Advertising](docs/microsoft-ads-setup.md). All sample data is flagged `isDemo` and labelled "Demo data" in the UI. See [What's built and what isn't](#whats-built-and-what-isnt).
 
@@ -28,6 +32,8 @@ npm run dev                   # http://localhost:3000
 | `CRON_SECRET` | Bearer secret for `/api/cron/sync` |
 | `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN` | Google Ads API credentials (also used for Local Services Ads); see [docs/google-ads-setup.md](docs/google-ads-setup.md) |
 | `SMTP_URL`, `EMAIL_FROM` | Outgoing email for invitations, password resets, alerts and daily summaries. Without them, emails are recorded in **Settings → Email log** but not delivered, and invite/reset links are shown to the admin to share. |
+| `ANTHROPIC_API_KEY` | Optional. Turns on the AI assistant (Claude API). Usage is billed by Anthropic to that key, separately from this app. Without it, the AI buttons explain how to turn it on. |
+| `ANTHROPIC_MODEL` | Optional. Defaults to `claude-opus-5-5`. |
 | `META_APP_ID`, `META_APP_SECRET` | Meta app credentials; see [docs/meta-ads-setup.md](docs/meta-ads-setup.md) |
 | `MICROSOFT_ADS_CLIENT_ID`, `MICROSOFT_ADS_CLIENT_SECRET`, `MICROSOFT_ADS_DEVELOPER_TOKEN` | Microsoft Advertising credentials; see [docs/microsoft-ads-setup.md](docs/microsoft-ads-setup.md) |
 
@@ -114,6 +120,7 @@ src/lib/                    Money, metrics, date ranges, recommendations, access
 src/server/                 Database access, auth, access control, pacing/reporting services
 src/server/integrations/    Platform adapter contract, registry, OAuth token storage, Google Ads adapter
 src/server/sync/            Sync runner (windowed re-import, retries, failure handling, run log)
+src/server/ai/              AI assistant: grounding context, Claude API calls, server actions
 src/app/                    Next.js App Router pages and server actions
 src/components/             UI (shadcn-style primitives, charts, dashboard)
 ```
@@ -232,15 +239,43 @@ src/components/             UI (shadcn-style primitives, charts, dashboard)
 - **Owner setup:** `npm run setup:owner` creates your agency and admin login. A brand-new agency sees a getting-started screen.
 - ROAS shows "—" when a platform reports no conversion value (lead generation, LSA) instead of a misleading 0.00x.
 
+### Phase 5a: KPI dashboards and report builder ✅
+
+- **Performance page:** 12 KPI scorecards for all clients with sparklines and change vs. the comparison period, daily trend charts, and sortable tables by platform and by client.
+  - Blended KPIs are true ratios (total spend ÷ total clicks), never averages of per-platform averages.
+  - Metrics no platform reported (for example leads on Google Ads) show "—" and "not reported" rather than 0.
+- **Report builder:** **Settings → Reports** sets the agency's default report, and **Customize report** on a client page gives that client its own. Each layout chooses:
+  - the KPI scorecards (up to 12)
+  - up to 3 trend charts
+  - which sections appear (summary, KPIs, trends, pacing, platforms, campaigns, budget history, notes)
+  - the title and a written summary
+  - the default date range and comparison
+- **Template-driven reports:** the client page and the PDF follow the layout.
+  - Client logins don't see sections a layout turns off. Your team still sees them, marked "Hidden from client report".
+  - The PDF adds a daily chart for each trend KPI, with the comparison period dashed, and defines each KPI in its notes.
+
+### Phase 5b: AI assistant ✅ (tested against a mock API · ⏳ needs your `ANTHROPIC_API_KEY` for live use)
+
+- **Suggestions:** on each client page (staff only), "Generate suggestions" gives up to 6 prioritised recommendations, each citing the figures it rests on. They are saved, so viewing the page doesn't cost anything.
+- **Report summary:** "Draft with AI" in Customize report writes the client-facing summary into the form. Nothing is saved until you press Save.
+- **Client emails:** "Email client" drafts a monthly update, pacing update or results highlight, following your notes. You edit the draft and press Send. Replies go to you, and every send is recorded in the Email log.
+- **Grounding:** the model gets only that client's report data, with every number pre-formatted.
+  - Its instructions forbid inventing figures, benchmarks or causes.
+  - It is told that conversions are platform-reported.
+  - It must flag demo data.
+  - It must never claim it changed anything in an ad platform.
+- **Data sent to Anthropic:** the client's name, account and campaign names, and their metrics. No logins or tokens are sent.
+- **Model:** `claude-opus-5-5` with structured output. Server-side fallback (`fallbacks: "default"`) is on, so if the model declines a request, Anthropic retries it on its recommended fallback model.
+
 ### Not built yet
 
 | Phase | Item | Notes |
 |---|---|---|
 | 2 | First live Google Ads connection | Needs the Cloud Console and MCC setup in [docs/google-ads-setup.md](docs/google-ads-setup.md). This is the step that moves Google Ads from "built" to "verified". |
 | 3 | First live Meta, Microsoft and LSA connections | Needs the setup in the guides above. Meta also needs App Review and Advanced Access for client-owned ad accounts. |
-| 4 | PDF and CSV export, scheduled email reports, custom report builder | Schema (`Report`, `ReportSchedule`) is ready. |
+| 4 | Scheduled email reports | PDF/CSV export and the report builder are done; the `ReportSchedule` table is ready for scheduled sending. |
 | 4 | Branded client portal | Client users already get a read-only view of their own client; a custom domain and branded login are not built. |
 | 5 | More forecast models, seasonality learned from history, custom weekday and daily weights in the UI | The engine already supports custom weights; the budget form exposes only even, business-days and weekend-weighted. |
 | — | Currency conversion | Original currency is stored per account and an `ExchangeRate` table exists. If an account's currency differs from its budget's, the row shows a warning; conversion is not applied. Agency totals assume one currency. |
-| — | Single sign-on (Google / Microsoft) and two-factor authentication | Email and password only for now. Login attempts are not rate-limited yet; add that (or put the app behind your host's protection) before going public. |
+| — | Single sign-on (Google / Microsoft) and two-factor authentication | Email and password only for now, with sign-in attempt limits (Phase 4b). |
 | — | Multiple agencies | Data model and access checks are agency-scoped; agency sign-up and onboarding are not built. |

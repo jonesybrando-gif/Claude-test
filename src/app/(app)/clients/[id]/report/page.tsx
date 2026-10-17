@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ExportButtons } from "@/components/export-buttons";
 import { TemplateForm } from "@/components/reports/template-form";
+import { aiConfigured } from "@/server/ai/assistant";
+import { draftSummaryAction } from "@/server/ai/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +53,7 @@ export default async function ClientReportBuilderPage({ params, searchParams }: 
           )}
         </CardHeader>
         <CardContent>
-          <TemplateForm key={reset ?? "form"} template={template} action={saveClientTemplateAction.bind(null, id)} />
+          <TemplateForm key={reset ?? "form"} template={template} action={saveClientTemplateAction.bind(null, id)} draftSummary={aiConfigured() ? draftSummaryAction.bind(null, id) : undefined} />
         </CardContent>
       </Card>
     </div>

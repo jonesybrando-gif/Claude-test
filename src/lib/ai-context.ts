@@ -1,0 +1,109 @@
+// Turns report data into the text block the AI assistant is grounded in.
+// Every number is pre-formatted (money in currency, not minor units) so the
+// model quotes figures rather than computing them, and anything the platforms
+// didn't report is written as "not reported" instead of 0.
+
+import { formatKpi, KPI_BY_KEY, kpiValues, type KpiKey } from "./kpis";
+import { formatMoney, formatPct } from "./money";
+import type { MetricTotals } from "./metrics";
+import { STATUS_LABEL, type PacingStatus } from "./pacing/status";
+
+export interface AiPacing {
+  periodStart: string;
+  periodEnd: string;
+  asOf: string | null;
+  status: PacingStatus;
+  forecastStatus: PacingStatus;
+  budgetMinor: number;
+  actualToDateMinor: number;
+  expectedToDateMinor: number;
+  projectedMinor: number;
+  requiredDailyMinor: number | null;
+  currentDailyRateMinor: number;
+  remainingActiveDays: number;
+  pacingPct: number | null;
+}
+
+export interface AiContextInput {
+  clientName: string;
+  currency: string;
+  isDemo: boolean;
+  rangeLabel: string;
+  range: { from: string; to: string };
+  comparison: { from: string; to: string } | null;
+  kpis: KpiKey[];
+  totals: MetricTotals;
+  previous: MetricTotals | null;
+  accounts: { platform: string; name: string; totals: MetricTotals | null; spendVerified: boolean; dataNote: string | null }[];
+  campaigns: { name: string; platform: string; status: string; totals: MetricTotals; previous: MetricTotals | null }[];
+  pacing: AiPacing | null;
+  notes: string[];
+}
+
+const ACCOUNT_KPIS: KpiKey[] = ["spend", "impressions", "clicks", "ctr", "cpc", "conversions", "costPerConversion", "leads", "costPerLead", "roas"];
+const CAMPAIGN_KPIS: KpiKey[] = ["spend", "clicks", "conversions", "costPerConversion", "leads"];
+const MAX_CAMPAIGNS = 15;
+
+const pct = (p: number) => (Math.abs(p) < 0.05 ? "no change" : `${p > 0 ? "+" : ""}${p.toFixed(1)}%`);
+
+function kpiLine(keys: KpiKey[], cur: MetricTotals, prev: MetricTotals | null, currency: string): string {
+  return kpiValues(keys, cur, prev)
+    .map((kv) => {
+      const v = kv.value === null ? "not reported" : formatKpi(kv.key, kv.value, currency);
+      const change = kv.changePct === null ? "" : ` (${pct(kv.changePct)} vs ${formatKpi(kv.key, kv.previous, currency)})`;
+      return `${KPI_BY_KEY[kv.key].short}: ${v}${change}`;
+    })
+    .join("; ");
+}
+
+export function buildAiContext(i: AiContextInput): string {
+  const c = i.currency;
+  const m = (v: number | null) => (v === null ? "n/a" : formatMoney(v, c, { whole: true }));
+  const lines: string[] = [];
+  lines.push(`Client: ${i.clientName}`);
+  lines.push(`Currency: ${c}`);
+  if (i.isDemo) lines.push("IMPORTANT: this client's accounts contain illustrative demo data, not real advertising results.");
+  lines.push(`Reporting period: ${i.rangeLabel}, ${i.range.from} to ${i.range.to} (complete days only)`);
+  lines.push(i.comparison ? `Comparison period: ${i.comparison.from} to ${i.comparison.to}` : "Comparison period: none");
+  lines.push("");
+  lines.push("## Totals, all platforms");
+  for (const kv of kpiValues(i.kpis, i.totals, i.previous)) {
+    const def = KPI_BY_KEY[kv.key];
+    const v = kv.value === null ? "not reported" : formatKpi(kv.key, kv.value, c);
+    const prev = i.previous ? `; comparison ${kv.previous === null ? "not reported" : formatKpi(kv.key, kv.previous, c)}` : "";
+    const change = kv.changePct === null ? "" : `; change ${pct(kv.changePct)}${def.better === "neutral" ? "" : kv.tone === "good" ? " (favourable)" : kv.tone === "bad" ? " (unfavourable)" : ""}`;
+    lines.push(`- ${def.label}: ${v}${prev}${change}`);
+  }
+  if (i.totals.hasEstimatedCost) lines.push("- Note: spend includes estimated Local Services Ads cost.");
+
+  lines.push("", "## By ad account");
+  if (i.accounts.length === 0) lines.push("- No ad accounts connected.");
+  for (const a of i.accounts) {
+    const body = a.totals ? kpiLine(ACCOUNT_KPIS, a.totals, null, c) : "no data in this period";
+    lines.push(`- ${a.platform} · ${a.name}: ${body}${a.spendVerified ? "" : " [spend estimated or incomplete]"}${a.dataNote ? ` [${a.dataNote}]` : ""}`);
+  }
+
+  const campaigns = [...i.campaigns].sort((a, b) => b.totals.costMinor - a.totals.costMinor);
+  lines.push("", `## Campaigns by spend${campaigns.length > MAX_CAMPAIGNS ? ` (top ${MAX_CAMPAIGNS} of ${campaigns.length})` : ""}`);
+  if (campaigns.length === 0) lines.push("- No campaign spend in this period.");
+  for (const cmp of campaigns.slice(0, MAX_CAMPAIGNS)) {
+    lines.push(`- ${cmp.name} (${cmp.platform}, ${cmp.status.toLowerCase()}): ${kpiLine(CAMPAIGN_KPIS, cmp.totals, cmp.previous, c)}`);
+  }
+
+  lines.push("", "## Monthly budget pacing");
+  const p = i.pacing;
+  if (!p) lines.push("- No budget is set for the current month.");
+  else {
+    lines.push(`- Month: ${p.periodStart} to ${p.periodEnd}; data complete through ${p.asOf ?? "no complete days yet"}`);
+    lines.push(`- Budget ${m(p.budgetMinor)}; spent ${m(p.actualToDateMinor)}; expected by now ${m(p.expectedToDateMinor)}; pacing ${formatPct(p.pacingPct)} of expected`);
+    lines.push(`- Status to date: ${STATUS_LABEL[p.status]}; month-end forecast: ${STATUS_LABEL[p.forecastStatus]}, projected ${m(p.projectedMinor)} (${p.projectedMinor >= p.budgetMinor ? "+" : "-"}${m(Math.abs(p.projectedMinor - p.budgetMinor))} vs budget)`);
+    lines.push(`- Current daily rate (7-day): ${m(p.currentDailyRateMinor)}; required daily to land on budget: ${p.requiredDailyMinor === null ? "n/a" : `${m(p.requiredDailyMinor)} over ${p.remainingActiveDays} remaining days`}`);
+  }
+
+  if (i.notes.length) {
+    lines.push("", "## Data notes");
+    for (const n of i.notes) lines.push(`- ${n}`);
+  }
+  lines.push("", "Conversions and conversion value are reported by each platform under its own attribution settings; platforms count them differently.");
+  return lines.join("\n");
+}
