@@ -41,6 +41,8 @@ export function formatNumber(n: number, digits = 0): string {
 const compact = new Map<string, Intl.NumberFormat>();
 /** Axis-tick format: $5K, $12.5K, $1.2M */
 export function formatMoneyCompact(minor: number, currency = "USD"): string {
+  // Intl's compact notation renders zero as "$0.0"
+  if (minor === 0) return formatMoney(0, currency, { whole: true });
   let f = compact.get(currency);
   if (!f) {
     f = new Intl.NumberFormat("en-US", { style: "currency", currency, notation: "compact", maximumFractionDigits: 1 });

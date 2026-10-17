@@ -8,6 +8,7 @@ import { PacingTable } from "@/components/dashboard/pacing-table";
 import { PacingChart } from "@/components/charts/pacing-chart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DemoBadge, StatusBadge } from "@/components/status-badge";
+import { ExportButtons } from "@/components/export-buttons";
 
 export const dynamic = "force-dynamic";
 
@@ -21,22 +22,52 @@ export default async function DashboardPage() {
   const variance = s.projectedMinor - s.totalBudgetMinor;
   const period = s.combined ? `${formatDate(s.combined.periodStart, { month: "long", year: "numeric" })}` : "";
 
+  if (clients.length === 0) {
+    const steps = [
+      { href: "/clients", title: "Add your first client", body: "Create a client with its reporting time zone." },
+      { href: "/integrations", title: "Connect an ad platform", body: "Sign in to Google Ads, Meta or Microsoft and link each ad account to a client." },
+      { href: "/clients", title: "Set monthly budgets", body: "Open a client and choose Budgets. Pacing, forecasts and alerts start from there." },
+    ];
+    return (
+      <div className="mx-auto flex max-w-[900px] flex-col gap-5">
+        <div>
+          <h1 className="text-xl font-semibold">Welcome — let&apos;s set up your budget monitor</h1>
+          <p className="text-sm text-text-2">You don&apos;t have any clients yet. Three steps and the dashboard fills in.</p>
+        </div>
+        <ol className="grid gap-3 md:grid-cols-3">
+          {steps.map((st, i) => (
+            <li key={st.title}>
+              <a href={st.href} className="flex h-full flex-col gap-1 rounded-xl border border-border bg-surface p-4 hover:bg-surface-2">
+                <span className="text-xs font-medium text-text-3">Step {i + 1}</span>
+                <span className="font-medium">{st.title}</span>
+                <span className="text-sm text-text-2">{st.body}</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold">Advertising Budget Monitor</h1>
           <p className="text-sm text-text-2">
-            {period} · {clients.length} clients · {rows.length} budget lines
+            {[period, `${clients.length} client${clients.length === 1 ? "" : "s"}`, `${rows.length} budget line${rows.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}
             {s.typicalAsOf && <> · data through {formatDate(s.typicalAsOf, { month: "short", day: "numeric" })}</>}
             {s.staleRows > 0 && <span className="text-warning-ink"> · {s.staleRows} line{s.staleRows === 1 ? "" : "s"} with older data</span>}
           </p>
         </div>
-        {isDemo && (
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-info-bg px-3 py-1.5 text-xs text-info-ink">
-            <DemoBadge /> {rows.every((r) => r.isDemo || r.accounts.length === 0) ? "Illustrative sample data — no live advertising accounts are connected." : "Some accounts show illustrative sample data, marked “Demo data” on their client pages."}
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportButtons base="/api/reports/agency" />
+          {isDemo && (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-info-bg px-3 py-1.5 text-xs text-info-ink">
+              <DemoBadge /> {rows.every((r) => r.isDemo || r.accounts.length === 0) ? "Illustrative sample data — no live advertising accounts are connected." : "Some accounts show illustrative sample data, marked “Demo data” on their client pages."}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">

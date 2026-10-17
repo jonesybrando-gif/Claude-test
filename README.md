@@ -51,7 +51,8 @@ The demo data is generated relative to today, so the current month always has re
 | `npm test` | Unit tests (pacing engine, roll-ups, permissions, recommendations, validation) |
 | `npm run typecheck` | TypeScript |
 | `npm run lint` | ESLint |
-| `npm run db:seed` | Reset and reload the demo agency |
+| `npm run db:seed` | Reset and reload the demo agency (development only; it creates logins with a known password) |
+| `npm run setup:owner -- --email you@agency.com --name "Your Name" --agency "Your Agency" [--remove-demo]` | Create your own agency and admin login and print a one-time link to set your password. Use this instead of the demo data for real use. |
 | `npm run sync` | Sync all live accounts that are due (`-- --account <id> [--backfill]` for one account) |
 | `npm run alerts` | Evaluate alerts and send any due daily summaries (also runs after every `/api/cron/sync`) |
 
@@ -209,6 +210,27 @@ src/components/             UI (shadcn-style primitives, charts, dashboard)
 - **Daily summary email:** weekday mornings from 7:00 in the agency's time zone, once per person per day, covering only that person's clients.
 - **Email:** sent over SMTP with white-labelled templates. Every message is recorded in **Settings → Email log**, with one-time links removed from the stored copy.
 - **Tests:** 25 new, including database-backed tests of recipients, deduplication, resolution, acknowledgement and summary timing, plus 28 browser checks.
+
+### Phase 4b: Reports and sign-in protection ✅
+
+- **PDF reports:** branded with agency name, color, logo, header and footer text, plus page numbers.
+  - **Client report:** KPI tiles with change vs. the comparison period, a cumulative pacing chart, pacing figures, budget lines, a platform breakdown (impressions, clicks, CTR, CPC, conversions, cost per conversion, leads, ROAS), campaigns, budget history and data notes. It follows the date range selected on the client page.
+  - **Internal variant:** "PDF + notes" adds the internal recommendations. Client users always get the client-facing version.
+  - **Agency report:** summary, agency pacing chart, and every budget line sorted by urgency, with recommendations.
+- **CSV exports:**
+  - **Client:** daily rows per account and campaign, with every metric.
+  - **Agency:** every budget line with its pacing figures.
+  - Money is exact to the cent, and Excel-friendly (UTF-8 BOM).
+  - Text from ad platforms is neutralised so it can never run as a spreadsheet formula.
+- **Permissions:** downloads follow the same rules as the pages. Client users can only download their own client.
+- **Sign-in protection:**
+  - 5 failed attempts for an email from one address locks that combination for 15 minutes.
+  - 30 failures from one address lock that address for 30 minutes.
+  - 50 failures for one email across all addresses within an hour lock it for 15 minutes.
+  - Attempts from elsewhere therefore can't lock you out from your own connection.
+  - Unknown emails take the same time to check as real ones.
+- **Owner setup:** `npm run setup:owner` creates your agency and admin login. A brand-new agency sees a getting-started screen.
+- ROAS shows "—" when a platform reports no conversion value (lead generation, LSA) instead of a misleading 0.00x.
 
 ### Not built yet
 
