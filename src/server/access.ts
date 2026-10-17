@@ -26,6 +26,12 @@ async function loadClientFacts(clientId: string) {
   return c && { id: c.id, agencyId: c.agencyId, primaryManagerId: c.primaryManagerId, assignedUserIds: c.assignments.map((a) => a.userId) };
 }
 
+/** Non-throwing check for route handlers. */
+export async function userCanViewClient(user: SessionUser, clientId: string): Promise<boolean> {
+  const facts = await loadClientFacts(clientId);
+  return !!facts && canViewClient(user, facts);
+}
+
 /** 404s (rather than 403s) so the existence of other clients is not revealed. */
 export async function requireClientView(clientId: string): Promise<SessionUser> {
   const user = await requireUser();

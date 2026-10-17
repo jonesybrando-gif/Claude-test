@@ -529,3 +529,12 @@ model ReportSchedule {
   nextRunAt  DateTime?
   enabled    Boolean  @default(true)
 }
+
+// Failed sign-in counters for throttling (see src/lib/login-throttle.ts).
+model LoginThrottle {
+  key         String   @id // "pair:<email>|<ip>", "ip:<ip>", "email:<email>"
+  failures    Int      @default(0)
+  windowStart DateTime @default(now())
+  lockedUntil DateTime?
+  updatedAt   DateTime @updatedAt
+}

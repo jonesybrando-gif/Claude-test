@@ -1,11 +1,9 @@
 import Link from "next/link";
 import { AlertTriangle, Settings2 } from "lucide-react";
-import { prisma } from "@/server/db";
 import { requireClientView } from "@/server/access";
-import { loadPacing, type PacingRow } from "@/server/pacing-service";
-import { getClientPerformance } from "@/server/reporting";
-import { comparisonRange, resolveRange, PRESET_LABEL, type CompareMode, type RangePreset } from "@/lib/date-ranges";
-import { addDays, monthBounds, todayInTimeZone } from "@/lib/pacing/dates";
+import type { PacingRow } from "@/server/pacing-service";
+import { loadClientReport } from "@/server/client-report";
+import { PRESET_LABEL } from "@/lib/date-ranges";
 import { derive, pctChange, type MetricTotals } from "@/lib/metrics";
 import { formatMoney, formatNumber, formatPct } from "@/lib/money";
 import { formatDate, relativeTime } from "@/lib/time";
@@ -21,15 +19,15 @@ import { PacingChart } from "@/components/charts/pacing-chart";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { RangeControls } from "@/components/range-controls";
 import { RefreshAccountButton } from "@/components/refresh-account-button";
+import { ExportButtons } from "@/components/export-buttons";
 
 export const dynamic = "force-dynamic";
-
-const PRESETS: RangePreset[] = ["mtd", "last_month", "last_7", "last_30", "last_90", "custom"];
 
 function Delta({ cur, prev, invert, neutral }: { cur: number; prev: number | undefined; invert?: boolean; neutral?: boolean }) {
   if (prev === undefined) return null;
   const c = pctChange(cur, prev);
   if (c === null) return <span className="text-text-3">no prior data</span>;
+  if (Math.abs(c) < 0.05) return <span className="text-text-2">no change vs. comparison</span>;
   const good = invert ? c < 0 : c > 0;
   return (
     <span className={neutral || Math.abs(c) < 0.5 ? "text-text-2" : good ? "text-good-ink" : "text-critical-ink"}>
@@ -44,33 +42,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const user = await requireClientView(id);
   const staff = user.role !== "CLIENT_USER";
 
-  const client = await prisma.client.findUniqueOrThrow({
-    where: { id },
-    include: { accounts: { include: { campaigns: true, syncRuns: { orderBy: { startedAt: "desc" }, take: 1 } }, orderBy: { platform: "asc" } } },
-  });
-  const today = todayInTimeZone(client.timezone);
-  const preset: RangePreset = PRESETS.includes(sp.range as RangePreset) ? (sp.range as RangePreset) : "mtd";
-  const compareMode: CompareMode = (["previous_period", "previous_month", "none"] as const).includes(sp.compare as CompareMode) ? (sp.compare as CompareMode) : "previous_month";
-  let range;
-  try {
-    range = resolveRange(preset, today, { from: sp.from, to: sp.to });
-  } catch {
-    range = resolveRange("mtd", today);
-  }
-  const cmpRange = comparisonRange(range, compareMode);
-
-  // Current pacing, plus the three previous months for budget history.
-  const historyDates = [1, 2, 3].map((n) => {
-    let d = monthBounds(today).start;
-    for (let i = 0; i < n; i++) d = monthBounds(addDays(d, -1)).start;
-    return d;
-  });
-  const [[pacing], history, perf, cmpPerf] = await Promise.all([
-    loadPacing({ id }),
-    Promise.all(historyDates.map((d) => loadPacing({ id }, new Date(), d).then((r) => r[0]))),
-    getClientPerformance(id, range),
-    cmpRange ? getClientPerformance(id, cmpRange) : Promise.resolve(null),
-  ]);
+  const { client, preset, compareMode, range, cmpRange, pacing, history, perf, cmpPerf } = await loadClientReport(id, sp);
 
   const total = pacing.total;
   const allLines: PacingRow[] = [...pacing.rows, ...pacing.subRows];
@@ -107,6 +79,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <RangeControls preset={preset} compare={compareMode} from={range.from} to={range.to} />
+          <ExportButtons base={`/api/reports/clients/${id}`} query={sp} internalPdf={staff} />
           {staff && (
             <Link href={`/clients/${id}/budgets`} className={buttonVariants({ variant: "outline" })}>
               <Settings2 className="h-4 w-4" /> Budgets
@@ -122,7 +95,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         <StatTile label="Conversions (platform-reported)" value={formatNumber(t.conversions, 1)} sub={<Delta cur={t.conversions} prev={ct?.conversions} />} />
         <StatTile label="Leads" value={formatNumber(t.leads)} sub={<Delta cur={t.leads} prev={ct?.leads} />} />
         <StatTile label="Cost per lead" value={d.costPerLeadMinor === null ? "—" : formatMoney(d.costPerLeadMinor, c)} sub={d.costPerLeadMinor !== null && cd?.costPerLeadMinor != null ? <Delta cur={d.costPerLeadMinor} prev={cd.costPerLeadMinor} invert /> : "leads from Meta & LSA"} />
-        <StatTile label="ROAS" value={d.roas === null ? "—" : `${d.roas.toFixed(2)}×`} sub={d.roas !== null && cd?.roas != null ? <Delta cur={d.roas} prev={cd.roas} /> : "conversion value ÷ spend"} />
+        <StatTile label="ROAS" value={d.roas === null ? "—" : `${d.roas.toFixed(2)}×`} sub={d.roas === null ? "no conversion value reported" : cd?.roas != null ? <Delta cur={d.roas} prev={cd.roas} /> : "conversion value ÷ spend"} />
       </div>
 
       {/* Budget pacing */}

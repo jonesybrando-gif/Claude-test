@@ -39,7 +39,7 @@ export interface DerivedMetrics {
   costPerConversionMinor: number | null;
   costPerLeadMinor: number | null;
   conversionRate: number | null; // % of clicks
-  roas: number | null; // conversion value ÷ cost
+  roas: number | null; // conversion value ÷ cost; null when no value is reported
 }
 
 export function derive(t: MetricTotals): DerivedMetrics {
@@ -51,7 +51,8 @@ export function derive(t: MetricTotals): DerivedMetrics {
     costPerConversionMinor: div(t.costMinor, t.conversions),
     costPerLeadMinor: div(t.costMinor, t.leads),
     conversionRate: t.clicks > 0 ? (t.conversions / t.clicks) * 100 : null,
-    roas: div(t.conversionValueMinor, t.costMinor),
+    // No conversion value reported (e.g. lead-gen or LSA) means ROAS is unknown, not zero.
+    roas: t.conversionValueMinor > 0 ? div(t.conversionValueMinor, t.costMinor) : null,
   };
 }
 

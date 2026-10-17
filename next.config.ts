@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // PDFKit reads its built-in font metrics from its package directory at runtime.
+  serverExternalPackages: ["pdfkit"],
 };
 
 export default nextConfig;

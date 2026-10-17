@@ -13,7 +13,8 @@
     "db:seed": "tsx prisma/seed.ts && npm run alerts",
     "postinstall": "prisma generate",
     "sync": "tsx --conditions=react-server scripts/sync.ts",
-    "alerts": "tsx --conditions=react-server scripts/alerts.ts"
+    "alerts": "tsx --conditions=react-server scripts/alerts.ts",
+    "setup:owner": "tsx --conditions=react-server scripts/setup-owner.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
@@ -24,6 +25,7 @@
     "lucide-react": "^0.544.0",
     "next": "15.5.4",
     "nodemailer": "^6.9.16",
+    "pdfkit": "^0.17.2",
     "prisma": "^6.16.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -37,6 +39,7 @@
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/nodemailer": "^6.4.17",
+    "@types/pdfkit": "^0.17.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv": "^16.6.1",
