@@ -3,46 +3,26 @@
 import { useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from "recharts";
 import type { DailyMetrics } from "@/server/reporting";
-import { derive } from "@/lib/metrics";
-import { formatMoney, formatMoneyCompact, formatNumber, formatPct } from "@/lib/money";
+import { dailyKpiValue, formatKpi, KPI_BY_KEY, type KpiKey } from "@/lib/kpis";
+import { formatMoneyCompact, formatNumber, formatPct } from "@/lib/money";
 import { formatDate } from "@/lib/time";
 import { cn } from "../ui/cn";
 
-type MetricKey = "spend" | "conversions" | "leads" | "cpl" | "clicks" | "impressions" | "cvr";
+const DEFAULT_METRICS: KpiKey[] = ["spend", "conversions", "leads", "costPerLead", "clicks", "impressions", "conversionRate"];
 
-const METRICS: { key: MetricKey; label: string; kind: "money" | "number" | "pct" }[] = [
-  { key: "spend", label: "Spend", kind: "money" },
-  { key: "conversions", label: "Conversions", kind: "number" },
-  { key: "leads", label: "Leads", kind: "number" },
-  { key: "cpl", label: "Cost per lead", kind: "money" },
-  { key: "clicks", label: "Clicks", kind: "number" },
-  { key: "impressions", label: "Impressions", kind: "number" },
-  { key: "cvr", label: "Conversion rate", kind: "pct" },
-];
-
-function value(d: DailyMetrics, key: MetricKey): number | null {
-  const x = derive(d);
-  switch (key) {
-    case "spend": return d.costMinor;
-    case "conversions": return d.conversions;
-    case "leads": return d.leads;
-    case "cpl": return x.costPerLeadMinor;
-    case "clicks": return d.clicks;
-    case "impressions": return d.impressions;
-    case "cvr": return x.conversionRate;
-  }
-}
-
-export function TrendChart({ current, comparison, currency = "USD" }: { current: DailyMetrics[]; comparison: DailyMetrics[] | null; currency?: string }) {
-  const [metric, setMetric] = useState<MetricKey>("spend");
-  const m = METRICS.find((x) => x.key === metric)!;
-  const fmt = (v: number | null, axis = false) =>
-    v === null ? "—" : m.kind === "money" ? (axis ? formatMoneyCompact(v, currency) : formatMoney(v, currency, { whole: v >= 10000 })) : m.kind === "pct" ? formatPct(v) : formatNumber(v, v < 10 ? 1 : 0);
+export function TrendChart({ current, comparison, currency = "USD", metrics = DEFAULT_METRICS }: { current: DailyMetrics[]; comparison: DailyMetrics[] | null; currency?: string; metrics?: KpiKey[] }) {
+  const [metric, setMetric] = useState<KpiKey>(metrics[0] ?? "spend");
+  const m = KPI_BY_KEY[metrics.includes(metric) ? metric : metrics[0] ?? "spend"];
+  const fmt = (v: number | null, axis = false) => {
+    if (!axis) return formatKpi(m.key, v, currency);
+    if (v === null) return "";
+    return m.kind === "money" ? formatMoneyCompact(v, currency) : m.kind === "pct" ? formatPct(v, 1) : m.kind === "ratio" ? `${v.toFixed(1)}×` : formatNumber(v, v < 10 && v % 1 ? 1 : 0);
+  };
   // Comparison is aligned by day offset (day 1 vs day 1).
   const data = current.map((d, i) => ({
     date: d.date,
-    current: value(d, metric),
-    previous: comparison?.[i] ? value(comparison[i], metric) : null,
+    current: dailyKpiValue(d, m.key),
+    previous: comparison?.[i] ? dailyKpiValue(comparison[i], m.key) : null,
     previousDate: comparison?.[i]?.date ?? null,
   }));
 
@@ -60,15 +40,15 @@ export function TrendChart({ current, comparison, currency = "USD" }: { current:
   return (
     <div>
       <div className="mb-3 flex flex-wrap gap-1" role="tablist" aria-label="Metric">
-        {METRICS.map((x) => (
+        {metrics.map((k) => (
           <button
-            key={x.key}
+            key={k}
             role="tab"
-            aria-selected={metric === x.key}
-            onClick={() => setMetric(x.key)}
-            className={cn("rounded-md px-2.5 py-1 text-xs cursor-pointer", metric === x.key ? "bg-surface-2 font-medium text-text ring-1 ring-border" : "text-text-2 hover:text-text")}
+            aria-selected={m.key === k}
+            onClick={() => setMetric(k)}
+            className={cn("rounded-md px-2.5 py-1 text-xs cursor-pointer", m.key === k ? "bg-surface-2 font-medium text-text ring-1 ring-border" : "text-text-2 hover:text-text")}
           >
-            {x.label}
+            {KPI_BY_KEY[k].label}
           </button>
         ))}
       </div>
@@ -90,7 +70,7 @@ export function TrendChart({ current, comparison, currency = "USD" }: { current:
           </LineChart>
         </ResponsiveContainer>
       </div>
-      {(metric === "conversions" || metric === "cvr") && <p className="mt-2 text-xs text-text-3">Conversions are platform-reported; each platform defines and attributes them differently.</p>}
+      {(m.key === "conversions" || m.key === "conversionRate" || m.key === "costPerConversion") && <p className="mt-2 text-xs text-text-3">Conversions are platform-reported; each platform defines and attributes them differently.</p>}
     </div>
   );
 }
