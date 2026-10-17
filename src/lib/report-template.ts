@@ -2,14 +2,15 @@
 // JSON on the Report model; always read through parseTemplate so a stale or
 // hand-edited value can never break a report.
 
-import { ALL_KPI_KEYS, DEFAULT_KPIS, isKpiKey, type KpiKey } from "./kpis";
+import { DEFAULT_KPIS, isKpiKey, type KpiKey } from "./kpis";
 import type { CompareMode, RangePreset } from "./date-ranges";
 
-export const SECTION_KEYS = ["summary", "kpis", "trends", "pacing", "platforms", "campaigns", "history", "notes"] as const;
+export const SECTION_KEYS = ["executive", "summary", "kpis", "trends", "pacing", "platforms", "campaigns", "history", "notes"] as const;
 export type SectionKey = (typeof SECTION_KEYS)[number];
 
 export const SECTION_LABEL: Record<SectionKey, string> = {
-  summary: "Written summary",
+  executive: "Executive summary",
+  summary: "Written note",
   kpis: "KPI scorecards",
   trends: "Trend charts",
   pacing: "Budget pacing",
@@ -25,6 +26,8 @@ export interface ReportTemplate {
   trendKpis: KpiKey[];
   sections: Record<SectionKey, boolean>;
   summary: string;
+  /** Executive summary written by AI when it's set up; otherwise built from the figures. */
+  executiveAi: boolean;
   defaultRange: Exclude<RangePreset, "custom">;
   compare: CompareMode;
 }
@@ -38,8 +41,9 @@ export const DEFAULT_TEMPLATE: ReportTemplate = {
   title: "Advertising performance report",
   kpis: DEFAULT_KPIS,
   trendKpis: ["spend", "conversions"],
-  sections: { summary: true, kpis: true, trends: true, pacing: true, platforms: true, campaigns: true, history: true, notes: true },
+  sections: { executive: true, summary: true, kpis: true, trends: true, pacing: true, platforms: true, campaigns: true, history: true, notes: true },
   summary: "",
+  executiveAi: true,
   defaultRange: "last_month",
   compare: "previous_period",
 };
@@ -64,12 +68,13 @@ export function parseTemplate(raw: unknown, base: ReportTemplate = DEFAULT_TEMPL
     trendKpis: trendKpis ?? base.trendKpis,
     sections,
     summary: typeof o.summary === "string" ? o.summary.slice(0, 5000) : base.summary,
+    executiveAi: typeof o.executiveAi === "boolean" ? o.executiveAi : base.executiveAi,
     defaultRange: RANGES.includes(o.defaultRange as (typeof RANGES)[number]) ? (o.defaultRange as ReportTemplate["defaultRange"]) : base.defaultRange,
     compare: COMPARES.includes(o.compare as CompareMode) ? (o.compare as CompareMode) : base.compare,
   };
 }
 
-/** Builds a template from a submitted builder form. */
+/** Builds a template from a submitted builder form. KPIs keep the submitted order. */
 export function templateFromForm(form: { getAll(k: string): unknown[]; get(k: string): unknown }): { template: ReportTemplate; problems: string[] } {
   const problems: string[] = [];
   const kpis = form.getAll("kpis").filter(isKpiKey);
@@ -80,10 +85,11 @@ export function templateFromForm(form: { getAll(k: string): unknown[]; get(k: st
   const sections = Object.fromEntries(SECTION_KEYS.map((k) => [k, form.get(`section:${k}`) === "on"]));
   const template = parseTemplate({
     title: form.get("title"),
-    kpis: ALL_KPI_KEYS.filter((k) => kpis.includes(k)), // keep catalog order
-    trendKpis: ALL_KPI_KEYS.filter((k) => trendKpis.includes(k)),
+    kpis, // in the order arranged in the builder
+    trendKpis,
     sections,
     summary: form.get("summary"),
+    executiveAi: form.get("executiveAi") !== "auto",
     defaultRange: form.get("defaultRange"),
     compare: form.get("compare"),
   });

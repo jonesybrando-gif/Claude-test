@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { loadClientReport } from "@/server/client-report";
 import { renderClientReportPdf } from "@/server/pdf/reports";
+import { getExecutiveSummary } from "@/server/exec-summary";
 import { agencyBrand } from "@/server/pdf/brand";
 import { resolveShareToken } from "@/server/share-links";
 import { slug } from "@/lib/csv";
@@ -13,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   const link = await resolveShareToken(token);
   if (!link) return NextResponse.json({ error: "This link has expired or been turned off." }, { status: 404 });
   const report = await loadClientReport(link.clientId, { range: link.range ?? undefined, compare: link.compare ?? undefined });
-  const pdf = await renderClientReportPdf(report, await agencyBrand(link.client.agencyId), { internal: false });
+  const pdf = await renderClientReportPdf(report, await agencyBrand(link.client.agencyId), { internal: false, executiveSummary: await getExecutiveSummary(report, { generate: true }) });
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",

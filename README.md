@@ -245,14 +245,21 @@ src/components/             UI (shadcn-style primitives, charts, dashboard)
   - Blended KPIs are true ratios (total spend ÷ total clicks), never averages of per-platform averages.
   - Metrics no platform reported (for example leads on Google Ads) show "—" and "not reported" rather than 0.
 - **Report builder:** **Settings → Reports** sets the agency's default report, and **Customize report** on a client page gives that client its own. Each layout chooses:
-  - the KPI scorecards (up to 12)
+  - the KPI scorecards (up to 12), in any order: drag, use the arrows, remove, or add from the catalog
   - up to 3 trend charts
-  - which sections appear (summary, KPIs, trends, pacing, platforms, campaigns, budget history, notes)
-  - the title and a written summary
+  - which sections appear (executive summary, written note, KPIs, trends, pacing, platforms, campaigns, budget history, notes)
+  - the title and an optional written note
   - the default date range and comparison
 - **Template-driven reports:** the client page and the PDF follow the layout.
   - Client logins don't see sections a layout turns off. Your team still sees them, marked "Hidden from client report".
   - The PDF adds a daily chart for each trend KPI, with the comparison period dashed, and defines each KPI in its notes.
+
+- **Executive summary:** a paragraph or two at the top of every report, written for the date range being viewed. It appears on the client page, on shared links and in the PDF.
+  - **Automatic:** plain sentences built directly from the figures, covering results, changes vs. the comparison period, the largest campaign, and the budget position (month to date, or the final result for a past month). It needs no AI and always works.
+  - **Written by AI (default when `ANTHROPIC_API_KEY` is set):** the page shows the automatic version at once and the AI version streams in when ready.
+    - Each version is saved per client, date range and comparison for 24 hours, so reloading or sharing doesn't call the AI again.
+    - If the AI call fails, the automatic version is shown.
+  - Each layout chooses which of the two it uses.
 
 ### Phase 5b: AI assistant ✅ (tested against a mock API · ⏳ needs your `ANTHROPIC_API_KEY` for live use)
 

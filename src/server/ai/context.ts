@@ -1,16 +1,22 @@
 import "server-only";
 import type { ClientReport } from "../client-report";
-import { buildAiContext } from "@/lib/ai-context";
+import { buildAiContext, type AiContextInput } from "@/lib/ai-context";
 import { PLATFORM_LABEL } from "@/lib/platforms";
 import { PRESET_LABEL } from "@/lib/date-ranges";
 import { formatDate } from "@/lib/time";
 
 /** The grounding text for one client's report, as the page and PDF show it. */
 export function contextForReport(rep: ClientReport): string {
+  return buildAiContext(contextInput(rep));
+}
+
+export function contextInput(rep: ClientReport): AiContextInput {
   const { client, pacing, perf, cmpPerf, template } = rep;
   const total = pacing.total;
   const metaById = new Map(pacing.accounts.map((a) => [a.id, a]));
-  return buildAiContext({
+  // When the report covers exactly a past budget month, its final result is relevant.
+  const past = rep.history.find((h) => h.period.start === rep.range.from && h.period.end === rep.range.to && h.total);
+  return {
     clientName: client.name,
     currency: client.currency,
     isDemo: client.accounts.some((a) => a.isDemo),
@@ -52,6 +58,9 @@ export function contextForReport(rep: ClientReport): string {
           pacingPct: total.pacingPct,
         }
       : null,
+    pastBudget: past?.total
+      ? { month: formatDate(past.period.start, { month: "long", year: "numeric" }), budgetMinor: past.total.budgetMinor, spentMinor: past.total.actualToDateMinor, status: past.total.status }
+      : null,
     notes: [...new Set([...pacing.rows, ...pacing.subRows].flatMap((r) => r.warnings))],
-  });
+  };
 }

@@ -19,6 +19,7 @@ import { PlatformLabel } from "@/components/platform-badge";
 import { PacingChart } from "@/components/charts/pacing-chart";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { RefreshAccountButton } from "@/components/refresh-account-button";
+import { ExecutiveSummary } from "./executive-summary";
 
 const TREND_EXTRAS: KpiKey[] = ["spend", "conversions", "leads", "costPerLead", "clicks", "impressions", "conversionRate"];
 
@@ -70,10 +71,12 @@ export function ClientReportView({
 
   return (
     <>
+      {show("executive") && <ExecutiveSummary rep={rep} marker={hiddenMark("executive")} />}
+
       {show("summary") && template.summary.trim() && (
         <Card>
           <CardHeader>
-            <div className="flex flex-wrap items-center gap-2"><CardTitle>Summary</CardTitle>{hiddenMark("summary")}</div>
+            <div className="flex flex-wrap items-center gap-2"><CardTitle>Note</CardTitle>{hiddenMark("summary")}</div>
           </CardHeader>
           <CardContent><p className="max-w-[80ch] whitespace-pre-line text-sm text-text-2">{template.summary.trim()}</p></CardContent>
         </Card>
