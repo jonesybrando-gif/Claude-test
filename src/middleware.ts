@@ -20,5 +20,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|api/cron|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!login|accept-invite|reset-password|forgot-password|api/cron|_next/static|_next/image|favicon.ico).*)"],
 };

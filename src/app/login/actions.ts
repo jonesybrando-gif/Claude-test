@@ -14,7 +14,8 @@ export async function login(_prev: { error?: string } | undefined, form: FormDat
   const user = await prisma.user.findUnique({ where: { email: parsed.data.email.toLowerCase() } });
   // Compare against a dummy hash when the user is missing so timing does not reveal accounts.
   const ok = await bcrypt.compare(parsed.data.password, user?.passwordHash ?? "$2b$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinv");
-  if (!user || !ok) return { error: "Incorrect email or password." };
+  if (!user || !ok || !user.passwordHash || user.deactivatedAt) return { error: "Incorrect email or password." };
+  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   await createSession(user.id);
   redirect(user.role === "CLIENT_USER" && user.clientId ? `/clients/${user.clientId}` : "/dashboard");
 }

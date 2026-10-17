@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Building2, Gauge, Plug, Settings, LogOut } from "lucide-react";
+import { BarChart3, Bell, Building2, Gauge, Plug, Settings, LogOut } from "lucide-react";
 import { requireUser } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { visibleClientsWhere } from "@/server/access";
@@ -8,13 +8,15 @@ import { ClientJump } from "@/components/client-jump";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const [agency, clients] = await Promise.all([
+  const [agency, clients, unread] = await Promise.all([
     prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId }, select: { name: true, brandColor: true, logoUrl: true } }),
     prisma.client.findMany({ where: visibleClientsWhere(user), select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    user.role === "CLIENT_USER" ? Promise.resolve(0) : prisma.notification.count({ where: { userId: user.id, readAt: null } }),
   ]);
   const staff = user.role !== "CLIENT_USER";
   const nav = [
     ...(staff ? [{ href: "/dashboard", label: "Pacing dashboard", Icon: Gauge }] : []),
+    ...(staff ? [{ href: "/alerts", label: "Alerts", Icon: Bell, count: unread }] : []),
     { href: staff ? "/clients" : `/clients/${user.clientId}`, label: staff ? "Clients" : "My reports", Icon: staff ? Building2 : BarChart3 },
     ...(staff ? [{ href: "/integrations", label: "Integrations", Icon: Plug }] : []),
     ...(user.role === "AGENCY_ADMIN" ? [{ href: "/settings", label: "Settings", Icon: Settings }] : []),
@@ -35,12 +37,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <span className="truncate text-sm font-semibold">{agency.name}</span>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:pb-0">
-          {nav.map(({ href, label, Icon }) => (
-            <Link key={href} href={href} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-text-2 hover:bg-surface-2 hover:text-text whitespace-nowrap">
-              <Icon className="h-4 w-4" aria-hidden />
-              {label}
-            </Link>
-          ))}
+          {nav.map(({ href, label, Icon, ...rest }) => {
+            const count = "count" in rest ? (rest.count as number) : 0;
+            return (
+              <Link key={href} href={href} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-text-2 hover:bg-surface-2 hover:text-text whitespace-nowrap">
+                <Icon className="h-4 w-4" aria-hidden />
+                {label}
+                {count > 0 && <span className="ml-auto rounded-full bg-critical px-1.5 text-[11px] font-semibold text-white tabular" aria-label={`${count} unread`}>{count > 99 ? "99+" : count}</span>}
+              </Link>
+            );
+          })}
         </nav>
         {staff && clients.length > 0 && (
           <div className="hidden px-4 pt-4 md:block">
@@ -48,7 +54,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         )}
         <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2 md:absolute md:bottom-0 md:block md:w-60 md:py-3">
-          <p className="truncate text-sm font-medium">{user.name}</p>
+          <Link href="/account" className="block truncate text-sm font-medium hover:underline">{user.name}</Link>
           <p className="truncate text-xs text-text-3">{user.role.replace("_", " ").toLowerCase()}</p>
           <form action={logout}>
             <button className="mt-2 inline-flex items-center gap-1.5 text-xs text-text-2 hover:text-text cursor-pointer">

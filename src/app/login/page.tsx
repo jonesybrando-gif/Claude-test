@@ -16,6 +16,7 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <LoginForm />
+            <p className="mt-4 text-sm"><a href="/forgot-password" className="text-text-2 underline">Forgot your password?</a></p>
           </CardContent>
         </Card>
         {showDemo && (

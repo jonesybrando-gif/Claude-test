@@ -8,8 +8,7 @@ export default async function SettingsPage() {
   const user = await requireAdmin();
   const a = await prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId } });
   return (
-    <div className="mx-auto flex max-w-[900px] flex-col gap-5">
-      <h1 className="text-xl font-semibold">Settings</h1>
+    <div className="flex max-w-[900px] flex-col gap-5">
       <SettingsForm
         values={{
           name: a.name,
