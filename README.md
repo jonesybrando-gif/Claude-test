@@ -2,7 +2,7 @@
 
 A multi-tenant advertising reporting and **budget pacing** app for agencies. Enter each client's monthly budget, and the app works out whether campaigns are spending too fast, too slow, or on target, forecasts month-end spend, and tells account managers exactly what daily spend to aim for.
 
-> **Status:** Phase 1 (core application) is built and tested with demo data. Phase 2 (the Google Ads integration and background sync) is built and tested against the documented API, but **has not yet been run against a real Google Ads account**. Setup steps are in [docs/google-ads-setup.md](docs/google-ads-setup.md). All sample data is flagged `isDemo` and labelled "Demo data" in the UI. See [What's built and what isn't](#whats-built-and-what-isnt).
+> **Status:** Phase 1 (core application) is built and tested with demo data. Phases 2–3 (Google Ads, Meta Ads, Microsoft Advertising and Google Local Services Ads integrations, plus background sync) are built and tested against each platform's documented API, but **none has yet been run against a real ad account**. Setup guides: [Google Ads + LSA](docs/google-ads-setup.md), [Meta Ads](docs/meta-ads-setup.md), [Microsoft Advertising](docs/microsoft-ads-setup.md). All sample data is flagged `isDemo` and labelled "Demo data" in the UI. See [What's built and what isn't](#whats-built-and-what-isnt).
 
 ## Quick start
 
@@ -26,7 +26,9 @@ npm run dev                   # http://localhost:3000
 | `SHOW_DEMO_LOGINS` | Optional. `1` shows the demo login hints on the sign-in page in production |
 | `APP_URL` | Public base URL; must match the OAuth redirect URI registered with Google |
 | `CRON_SECRET` | Bearer secret for `/api/cron/sync` |
-| `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN` | Google Ads API credentials; see [docs/google-ads-setup.md](docs/google-ads-setup.md) |
+| `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN` | Google Ads API credentials (also used for Local Services Ads); see [docs/google-ads-setup.md](docs/google-ads-setup.md) |
+| `META_APP_ID`, `META_APP_SECRET` | Meta app credentials; see [docs/meta-ads-setup.md](docs/meta-ads-setup.md) |
+| `MICROSOFT_ADS_CLIENT_ID`, `MICROSOFT_ADS_CLIENT_SECRET`, `MICROSOFT_ADS_DEVELOPER_TOKEN` | Microsoft Advertising credentials; see [docs/microsoft-ads-setup.md](docs/microsoft-ads-setup.md) |
 
 Demo logins (password `demo-password`):
 
@@ -164,14 +166,31 @@ src/components/             UI (shadcn-style primitives, charts, dashboard)
 - Tests: 28 Google Ads and sync tests, covering GAQL building and injection safety, micros-to-cents conversion, response parsing, error classification, retry behavior, the hierarchy listing, and database-backed sync scenarios.
 - Checked against Google's real OAuth and Ads endpoints using deliberately invalid credentials, to confirm the request format and error handling.
 
+### Phase 3: Meta Ads, Microsoft Advertising, Local Services Ads ✅ built · ⏳ awaiting live accounts to verify
+
+- **Meta Ads** (Graph / Marketing API v26.0):
+  - Facebook Login with a long-lived token (expiry is shown, and the app asks for reconnection in the final week), or a pasted Business Manager system-user token. The pasted token is validated with Meta's `debug_token` before it is stored.
+  - Ad account discovery (direct, plus business-owned and client accounts).
+  - Daily campaign insights. Leads and purchases are counted from one preferred action type each, so overlapping types are never double-counted.
+  - Signed calls (`appsecret_proof`); retry waits come from Meta's rate-limit headers.
+- **Microsoft Advertising** (v13 JSON REST, since SOAP is retired on 2027-01-31):
+  - Microsoft identity sign-in with rotating refresh tokens.
+  - Account discovery (`User/Query` → `Accounts/Search`).
+  - Asynchronous daily campaign reports: submit, poll, then download the ZIP/CSV, with a built-in unzip and CSV parser.
+  - Time zone mapping; errors are recognized even when returned inside an HTTP 200 response.
+- **Google Local Services Ads** (through the Google Ads API and connection):
+  - `LOCAL_SERVICES` campaigns are split out of Google Ads, so their cost is never counted twice.
+  - Daily leads and charged leads come from `local_services_lead`.
+  - When charged leads arrive with no cost, spend is flagged "not reported" rather than estimated.
+- **Shared framework:** one OAuth route for every platform (`/api/integrations/<platform>/connect`), an account picker with one column per platform (Google offers Google Ads and Local Services), and "Don't monitor" to stop syncing an account while keeping its history.
+- **Tests:** 34 new, covering parsing, money conversion, error classification, OAuth and token behavior, paging and host safety, report polling, ZIP/CSV handling, and LSA lead attribution and spend verification.
+
 ### Not built yet
 
 | Phase | Item | Notes |
 |---|---|---|
 | 2 | First live Google Ads connection | Needs the Cloud Console and MCC setup in [docs/google-ads-setup.md](docs/google-ads-setup.md). This is the step that moves Google Ads from "built" to "verified". |
-| 3 | Meta Ads | Needs a Meta app with Marketing API access, App Review for `ads_read`, and business verification. |
-| 3 | Microsoft Advertising | Needs a developer token and an Azure app registration. |
-| 3 | Google Local Services Ads | **Not verified yet.** Before building, confirm from current Google documentation which official API exposes LSA leads and charges, and whether it reports verified daily cost. Until then, LSA spend is labelled *estimated* everywhere. |
+| 3 | First live Meta, Microsoft and LSA connections | Needs the setup in the guides above. Meta also needs App Review and Advanced Access for client-owned ad accounts. |
 | 4 | Alerts and notifications | Schema (`Alert`, with a dedupe key, and `Notification`) is ready. The evaluator, email delivery and daily summary are not built. |
 | 4 | PDF and CSV export, scheduled email reports, custom report builder | Schema (`Report`, `ReportSchedule`) is ready. |
 | 4 | Branded client portal | Client users already get a read-only view of their own client; a custom domain and branded login are not built. |

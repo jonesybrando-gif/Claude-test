@@ -24,11 +24,20 @@ export async function storeTokens(connectionId: string, tokens: OAuthTokens): Pr
  */
 export async function getAccessToken(connectionId: string, adapter: PlatformAdapter, opts: { force?: boolean } = {}): Promise<string> {
   const cred = await prisma.oAuthCredential.findUnique({ where: { connectionId } });
-  if (!cred?.encryptedRefreshToken) {
+  if (!cred || (!cred.encryptedAccessToken && !cred.encryptedRefreshToken)) {
     throw new IntegrationError("AUTH_REVOKED", "No stored authorization for this connection. Reconnect it.");
   }
-  const fresh = cred.encryptedAccessToken && cred.accessTokenExpiresAt && cred.accessTokenExpiresAt.getTime() - Date.now() > REFRESH_MARGIN_MS;
-  if (fresh && !opts.force) return decryptSecret(cred.encryptedAccessToken!);
+  // A token with no expiry and no refresh token is long-lived (e.g. a Meta system-user token).
+  const expiresAt = cred.accessTokenExpiresAt?.getTime();
+  const accessValid = !!cred.encryptedAccessToken && (expiresAt === undefined || expiresAt - Date.now() > REFRESH_MARGIN_MS);
+  if (accessValid && !opts.force) return decryptSecret(cred.encryptedAccessToken!);
+
+  if (!cred.encryptedRefreshToken || !adapter.refresh) {
+    const expired = expiresAt !== undefined && expiresAt - Date.now() <= REFRESH_MARGIN_MS;
+    const message = expired ? "The platform authorization has expired. Reconnect it." : "The platform rejected the stored authorization. Reconnect it.";
+    await markConnectionNeedsReauth(connectionId, message);
+    throw new IntegrationError("AUTH_REVOKED", message);
+  }
   try {
     const tokens = await adapter.refresh(decryptSecret(cred.encryptedRefreshToken));
     await storeTokens(connectionId, tokens);

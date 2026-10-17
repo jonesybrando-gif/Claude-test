@@ -7,15 +7,31 @@ import type { IsoDate } from "@/lib/pacing/dates";
  * the sync runner, pacing engine and reports do not change.
  */
 export interface PlatformAdapter {
+  /** The platform of the ad accounts this adapter syncs. */
   platform: Platform;
+  /**
+   * The platform of the login (PlatformConnection) this adapter uses. Usually
+   * the same; Local Services Ads reuse a Google Ads connection.
+   */
+  connectionPlatform: Platform;
   /** True when the server has the credentials this integration needs. */
   isConfigured(): boolean;
   /** Build the OAuth consent URL for this platform. */
   authorizationUrl(state: string, redirectUri: string): string;
   /** Exchange an OAuth code for tokens (caller encrypts and stores them). */
   exchangeCode(code: string, redirectUri: string): Promise<OAuthTokens>;
-  /** Use a refresh token to get a fresh access token. */
-  refresh(refreshToken: string): Promise<OAuthTokens>;
+  /**
+   * Use a refresh token to get a fresh access token. Platforms without
+   * refresh tokens (Meta) omit this; their tokens are re-authorized instead.
+   */
+  refresh?(refreshToken: string): Promise<OAuthTokens>;
+  /**
+   * Connect with a pasted long-lived token instead of OAuth (e.g. a Meta
+   * Business Manager system-user token). Validates it and returns a label.
+   */
+  connectWithToken?(token: string): Promise<{ label: string; tokens: OAuthTokens }>;
+  /** Account platforms that can be linked from this connection's accounts (Google Ads → Google Ads + LSA). */
+  linkablePlatforms: Platform[];
   /** Accounts the authorized login can reach (e.g. every customer under a Google Ads MCC). */
   listAccounts(accessToken: string): Promise<RemoteAccount[]>;
   listCampaigns(accessToken: string, account: AccountRef): Promise<RemoteCampaign[]>;
@@ -25,7 +41,9 @@ export interface PlatformAdapter {
    * platform has no campaign granularity), never pre-aggregated totals.
    * Days with no activity may be absent; absent means zero.
    */
-  fetchDailyPerformance(accessToken: string, account: AccountRef, from: IsoDate, to: IsoDate): Promise<{ rows: RemoteDailyRow[]; campaigns: RemoteCampaign[] }>;
+  fetchDailyPerformance(accessToken: string, account: AccountRef, from: IsoDate, to: IsoDate): Promise<DailyPerformanceResult>;
+  /** Largest date range requested at once (default 92 days). */
+  maxRangeDays?: number;
   /**
    * Last local date whose numbers are complete enough to pace on. The
    * dashboard never paces past this date.
@@ -39,8 +57,22 @@ export interface PlatformAdapter {
   spendIsVerified: boolean;
 }
 
+export interface DailyPerformanceResult {
+  rows: RemoteDailyRow[];
+  campaigns: RemoteCampaign[];
+  /**
+   * Set when the adapter can tell whether this response carried verified
+   * spend (false e.g. when LSA leads were charged but no cost was reported).
+   */
+  spendVerified?: boolean;
+}
+
 export interface AccountRef {
   externalId: string;
+  /**
+   * Platform-specific parent id: the Google Ads manager id sent as
+   * login-customer-id, or the Microsoft Advertising CustomerId.
+   */
   loginCustomerId?: string | null;
   timezone?: string | null;
 }
@@ -59,8 +91,12 @@ export interface RemoteAccount {
   timezone: string;
   isManager: boolean;
   isTestAccount?: boolean;
-  /** Manager id to send as login-customer-id when reaching this account. */
+  /** Parent id needed to reach this account (see AccountRef.loginCustomerId). */
   loginCustomerId?: string;
+  /** Human-facing id, e.g. "123-456-7890" or "act_123". */
+  displayId?: string;
+  /** Platform account status, if not active (shown in the account picker). */
+  statusNote?: string;
   level?: number;
 }
 

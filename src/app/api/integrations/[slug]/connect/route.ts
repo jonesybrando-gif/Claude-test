@@ -1,0 +1,19 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { getCurrentUser } from "@/server/auth";
+import { getAdapter, platformForSlug } from "@/server/integrations/registry";
+import { createOAuthState, OAUTH_NONCE_COOKIE, redirectUri } from "@/server/integrations/oauth-state";
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const platform = platformForSlug(slug);
+  if (!platform) return NextResponse.json({ error: "Unknown platform" }, { status: 404 });
+  const user = await getCurrentUser();
+  if (!user || user.role !== "AGENCY_ADMIN") return NextResponse.json({ error: "Only agency administrators can connect platforms" }, { status: 403 });
+  const adapter = getAdapter(platform);
+  if (!adapter.isConfigured()) return NextResponse.redirect(new URL(`/integrations?error=${encodeURIComponent(`${slug}_not_configured`)}`, req.url));
+
+  const { state, nonce, maxAge } = await createOAuthState(user.id, user.agencyId, platform);
+  const res = NextResponse.redirect(adapter.authorizationUrl(state, redirectUri(`/api/integrations/${slug}/callback`, req.url)));
+  res.cookies.set(OAUTH_NONCE_COOKIE, nonce, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge, path: "/api/integrations" });
+  return res;
+}

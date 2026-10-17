@@ -153,7 +153,13 @@ function paceUnit(unit: PacingUnit, budget: BudgetWithRevisions, ctx: UnitContex
     if (a.timezone && a.timezone !== ctx.client.timezone) {
       warnings.push(`${a.name} reports in ${a.timezone} but the client uses ${ctx.client.timezone}; daily totals follow the ad platform's day boundaries`);
     }
-    if (!a.spendIsVerified) warnings.push(`${a.name}: spend is estimated — the platform API does not report verified daily cost`);
+    if (!a.spendIsVerified) {
+      warnings.push(
+        a.isDemo
+          ? `${a.name}: spend is estimated — the platform API does not report verified daily cost`
+          : `${a.name}: the platform reported charged leads but no cost, so spend is incomplete and pacing for this line is unreliable`,
+      );
+    }
   }
 
   const result = computePacing({

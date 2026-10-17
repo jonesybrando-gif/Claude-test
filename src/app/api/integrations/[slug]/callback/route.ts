@@ -1,0 +1,54 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { getCurrentUser } from "@/server/auth";
+import { prisma } from "@/server/db";
+import { getAdapter, platformForSlug } from "@/server/integrations/registry";
+import { OAUTH_NONCE_COOKIE, redirectUri, verifyOAuthState } from "@/server/integrations/oauth-state";
+import { storeTokens } from "@/server/integrations/tokens";
+import { IntegrationError } from "@/server/integrations/errors";
+import { PLATFORM_LABEL } from "@/lib/platforms";
+
+function back(req: NextRequest, error: string) {
+  const res = NextResponse.redirect(new URL(`/integrations?error=${encodeURIComponent(error)}`, req.url));
+  res.cookies.delete({ name: OAUTH_NONCE_COOKIE, path: "/api/integrations" });
+  return res;
+}
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const platform = platformForSlug(slug);
+  if (!platform) return NextResponse.json({ error: "Unknown platform" }, { status: 404 });
+  const user = await getCurrentUser();
+  if (!user || user.role !== "AGENCY_ADMIN") return NextResponse.redirect(new URL("/login", req.url));
+  const label = PLATFORM_LABEL[platform];
+  const q = req.nextUrl.searchParams;
+  const providerError = q.get("error");
+  if (providerError) {
+    const cancelled = providerError === "access_denied" || q.get("error_reason") === "user_denied";
+    return back(req, cancelled ? `${label} authorization was cancelled` : `${label} returned: ${q.get("error_description") ?? providerError}`);
+  }
+  const code = q.get("code");
+  const state = q.get("state");
+  if (!code || !state) return back(req, "Missing authorization code");
+  try {
+    await verifyOAuthState(state, req.cookies.get(OAUTH_NONCE_COOKIE)?.value, user.id, platform);
+  } catch (e) {
+    return back(req, (e as Error).message);
+  }
+
+  const adapter = getAdapter(platform);
+  try {
+    const tokens = await adapter.exchangeCode(code, redirectUri(`/api/integrations/${slug}/callback`, req.url));
+    if (adapter.refresh && !tokens.refreshToken) {
+      return back(req, `${label} did not return a refresh token. Remove this app's access in your account's security settings and connect again.`);
+    }
+    const connection = await prisma.platformConnection.create({
+      data: { agencyId: user.agencyId, platform, label: `${label} — connected by ${user.name}`, status: "ACTIVE", createdById: user.id },
+    });
+    await storeTokens(connection.id, tokens);
+    const res = NextResponse.redirect(new URL(`/integrations/${slug}/${connection.id}`, req.url));
+    res.cookies.delete({ name: OAUTH_NONCE_COOKIE, path: "/api/integrations" });
+    return res;
+  } catch (e) {
+    return back(req, e instanceof IntegrationError ? e.message : `Could not complete ${label} authorization`);
+  }
+}
