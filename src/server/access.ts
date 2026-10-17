@@ -1,0 +1,54 @@
+import "server-only";
+import { notFound, redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
+import { prisma } from "./db";
+import { requireUser } from "./auth";
+import { canEditClient, canViewAgencyDashboard, canViewClient, type SessionUser } from "@/lib/access";
+
+/** Prisma filter for the clients a user may see. Mirrors canViewClient. */
+export function visibleClientsWhere(user: SessionUser): Prisma.ClientWhereInput {
+  const base: Prisma.ClientWhereInput = { agencyId: user.agencyId, archivedAt: null };
+  switch (user.role) {
+    case "AGENCY_ADMIN":
+      return base;
+    case "ACCOUNT_MANAGER":
+      return { ...base, OR: [{ primaryManagerId: user.id }, { assignments: { some: { userId: user.id } } }] };
+    case "CLIENT_USER":
+      return { ...base, id: user.clientId ?? "__none__" };
+  }
+}
+
+async function loadClientFacts(clientId: string) {
+  const c = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, agencyId: true, primaryManagerId: true, assignments: { select: { userId: true } } },
+  });
+  return c && { id: c.id, agencyId: c.agencyId, primaryManagerId: c.primaryManagerId, assignedUserIds: c.assignments.map((a) => a.userId) };
+}
+
+/** 404s (rather than 403s) so the existence of other clients is not revealed. */
+export async function requireClientView(clientId: string): Promise<SessionUser> {
+  const user = await requireUser();
+  const facts = await loadClientFacts(clientId);
+  if (!facts || !canViewClient(user, facts)) notFound();
+  return user;
+}
+
+export async function requireClientEdit(clientId: string): Promise<SessionUser> {
+  const user = await requireUser();
+  const facts = await loadClientFacts(clientId);
+  if (!facts || !canEditClient(user, facts)) notFound();
+  return user;
+}
+
+export async function requireAgencyStaff(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!canViewAgencyDashboard(user)) redirect(user.clientId ? `/clients/${user.clientId}` : "/login");
+  return user;
+}
+
+export async function requireAdmin(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (user.role !== "AGENCY_ADMIN") notFound();
+  return user;
+}
