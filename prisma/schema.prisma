@@ -168,6 +168,7 @@ model Client {
   budgets     Budget[]
   users       User[]  @relation("ClientUsers")
   aiInsights  AiInsight[]
+  shareLinks  ReportShareLink[]
   assignments ClientAssignment[]
   alerts      Alert[]
   reports     Report[]
@@ -560,4 +561,27 @@ model AiInsight {
   createdAt   DateTime @default(now())
 
   @@index([clientId, kind, createdAt])
+}
+
+// Read-only report links that work without signing in (src/server/share-links.ts).
+// Only a SHA-256 hash of the token is used for lookup; the encrypted copy lets
+// staff copy the link again later.
+model ReportShareLink {
+  id           String    @id @default(cuid())
+  clientId     String
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique
+  tokenEnc     String
+  label        String?
+  // Fixed date range preset and comparison; null follows the report template.
+  range        String?
+  compare      String?
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  lastViewedAt DateTime?
+  viewCount    Int       @default(0)
+
+  @@index([clientId, createdAt])
 }

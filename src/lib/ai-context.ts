@@ -37,6 +37,8 @@ export interface AiContextInput {
   accounts: { platform: string; name: string; totals: MetricTotals | null; spendVerified: boolean; dataNote: string | null }[];
   campaigns: { name: string; platform: string; status: string; totals: MetricTotals; previous: MetricTotals | null }[];
   pacing: AiPacing | null;
+  /** Final budget result when the reporting period is exactly a past budget month. */
+  pastBudget?: { month: string; budgetMinor: number; spentMinor: number; status: PacingStatus } | null;
   notes: string[];
 }
 
@@ -98,6 +100,12 @@ export function buildAiContext(i: AiContextInput): string {
     lines.push(`- Budget ${m(p.budgetMinor)}; spent ${m(p.actualToDateMinor)}; expected by now ${m(p.expectedToDateMinor)}; pacing ${formatPct(p.pacingPct)} of expected`);
     lines.push(`- Status to date: ${STATUS_LABEL[p.status]}; month-end forecast: ${STATUS_LABEL[p.forecastStatus]}, projected ${m(p.projectedMinor)} (${p.projectedMinor >= p.budgetMinor ? "+" : "-"}${m(Math.abs(p.projectedMinor - p.budgetMinor))} vs budget)`);
     lines.push(`- Current daily rate (7-day): ${m(p.currentDailyRateMinor)}; required daily to land on budget: ${p.requiredDailyMinor === null ? "n/a" : `${m(p.requiredDailyMinor)} over ${p.remainingActiveDays} remaining days`}`);
+  }
+
+  if (i.pastBudget) {
+    const b = i.pastBudget;
+    lines.push("", `## Budget result for ${b.month} (the reporting period)`);
+    lines.push(`- Budget ${m(b.budgetMinor)}; final spend ${m(b.spentMinor)} (${formatPct(b.budgetMinor ? (b.spentMinor / b.budgetMinor) * 100 : null, 0)} of budget); result: ${STATUS_LABEL[b.status]}`);
   }
 
   if (i.notes.length) {

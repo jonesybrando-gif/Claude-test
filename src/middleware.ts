@@ -20,5 +20,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|accept-invite|reset-password|forgot-password|api/cron|_next/static|_next/image|favicon.ico).*)"],
+  // r/ = shared report links (token-checked in the page and route themselves).
+  matcher: ["/((?!$|privacy|terms|login|accept-invite|reset-password|forgot-password|api/cron|r/|_next/static|_next/image|favicon.ico).*)"],
 };

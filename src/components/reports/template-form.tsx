@@ -1,11 +1,11 @@
 "use client";
 
 import { useActionState, useRef, useState, useTransition } from "react";
-import { Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, Plus, Sparkles, X } from "lucide-react";
 import { useFormSubmit } from "@/components/use-form-submit";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
-import { KPIS, type KpiKey } from "@/lib/kpis";
+import { KPI_BY_KEY, KPIS, type KpiKey } from "@/lib/kpis";
 import { PRESET_LABEL } from "@/lib/date-ranges";
 import { MAX_KPIS, MAX_TRENDS, SECTION_KEYS, SECTION_LABEL, type ReportTemplate } from "@/lib/report-template";
 import type { TemplateFormState } from "@/server/report-template-actions";
@@ -14,7 +14,8 @@ const RANGES = ["mtd", "last_month", "last_7", "last_30", "last_90"] as const;
 const COMPARE_LABEL = { previous_period: "Previous period", previous_month: "Same days last month", none: "No comparison" } as const;
 
 const SECTION_HINT: Record<(typeof SECTION_KEYS)[number], string> = {
-  summary: "The written summary below, at the top of the report.",
+  executive: "A paragraph or two at the top about the selected date range, rewritten whenever the range changes.",
+  summary: "Your own note below, shown as written.",
   kpis: "Scorecards for the KPIs you choose.",
   trends: "Daily charts for the trend KPIs, with the comparison period.",
   pacing: "Monthly budget, spend to date and month-end projection.",
@@ -23,6 +24,55 @@ const SECTION_HINT: Record<(typeof SECTION_KEYS)[number], string> = {
   history: "Final spend against budget for the last three months.",
   notes: "How each figure is defined and any data caveats.",
 };
+
+/** The chosen KPIs in display order: drag, or use the arrows, to rearrange. */
+function KpiArranger({ picked, setPicked, max }: { picked: KpiKey[]; setPicked: (k: KpiKey[]) => void; max: number }) {
+  const [dragging, setDragging] = useState<number | null>(null);
+  const move = (from: number, to: number) => {
+    if (to < 0 || to >= picked.length || from === to) return;
+    const next = [...picked];
+    const [k] = next.splice(from, 1);
+    next.splice(to, 0, k);
+    setPicked(next);
+  };
+  const available = KPIS.filter((k) => !picked.includes(k.key));
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <ol className="flex flex-col gap-1.5" aria-label="KPIs in the report, in order">
+        {picked.map((k, i) => (
+          <li
+            key={k}
+            draggable
+            onDragStart={() => setDragging(i)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => { if (dragging !== null) move(dragging, i); setDragging(null); }}
+            onDragEnd={() => setDragging(null)}
+            className={`flex items-center gap-2 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm ${dragging === i ? "opacity-50" : ""}`}
+            data-kpi={k}
+          >
+            <input type="hidden" name="kpis" value={k} />
+            <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-text-3" aria-hidden />
+            <span className="w-5 shrink-0 text-xs text-text-3 tabular">{i + 1}</span>
+            <span className="min-w-0 flex-1 truncate font-medium">{KPI_BY_KEY[k].label}</span>
+            <button type="button" onClick={() => move(i, i - 1)} disabled={i === 0} aria-label={`Move ${KPI_BY_KEY[k].label} up`} className="rounded p-1 text-text-2 hover:bg-surface-2 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => move(i, i + 1)} disabled={i === picked.length - 1} aria-label={`Move ${KPI_BY_KEY[k].label} down`} className="rounded p-1 text-text-2 hover:bg-surface-2 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => setPicked(picked.filter((x) => x !== k))} disabled={picked.length === 1} aria-label={`Remove ${KPI_BY_KEY[k].label}`} className="rounded p-1 text-text-2 hover:bg-surface-2 hover:text-critical-ink disabled:opacity-30"><X className="h-3.5 w-3.5" /></button>
+          </li>
+        ))}
+      </ol>
+      <div className="flex flex-col gap-2">
+        <p className="text-xs text-text-3">{available.length === 0 ? "Every KPI is in the report." : picked.length >= max ? `The report has the maximum of ${max} KPIs. Remove one to add another.` : "Add a KPI:"}</p>
+        <div className="flex flex-wrap gap-1.5">
+          {available.map((k) => (
+            <button key={k.key} type="button" onClick={() => setPicked([...picked, k.key])} disabled={picked.length >= max} title={k.description} className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs text-text-2 hover:bg-surface-2 hover:text-text disabled:opacity-40">
+              <Plus className="h-3 w-3" aria-hidden /> {k.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function Checks({ name, keys, picked, setPicked, max }: { name: string; keys: KpiKey[]; picked: KpiKey[]; setPicked: (k: KpiKey[]) => void; max: number }) {
   return (
@@ -104,7 +154,8 @@ export function TemplateForm({
 
       <fieldset className="flex flex-col gap-2">
         <legend className="text-sm font-medium">KPI scorecards <span className="font-normal text-text-3">· {kpis.length} of up to {MAX_KPIS}</span></legend>
-        <Checks name="kpis" keys={all} picked={kpis} setPicked={setKpis} max={MAX_KPIS} />
+        <p className="text-xs text-text-3">Shown in this order on the report page, shared links and the PDF. Drag or use the arrows to rearrange.</p>
+        <KpiArranger picked={kpis} setPicked={setKpis} max={MAX_KPIS} />
       </fieldset>
 
       <fieldset className="flex flex-col gap-2">
@@ -126,9 +177,22 @@ export function TemplateForm({
         </div>
       </fieldset>
 
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-sm font-medium">Executive summary</legend>
+        <p className="text-xs text-text-3">Written fresh for whichever date range is being viewed, using only the report&apos;s figures.</p>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="radio" name="executiveAi" value="ai" defaultChecked={template.executiveAi} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
+          <span><span className="font-medium">Written by AI</span><span className="block text-xs text-text-3">Reads naturally. Needs ANTHROPIC_API_KEY; until then the automatic version is used. Each new date range is one short AI request, saved for a day.</span></span>
+        </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="radio" name="executiveAi" value="auto" defaultChecked={!template.executiveAi} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
+          <span><span className="font-medium">Automatic from the figures</span><span className="block text-xs text-text-3">Plain sentences built directly from the numbers. No AI.</span></span>
+        </label>
+      </fieldset>
+
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Label htmlFor="summary">Written summary</Label>
+          <Label htmlFor="summary">Written note</Label>
           {draftSummary && (
             <Button type="button" variant="outline" size="sm" onClick={onDraft} disabled={drafting}>
               <Sparkles className="h-3.5 w-3.5" aria-hidden /> {drafting ? "Drafting…" : "Draft with AI"}

@@ -104,6 +104,21 @@ export async function draftReportSummary(data: string, opts: { agencyName: strin
   return out.summary.trim();
 }
 
+// --- Executive summary ------------------------------------------------------
+
+export async function draftExecutiveSummary(data: string, opts: { agencyName: string; days: number }): Promise<string> {
+  const length = opts.days <= 10 ? "one paragraph of 50 to 90 words" : "two short paragraphs, 90 to 160 words in total";
+  const out = await generate(
+    SummarySchema,
+    `Write the executive summary at the top of this client's report, from ${opts.agencyName} to the client, covering exactly the reporting period in the data.
+Write ${length}, plain-spoken and specific. Start with the headline results and how they compare with the comparison period, then what drove them (platforms or campaigns) and the budget position if the data covers it.
+Write in the third person about the client's advertising ("your ads" is fine). Don't recommend actions, add greetings, or sign off. Separate paragraphs with a blank line.`,
+    data,
+    "low",
+  );
+  return out.summary.trim();
+}
+
 // --- Client email -----------------------------------------------------------
 
 export const EMAIL_PURPOSES = {

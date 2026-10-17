@@ -30,6 +30,8 @@ npm run dev                   # http://localhost:3000
 | `SHOW_DEMO_LOGINS` | Optional. `1` shows the demo login hints on the sign-in page in production |
 | `APP_URL` | Public base URL; must match the OAuth redirect URI registered with Google |
 | `CRON_SECRET` | Bearer secret for `/api/cron/sync` |
+| `APP_NAME`, `PUBLIC_COMPANY_NAME`, `PUBLIC_CONTACT_EMAIL` | Shown on the public homepage (`/`), privacy policy (`/privacy`) and terms (`/terms`). Google and Meta require those pages, with a working contact email, before approving the app. |
+| `INTERNAL_SCHEDULER` | `1` runs the hourly sync and alerts inside the app (for always-on hosts such as Railway), instead of an external scheduler calling `/api/cron/sync`. Run a single instance with it on. |
 | `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN` | Google Ads API credentials (also used for Local Services Ads); see [docs/google-ads-setup.md](docs/google-ads-setup.md) |
 | `SMTP_URL`, `EMAIL_FROM` | Outgoing email for invitations, password resets, alerts and daily summaries. Without them, emails are recorded in **Settings → Email log** but not delivered, and invite/reset links are shown to the admin to share. |
 | `ANTHROPIC_API_KEY` | Optional. Turns on the AI assistant (Claude API). Usage is billed by Anthropic to that key, separately from this app. Without it, the AI buttons explain how to turn it on. |
@@ -245,14 +247,21 @@ src/components/             UI (shadcn-style primitives, charts, dashboard)
   - Blended KPIs are true ratios (total spend ÷ total clicks), never averages of per-platform averages.
   - Metrics no platform reported (for example leads on Google Ads) show "—" and "not reported" rather than 0.
 - **Report builder:** **Settings → Reports** sets the agency's default report, and **Customize report** on a client page gives that client its own. Each layout chooses:
-  - the KPI scorecards (up to 12)
+  - the KPI scorecards (up to 12), in any order: drag, use the arrows, remove, or add from the catalog
   - up to 3 trend charts
-  - which sections appear (summary, KPIs, trends, pacing, platforms, campaigns, budget history, notes)
-  - the title and a written summary
+  - which sections appear (executive summary, written note, KPIs, trends, pacing, platforms, campaigns, budget history, notes)
+  - the title and an optional written note
   - the default date range and comparison
 - **Template-driven reports:** the client page and the PDF follow the layout.
   - Client logins don't see sections a layout turns off. Your team still sees them, marked "Hidden from client report".
   - The PDF adds a daily chart for each trend KPI, with the comparison period dashed, and defines each KPI in its notes.
+
+- **Executive summary:** a paragraph or two at the top of every report, written for the date range being viewed. It appears on the client page, on shared links and in the PDF.
+  - **Automatic:** plain sentences built directly from the figures, covering results, changes vs. the comparison period, the largest campaign, and the budget position (month to date, or the final result for a past month). It needs no AI and always works.
+  - **Written by AI (default when `ANTHROPIC_API_KEY` is set):** the page shows the automatic version at once and the AI version streams in when ready.
+    - Each version is saved per client, date range and comparison for 24 hours, so reloading or sharing doesn't call the AI again.
+    - If the AI call fails, the automatic version is shown.
+  - Each layout chooses which of the two it uses.
 
 ### Phase 5b: AI assistant ✅ (tested against a mock API · ⏳ needs your `ANTHROPIC_API_KEY` for live use)
 
@@ -267,13 +276,26 @@ src/components/             UI (shadcn-style primitives, charts, dashboard)
 - **Data sent to Anthropic:** the client's name, account and campaign names, and their metrics. No logins or tokens are sent.
 - **Model:** `claude-opus-5-5` with structured output. Server-side fallback (`fallbacks: "default"`) is on, so if the model declines a request, Anthropic retries it on its recommended fallback model.
 
+### Phase 5c: Shareable report links ✅
+
+- **Share link** on a client page creates a private link to that client's report. Anyone with the link can open it in a browser, without signing in, and download the PDF.
+- **What viewers see:** the client-facing report, following the client's report layout, with your agency's branding. They never see internal recommendations, AI suggestions or account controls.
+- **Each link has:**
+  - a date range: the report default, or a fixed preset such as "Last month", which moves forward with the calendar
+  - an optional expiry
+  - a view count and last-viewed time
+  - a Turn off button that stops it working immediately
+- **Security:**
+  - Tokens carry 192 bits of randomness and are looked up by SHA-256 hash. The copy kept for re-copying is encrypted with `TOKEN_ENCRYPTION_KEY`.
+  - Link pages send `Referrer-Policy: no-referrer` and `noindex`.
+  - Unknown, expired and turned-off links all return 404, and links stop working when the client is archived.
+
 ### Not built yet
 
 | Phase | Item | Notes |
 |---|---|---|
 | 2 | First live Google Ads connection | Needs the Cloud Console and MCC setup in [docs/google-ads-setup.md](docs/google-ads-setup.md). This is the step that moves Google Ads from "built" to "verified". |
 | 3 | First live Meta, Microsoft and LSA connections | Needs the setup in the guides above. Meta also needs App Review and Advanced Access for client-owned ad accounts. |
-| 4 | Scheduled email reports | PDF/CSV export and the report builder are done; the `ReportSchedule` table is ready for scheduled sending. |
 | 4 | Branded client portal | Client users already get a read-only view of their own client; a custom domain and branded login are not built. |
 | 5 | More forecast models, seasonality learned from history, custom weekday and daily weights in the UI | The engine already supports custom weights; the budget form exposes only even, business-days and weekend-weighted. |
 | — | Currency conversion | Original currency is stored per account and an `ExchangeRate` table exists. If an account's currency differs from its budget's, the row shows a warning; conversion is not applied. Agency totals assume one currency. |

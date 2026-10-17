@@ -166,7 +166,11 @@ function pacingFacts(r: PacingResult, currency: string): string[][] {
   ];
 }
 
-export async function renderClientReportPdf(rep: ClientReport, brand: Brand, opts: { internal: boolean; compress?: boolean; generatedAt?: Date }) {
+export async function renderClientReportPdf(
+  rep: ClientReport,
+  brand: Brand,
+  opts: { internal: boolean; compress?: boolean; generatedAt?: Date; executiveSummary?: { text: string; source: "ai" | "auto" } },
+) {
   const { client, pacing, perf, cmpPerf, range, cmpRange, preset, history, template } = rep;
   const on = template.sections;
   const c = client.currency;
@@ -187,8 +191,18 @@ export async function renderClientReportPdf(rep: ClientReport, brand: Brand, opt
   }
   doc.moveDown(0.8);
 
+  if (on.executive && opts.executiveSummary) {
+    sectionTitle(doc, "Executive summary");
+    for (const para of opts.executiveSummary.text.split(/\n{2,}/)) {
+      paragraph(doc, para, { size: 10, color: C.text });
+      doc.moveDown(0.5);
+    }
+    paragraph(doc, opts.executiveSummary.source === "ai" ? "Written by AI from the figures in this report." : "Summarised automatically from the figures in this report.", { size: 7.5 });
+    doc.moveDown(1);
+  }
+
   if (on.summary && template.summary.trim()) {
-    sectionTitle(doc, "Summary");
+    sectionTitle(doc, "Note");
     paragraph(doc, template.summary.trim());
     doc.moveDown(0.8);
   }
