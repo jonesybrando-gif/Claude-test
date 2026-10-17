@@ -1,4 +1,0 @@
-{
-  "buildCommand": "prisma migrate deploy && next build",
-  "crons": [{ "path": "/api/cron/sync", "schedule": "0 * * * *" }]
-}
