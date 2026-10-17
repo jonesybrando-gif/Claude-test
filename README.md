@@ -30,6 +30,7 @@ npm run dev                   # http://localhost:3000
 | `SHOW_DEMO_LOGINS` | Optional. `1` shows the demo login hints on the sign-in page in production |
 | `APP_URL` | Public base URL; must match the OAuth redirect URI registered with Google |
 | `CRON_SECRET` | Bearer secret for `/api/cron/sync` |
+| `APP_NAME`, `PUBLIC_COMPANY_NAME`, `PUBLIC_CONTACT_EMAIL` | Shown on the public homepage (`/`), privacy policy (`/privacy`) and terms (`/terms`). Google and Meta require those pages, with a working contact email, before approving the app. |
 | `INTERNAL_SCHEDULER` | `1` runs the hourly sync and alerts inside the app (for always-on hosts such as Railway), instead of an external scheduler calling `/api/cron/sync`. Run a single instance with it on. |
 | `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN` | Google Ads API credentials (also used for Local Services Ads); see [docs/google-ads-setup.md](docs/google-ads-setup.md) |
 | `SMTP_URL`, `EMAIL_FROM` | Outgoing email for invitations, password resets, alerts and daily summaries. Without them, emails are recorded in **Settings → Email log** but not delivered, and invite/reset links are shown to the admin to share. |

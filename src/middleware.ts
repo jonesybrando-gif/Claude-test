@@ -21,5 +21,5 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   // r/ = shared report links (token-checked in the page and route themselves).
-  matcher: ["/((?!login|accept-invite|reset-password|forgot-password|api/cron|r/|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!$|privacy|terms|login|accept-invite|reset-password|forgot-password|api/cron|r/|_next/static|_next/image|favicon.ico).*)"],
 };
