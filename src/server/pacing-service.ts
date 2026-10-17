@@ -32,6 +32,7 @@ export interface AccountMeta {
   status: string;
   lastSuccessfulSyncAt: string | null;
   dataCompleteThrough: IsoDate | null;
+  timezone: string | null;
   stale: boolean;
 }
 
@@ -114,6 +115,7 @@ function accountMeta(a: ClientWithAccounts["accounts"][number], now: Date): Acco
     status: a.status,
     lastSuccessfulSyncAt: last?.toISOString() ?? null,
     dataCompleteThrough: a.dataCompleteThrough ? dateToIso(a.dataCompleteThrough) : null,
+    timezone: a.timezone,
     stale: !last || now.getTime() - last.getTime() > STALE_AFTER_MS,
   };
 }
@@ -147,6 +149,9 @@ function paceUnit(unit: PacingUnit, budget: BudgetWithRevisions, ctx: UnitContex
     }
     if (a.currency !== budget.currency) {
       warnings.push(`${a.name} reports in ${a.currency} but the budget is in ${budget.currency}; currency conversion is not applied yet`);
+    }
+    if (a.timezone && a.timezone !== ctx.client.timezone) {
+      warnings.push(`${a.name} reports in ${a.timezone} but the client uses ${ctx.client.timezone}; daily totals follow the ad platform's day boundaries`);
     }
     if (!a.spendIsVerified) warnings.push(`${a.name}: spend is estimated — the platform API does not report verified daily cost`);
   }

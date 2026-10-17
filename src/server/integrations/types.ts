@@ -8,35 +8,48 @@ import type { IsoDate } from "@/lib/pacing/dates";
  */
 export interface PlatformAdapter {
   platform: Platform;
+  /** True when the server has the credentials this integration needs. */
+  isConfigured(): boolean;
   /** Build the OAuth consent URL for this platform. */
   authorizationUrl(state: string, redirectUri: string): string;
   /** Exchange an OAuth code for tokens (caller encrypts and stores them). */
   exchangeCode(code: string, redirectUri: string): Promise<OAuthTokens>;
-  /** Accounts the authorized login can access (e.g. every customer under a Google Ads MCC). */
-  listAccounts(tokens: OAuthTokens): Promise<RemoteAccount[]>;
-  listCampaigns(tokens: OAuthTokens, accountExternalId: string): Promise<RemoteCampaign[]>;
+  /** Use a refresh token to get a fresh access token. */
+  refresh(refreshToken: string): Promise<OAuthTokens>;
+  /** Accounts the authorized login can reach (e.g. every customer under a Google Ads MCC). */
+  listAccounts(accessToken: string): Promise<RemoteAccount[]>;
+  listCampaigns(accessToken: string, account: AccountRef): Promise<RemoteCampaign[]>;
   /**
    * Daily leaf-level performance for [from, to] in the account's own timezone.
-   * Must return one row per campaign per day (or per account per day if the
-   * platform has no campaign granularity) and never pre-aggregated totals.
+   * Returns one row per campaign per day (or per account per day when the
+   * platform has no campaign granularity), never pre-aggregated totals.
+   * Days with no activity may be absent; absent means zero.
    */
-  fetchDailyPerformance(tokens: OAuthTokens, accountExternalId: string, from: IsoDate, to: IsoDate): Promise<RemoteDailyRow[]>;
+  fetchDailyPerformance(accessToken: string, account: AccountRef, from: IsoDate, to: IsoDate): Promise<{ rows: RemoteDailyRow[]; campaigns: RemoteCampaign[] }>;
   /**
-   * Last date whose numbers the platform considers final enough to pace on.
-   * Platforms report with a delay; the dashboard never paces past this date.
+   * Last local date whose numbers are complete enough to pace on. The
+   * dashboard never paces past this date.
    */
   dataCompleteThrough(accountTimezone: string, now: Date): IsoDate;
-  /** How far back to re-fetch on each sync, because conversions are restated. */
+  /** Days re-fetched on every sync because the platform restates recent data (e.g. late conversions). */
   restatementWindowDays: number;
+  /** Days of history imported when an account is first connected. */
+  initialBackfillDays: number;
   /** Whether cost from this platform is verified billed spend. */
   spendIsVerified: boolean;
+}
+
+export interface AccountRef {
+  externalId: string;
+  loginCustomerId?: string | null;
+  timezone?: string | null;
 }
 
 export interface OAuthTokens {
   accessToken: string;
   refreshToken?: string;
   expiresAt?: Date;
-  scopes?: string[];
+  scopes?: string;
 }
 
 export interface RemoteAccount {
@@ -45,7 +58,10 @@ export interface RemoteAccount {
   currency: string;
   timezone: string;
   isManager: boolean;
-  parentExternalId?: string;
+  isTestAccount?: boolean;
+  /** Manager id to send as login-customer-id when reaching this account. */
+  loginCustomerId?: string;
+  level?: number;
 }
 
 export interface RemoteCampaign {
@@ -66,5 +82,4 @@ export interface RemoteDailyRow {
   conversions: number;
   conversionValueMinor: number;
   leads?: number;
-  namedConversions?: { name: string; value: number; valueMinor?: number }[];
 }

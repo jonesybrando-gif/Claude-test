@@ -10,6 +10,7 @@ import { derive, pctChange, type MetricTotals } from "@/lib/metrics";
 import { formatMoney, formatNumber, formatPct } from "@/lib/money";
 import { formatDate, relativeTime } from "@/lib/time";
 import { PLATFORM_LABEL } from "@/lib/platforms";
+import { formatCustomerId } from "@/server/integrations/google-ads/gaql";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { buttonVariants } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { PlatformLabel } from "@/components/platform-badge";
 import { PacingChart } from "@/components/charts/pacing-chart";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { RangeControls } from "@/components/range-controls";
+import { RefreshAccountButton } from "@/components/refresh-account-button";
 
 export const dynamic = "force-dynamic";
 
@@ -180,6 +182,16 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </CardContent>
       </Card>
 
+      {(() => {
+        const caveats = [...new Set(allLines.flatMap((r) => r.warnings))];
+        return caveats.length > 0 ? (
+          <div className="rounded-lg border border-border bg-warning-bg px-4 py-3 text-sm text-warning-ink" role="note">
+            <p className="flex items-center gap-1.5 font-medium"><AlertTriangle className="h-4 w-4" aria-hidden /> Data notes</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">{caveats.map((w) => <li key={w}>{w}</li>)}</ul>
+          </div>
+        ) : null;
+      })()}
+
       {/* Pacing lines */}
       {allLines.length > 0 && (
         <Card>
@@ -240,7 +252,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                 <TR key={a.id}>
                   <TD className="pl-5">
                     <PlatformLabel platform={a.platform} />
-                    <div className="text-xs text-text-3">{a.name} · {a.externalId}</div>
+                    <div className="text-xs text-text-3">{a.name} · {a.platform === "GOOGLE_ADS" && /^\d{10}$/.test(a.externalId) ? formatCustomerId(a.externalId) : a.externalId}</div>
                   </TD>
                   <TD className="text-right font-medium">{m ? formatMoney(m.costMinor, c, { whole: true }) : "—"}{!a.spendIsVerified && <div className="text-[11px] font-normal text-warning-ink">estimated</div>}</TD>
                   <TD className="text-right">{lsa ? "n/a" : m ? formatNumber(m.impressions) : "—"}</TD>
@@ -253,8 +265,10 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                   <TD className="text-right">{x?.roas == null || lsa ? "—" : `${x.roas.toFixed(2)}×`}</TD>
                   <TD className="pr-5 text-xs">
                     <div className="flex flex-col items-start gap-1">
-                      {a.status === "NEEDS_REAUTH" || a.status === "DISCONNECTED" ? <StaleBadge label="Disconnected" /> : meta.stale ? <StaleBadge /> : <span className="text-text-2">Synced {relativeTime(meta.lastSuccessfulSyncAt)}</span>}
+                      {a.status === "NEEDS_REAUTH" || a.status === "DISCONNECTED" ? <StaleBadge label="Disconnected" /> : !meta.lastSuccessfulSyncAt ? <StaleBadge label="Not synced yet" /> : meta.stale ? <StaleBadge /> : <span className="text-text-2">Synced {relativeTime(meta.lastSuccessfulSyncAt)}</span>}
                       {meta.dataCompleteThrough && <span className="text-text-3">Complete through {formatDate(meta.dataCompleteThrough)}</span>}
+                      {a.timezone && a.timezone !== client.timezone && <span className="text-warning-ink">Account time zone: {a.timezone}</span>}
+                      {a.isDemo ? <span className="text-info-ink">Demo data</span> : staff && a.connectionId && <RefreshAccountButton accountId={a.id} />}
                       {staff && a.syncRuns[0]?.status === "FAILED" && <span className="flex items-start gap-1 text-critical-ink whitespace-normal max-w-56"><AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />{a.syncRuns[0].error}</span>}
                     </div>
                   </TD>
