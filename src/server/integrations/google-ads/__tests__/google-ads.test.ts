@@ -143,7 +143,7 @@ describe("Google Ads adapter (mocked HTTP)", () => {
 
   it("classifies a revoked refresh token", async () => {
     const m = mockFetch(() => ({ status: 400, body: { error: "invalid_grant", error_description: "Token has been expired or revoked." } }));
-    await expect(createGoogleAdsAdapter({ config, fetch: m.fn }).refresh("rt")).rejects.toMatchObject({ kind: "AUTH_REVOKED" });
+    await expect(createGoogleAdsAdapter({ config, fetch: m.fn }).refresh!("rt")).rejects.toMatchObject({ kind: "AUTH_REVOKED" });
     expect(m.calls[0].url).toBe("https://oauth2.googleapis.com/token");
     expect(String(m.calls[0].init!.body)).toContain("grant_type=refresh_token");
   });
@@ -197,6 +197,81 @@ describe("withRetry", () => {
 describe("OAuth client misconfiguration", () => {
   it("reports a rejected OAuth client as a configuration problem", async () => {
     const m = mockFetch(() => ({ status: 401, body: { error: "invalid_client", error_description: "The OAuth client was not found." } }));
-    await expect(createGoogleAdsAdapter({ config, fetch: m.fn }).refresh("rt")).rejects.toMatchObject({ kind: "NOT_CONFIGURED" });
+    await expect(createGoogleAdsAdapter({ config, fetch: m.fn }).refresh!("rt")).rejects.toMatchObject({ kind: "NOT_CONFIGURED" });
+  });
+});
+
+describe("Local Services Ads (via Google Ads API)", () => {
+  it("splits LOCAL_SERVICES campaigns between the two platforms", async () => {
+    const { campaignsQuery } = await import("../gaql");
+    expect(dailyPerformanceQuery("2026-10-01", "2026-10-02")).toContain("campaign.advertising_channel_type != 'LOCAL_SERVICES'");
+    expect(dailyPerformanceQuery("2026-10-01", "2026-10-02", "LOCAL_SERVICES")).toContain("campaign.advertising_channel_type = 'LOCAL_SERVICES'");
+    expect(campaignsQuery("LOCAL_SERVICES")).toContain("= 'LOCAL_SERVICES'");
+  });
+
+  const leadRows = [
+    { localServicesLead: { id: "1", campaign: "customers/2222222222/campaigns/77", leadType: "PHONE_CALL", leadCharged: true, creationDateTime: "2026-10-15 09:12:00" } },
+    { localServicesLead: { id: "2", campaign: "customers/2222222222/campaigns/77", leadType: "MESSAGE", leadCharged: false, creationDateTime: "2026-10-15 15:00:00" } },
+    { localServicesLead: { id: "3", leadType: "BOOKING", leadCharged: true, creationDateTime: "2026-10-16 08:00:00" } },
+    { localServicesLead: { id: "4", leadCharged: true, creationDateTime: "2026-09-01 08:00:00" } }, // outside range
+  ];
+
+  function lsaFetch(costMicros: string | undefined, rejectDateFilter = false) {
+    const queries: string[] = [];
+    const fn = async (_url: string, init?: RequestInit) => {
+      const q: string = JSON.parse(String(init!.body)).query;
+      queries.push(q);
+      if (q.includes("FROM local_services_lead")) {
+        if (rejectDateFilter && q.includes("WHERE")) {
+          return new Response(JSON.stringify({ error: { code: 400, details: [{ errors: [{ errorCode: { queryError: "PROHIBITED_FIELD_IN_WHERE_CLAUSE" }, message: "not filterable" }] }] } }), { status: 400 });
+        }
+        return new Response(JSON.stringify([{ results: leadRows }]));
+      }
+      const metrics = costMicros ? { costMicros } : {};
+      return new Response(JSON.stringify([{ results: [{ campaign: { id: "77", name: "LSA – Plumbing", status: "ENABLED" }, segments: { date: "2026-10-15" }, metrics }] }]));
+    };
+    return { fn, queries };
+  }
+
+  it("adds leads (all) and charged leads (as conversions) per day", async () => {
+    const m = lsaFetch("150000000");
+    const a = createGoogleAdsAdapter({ config, fetch: m.fn, localServices: true });
+    expect(a.platform).toBe("GOOGLE_LSA");
+    expect(a.connectionPlatform).toBe("GOOGLE_ADS");
+    const r = await a.fetchDailyPerformance("tok", { externalId: "2222222222" }, "2026-10-15", "2026-10-16");
+    const day15 = r.rows.find((x) => x.date === "2026-10-15")!;
+    const day16 = r.rows.find((x) => x.date === "2026-10-16")!;
+    expect(day15).toMatchObject({ campaignExternalId: "77", costMinor: 15000, leads: 2, conversions: 1 });
+    // lead without a campaign is attributed to the only LSA campaign
+    expect(day16).toMatchObject({ campaignExternalId: "77", costMinor: 0, leads: 1, conversions: 1 });
+    expect(r.spendVerified).toBe(true);
+    expect(m.queries[1]).toContain("local_services_lead.creation_date_time >= '2026-10-15 00:00:00'");
+  });
+
+  it("marks spend unverified when leads were charged but no cost was reported", async () => {
+    const r = await createGoogleAdsAdapter({ config, fetch: lsaFetch(undefined).fn, localServices: true }).fetchDailyPerformance("tok", { externalId: "2222222222" }, "2026-10-15", "2026-10-16");
+    expect(r.rows.reduce((s, x) => s + x.costMinor, 0)).toBe(0);
+    expect(r.spendVerified).toBe(false);
+  });
+
+  it("falls back to client-side date filtering if the API rejects it", async () => {
+    const m = lsaFetch("1000000", true);
+    const r = await createGoogleAdsAdapter({ config, fetch: m.fn, localServices: true }).fetchDailyPerformance("tok", { externalId: "2222222222" }, "2026-10-15", "2026-10-16");
+    expect(m.queries.filter((q) => q.includes("local_services_lead"))).toHaveLength(2);
+    expect(r.rows.reduce((s, x) => s + (x.leads ?? 0), 0)).toBe(3); // the September lead is excluded
+  });
+
+  it("regular Google Ads mode never queries leads", async () => {
+    const m = lsaFetch("1000000");
+    const r = await createGoogleAdsAdapter({ config, fetch: m.fn }).fetchDailyPerformance("tok", { externalId: "2222222222" }, "2026-10-15", "2026-10-16");
+    expect(m.queries).toHaveLength(1);
+    expect(r.spendVerified).toBeUndefined();
+  });
+});
+
+describe("Google code exchange", () => {
+  it("reports a bad sign-in code as such, not as revoked access", async () => {
+    const fn = async () => new Response(JSON.stringify({ error: "invalid_grant", error_description: "Bad Request" }), { status: 400 });
+    await expect(createGoogleAdsAdapter({ config, fetch: fn }).exchangeCode("bad", "https://app/cb")).rejects.toMatchObject({ kind: "INVALID_REQUEST" });
   });
 });

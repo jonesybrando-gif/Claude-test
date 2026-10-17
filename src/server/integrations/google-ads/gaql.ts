@@ -57,21 +57,38 @@ SELECT
 FROM customer_client
 WHERE customer_client.status = 'ENABLED'`.trim();
 
-export const CAMPAIGNS_QUERY = `
+/**
+ * Local Services campaigns (advertising_channel_type LOCAL_SERVICES) are
+ * reported under the separate "Google LSA" platform, so the Google Ads
+ * queries exclude them and the LSA queries select only them. Each campaign's
+ * cost therefore lands in exactly one platform.
+ */
+export type CampaignScope = "ADS" | "LOCAL_SERVICES";
+
+const channelFilter = (scope: CampaignScope) =>
+  scope === "LOCAL_SERVICES" ? "campaign.advertising_channel_type = 'LOCAL_SERVICES'" : "campaign.advertising_channel_type != 'LOCAL_SERVICES'";
+
+export function campaignsQuery(scope: CampaignScope = "ADS"): string {
+  return `
 SELECT
   campaign.id,
   campaign.name,
   campaign.status,
   campaign_budget.amount_micros
 FROM campaign
-WHERE campaign.status != 'REMOVED'`.trim();
+WHERE campaign.status != 'REMOVED'
+  AND ${channelFilter(scope)}`.trim();
+}
+
+/** @deprecated use campaignsQuery("ADS") */
+export const CAMPAIGNS_QUERY = campaignsQuery("ADS");
 
 /**
  * Daily campaign performance. Dates are in the account's own time zone.
  * Removed campaigns are deliberately NOT filtered out: their historical spend
  * still counts toward the month.
  */
-export function dailyPerformanceQuery(from: IsoDate, to: IsoDate): string {
+export function dailyPerformanceQuery(from: IsoDate, to: IsoDate, scope: CampaignScope = "ADS"): string {
   assertIsoDate(from);
   assertIsoDate(to);
   if (to < from) throw new Error("`to` is before `from`");
@@ -87,7 +104,66 @@ SELECT
   metrics.conversions,
   metrics.conversions_value
 FROM campaign
-WHERE segments.date BETWEEN '${from}' AND '${to}'`.trim();
+WHERE segments.date BETWEEN '${from}' AND '${to}'
+  AND ${channelFilter(scope)}`.trim();
+}
+
+/**
+ * Local Services leads created in [from, to] (account time zone). Field names
+ * per the local_services_lead resource; filtering on creation_date_time is
+ * attempted first, with a client-side filter as fallback (see the adapter).
+ */
+export function localServicesLeadsQuery(from?: IsoDate, to?: IsoDate): string {
+  const base = `
+SELECT
+  local_services_lead.id,
+  local_services_lead.campaign,
+  local_services_lead.lead_type,
+  local_services_lead.lead_status,
+  local_services_lead.lead_charged,
+  local_services_lead.creation_date_time
+FROM local_services_lead`.trim();
+  if (!from || !to) return base;
+  assertIsoDate(from);
+  assertIsoDate(to);
+  return `${base}
+WHERE local_services_lead.creation_date_time >= '${from} 00:00:00'
+  AND local_services_lead.creation_date_time <= '${to} 23:59:59'`;
+}
+
+export interface LocalServicesLeadRow {
+  localServicesLead?: {
+    id?: string;
+    campaign?: string; // "customers/123/campaigns/456"
+    leadType?: string;
+    leadStatus?: string;
+    leadCharged?: boolean;
+    creationDateTime?: string; // "2026-10-16 14:03:22"
+  };
+}
+
+export interface LeadCounts {
+  campaignExternalId: string | null;
+  date: IsoDate;
+  leads: number;
+  chargedLeads: number;
+}
+
+/** Lead rows → counts per campaign per creation date, limited to [from, to]. */
+export function countLocalServicesLeads(rows: LocalServicesLeadRow[], from: IsoDate, to: IsoDate): LeadCounts[] {
+  const out = new Map<string, LeadCounts>();
+  for (const r of rows) {
+    const l = r.localServicesLead;
+    const date = l?.creationDateTime?.slice(0, 10);
+    if (!l || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || date < from || date > to) continue;
+    const campaignExternalId = l.campaign?.match(/campaigns\/(\d+)$/)?.[1] ?? null;
+    const key = `${campaignExternalId}|${date}`;
+    const c = out.get(key) ?? { campaignExternalId, date, leads: 0, chargedLeads: 0 };
+    c.leads += 1;
+    if (l.leadCharged) c.chargedLeads += 1;
+    out.set(key, c);
+  }
+  return [...out.values()];
 }
 
 // ---------------------------------------------------------------------------
@@ -129,6 +205,7 @@ export function parseCustomerClients(rows: CustomerClientRow[], queriedCustomerI
       return {
         externalId: id,
         name: c.descriptiveName || formatCustomerId(id),
+        displayId: formatCustomerId(id),
         currency: c.currencyCode ?? "USD",
         timezone: c.timeZone ?? "America/New_York",
         isManager: !!c.manager,

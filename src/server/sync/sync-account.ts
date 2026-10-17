@@ -88,11 +88,15 @@ export async function syncAccount(accountId: string, kind: SyncKind, deps: SyncD
 
   const ref = { externalId: account.externalId, loginCustomerId: account.loginCustomerId, timezone: tz };
   let rowsUpserted = 0;
+  let spendVerified: boolean | undefined;
   try {
     const campaignIds = await upsertCampaigns(accountId, await call((t) => adapter.listCampaigns(t, ref)));
 
-    for (const chunk of chunkRange(range.from, range.to)) {
-      const { rows, campaigns } = await call((t) => adapter.fetchDailyPerformance(t, ref, chunk.from, chunk.to));
+    for (const chunk of chunkRange(range.from, range.to, adapter.maxRangeDays)) {
+      const result = await call((t) => adapter.fetchDailyPerformance(t, ref, chunk.from, chunk.to));
+      const { rows, campaigns } = result;
+      // Any chunk reporting unverified spend makes the account unverified.
+      if (result.spendVerified !== undefined) spendVerified = spendVerified === false ? false : result.spendVerified;
       // Campaigns that only appear in metrics (e.g. removed ones that spent earlier in the range)
       const unseen = campaigns.filter((c) => !campaignIds.has(c.externalId));
       for (const [k, v] of await upsertCampaigns(accountId, unseen)) campaignIds.set(k, v);
@@ -129,7 +133,7 @@ export async function syncAccount(accountId: string, kind: SyncKind, deps: SyncD
     await prisma.$transaction([
       prisma.adAccount.update({
         where: { id: accountId },
-        data: { lastSuccessfulSyncAt: now, dataCompleteThrough: isoToDate(completeThrough), status: "ACTIVE", spendIsVerified: adapter.spendIsVerified },
+        data: { lastSuccessfulSyncAt: now, dataCompleteThrough: isoToDate(completeThrough), status: "ACTIVE", spendIsVerified: spendVerified ?? adapter.spendIsVerified },
       }),
       prisma.syncRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", rowsUpserted, finishedAt: new Date() } }),
       prisma.platformConnection.update({ where: { id: connectionId }, data: { status: "ACTIVE", lastError: null } }),

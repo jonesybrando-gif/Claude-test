@@ -6,9 +6,11 @@ import { prisma } from "@/server/db";
 import { requireAdmin, requireClientEdit } from "@/server/access";
 import { decryptSecret } from "@/server/crypto";
 import { getAdapter } from "@/server/integrations/registry";
-import { withAccessToken } from "@/server/integrations/tokens";
+import { storeTokens, withAccessToken } from "@/server/integrations/tokens";
 import { IntegrationError } from "@/server/integrations/errors";
 import { syncAccount, type SyncResult } from "@/server/sync/sync-account";
+import { PLATFORM_LABEL } from "@/lib/platforms";
+import type { Platform } from "@prisma/client";
 
 export type LinkState = { ok?: string; errors?: string[] } | undefined;
 
@@ -19,14 +21,14 @@ async function loadConnection(connectionId: string, agencyId: string) {
 }
 
 /**
- * Link selected platform accounts to clients. Form fields: `client:<externalId>` = clientId or "".
+ * Link selected platform accounts to clients. Form fields:
+ * `client:<PLATFORM>:<externalId>` = clientId, or "" to leave/stop monitoring.
  * Only accounts the connection can actually reach (re-listed from the API) are accepted.
  */
 export async function linkAccounts(connectionId: string, _prev: LinkState, form: FormData): Promise<LinkState> {
   const user = await requireAdmin();
   const connection = await loadConnection(connectionId, user.agencyId);
   const adapter = getAdapter(connection.platform);
-  if (!adapter) return { errors: ["This platform is not supported yet."] };
 
   let remote;
   try {
@@ -37,25 +39,37 @@ export async function linkAccounts(connectionId: string, _prev: LinkState, form:
   const clients = new Set((await prisma.client.findMany({ where: { agencyId: user.agencyId }, select: { id: true } })).map((c) => c.id));
 
   const linked: string[] = [];
-  for (const acc of remote.filter((a) => !a.isManager)) {
-    const clientId = String(form.get(`client:${acc.externalId}`) ?? "");
-    if (!clientId) continue;
-    if (!clients.has(clientId)) return { errors: ["Unknown client selected."] };
-    const existing = await prisma.adAccount.findFirst({ where: { platform: connection.platform, externalId: acc.externalId, client: { agencyId: user.agencyId } } });
-    const data = {
-      clientId,
-      connectionId: connection.id,
-      name: acc.name,
-      currency: acc.currency,
-      timezone: acc.timezone,
-      loginCustomerId: acc.loginCustomerId ?? null,
-      isDemo: false,
-      status: "ACTIVE" as const,
-    };
-    const row = existing
-      ? await prisma.adAccount.update({ where: { id: existing.id }, data })
-      : await prisma.adAccount.create({ data: { ...data, platform: connection.platform, externalId: acc.externalId } });
-    linked.push(row.id);
+  let unlinked = 0;
+  for (const platform of adapter.linkablePlatforms as Platform[]) {
+    for (const acc of remote.filter((a) => !a.isManager)) {
+      const field = form.get(`client:${platform}:${acc.externalId}`);
+      if (field === null) continue; // not on the form
+      const clientId = String(field);
+      const existing = await prisma.adAccount.findFirst({ where: { platform, externalId: acc.externalId, isDemo: false, client: { agencyId: user.agencyId } } });
+      if (!clientId) {
+        // Stop monitoring: keep history, stop syncing.
+        if (existing && existing.status !== "DISCONNECTED") {
+          await prisma.adAccount.update({ where: { id: existing.id }, data: { status: "DISCONNECTED", connectionId: null } });
+          unlinked++;
+        }
+        continue;
+      }
+      if (!clients.has(clientId)) return { errors: ["Unknown client selected."] };
+      const data = {
+        clientId,
+        connectionId: connection.id,
+        name: platform === "GOOGLE_LSA" ? `${acc.name} — Local Services` : acc.name,
+        currency: acc.currency,
+        timezone: acc.timezone || null, // unmapped → client time zone
+        loginCustomerId: acc.loginCustomerId ?? null,
+        isDemo: false,
+        status: "ACTIVE" as const,
+      };
+      const row = existing
+        ? await prisma.adAccount.update({ where: { id: existing.id }, data })
+        : await prisma.adAccount.create({ data: { ...data, platform, externalId: acc.externalId } });
+      linked.push(row.id);
+    }
   }
   // Initial history import runs after the response is sent.
   after(async () => {
@@ -63,7 +77,29 @@ export async function linkAccounts(connectionId: string, _prev: LinkState, form:
   });
   revalidatePath("/integrations", "layout");
   revalidatePath("/dashboard");
-  return { ok: linked.length ? `Linked ${linked.length} account${linked.length === 1 ? "" : "s"}. Historical data is importing in the background; refresh in a few minutes.` : "No accounts selected." };
+  const parts = [
+    linked.length ? `Linked ${linked.length} account${linked.length === 1 ? "" : "s"}; historical data is importing in the background, so refresh in a few minutes.` : "",
+    unlinked ? `Stopped monitoring ${unlinked}; their history is kept.` : "",
+  ].filter(Boolean);
+  return { ok: parts.join(" ") || "No changes." };
+}
+
+/** Connect with a pasted long-lived token (Meta Business Manager system user). */
+export async function connectWithToken(platform: Platform, _prev: LinkState, form: FormData): Promise<LinkState> {
+  const user = await requireAdmin();
+  const adapter = getAdapter(platform);
+  if (!adapter.connectWithToken) return { errors: [`${PLATFORM_LABEL[platform]} does not support token connections.`] };
+  const token = String(form.get("token") ?? "").trim();
+  if (token.length < 20) return { errors: ["Paste the full access token."] };
+  try {
+    const { label, tokens } = await adapter.connectWithToken(token);
+    const connection = await prisma.platformConnection.create({ data: { agencyId: user.agencyId, platform, label, status: "ACTIVE", createdById: user.id } });
+    await storeTokens(connection.id, tokens);
+    revalidatePath("/integrations", "layout");
+    return { ok: `Connected as ${label}. Choose accounts to monitor below.` };
+  } catch (e) {
+    return { errors: [e instanceof IntegrationError ? e.message : "Could not validate the token."] };
+  }
 }
 
 export async function disconnectConnection(connectionId: string): Promise<void> {
@@ -71,6 +107,7 @@ export async function disconnectConnection(connectionId: string): Promise<void> 
   const connection = await loadConnection(connectionId, user.agencyId);
   const cred = await prisma.oAuthCredential.findUnique({ where: { connectionId: connection.id } });
   // Best effort: revoke the grant at Google so the refresh token stops working.
+  // Google supports token revocation; Meta and Microsoft grants are removed from the user's account settings.
   if (cred?.encryptedRefreshToken && connection.platform === "GOOGLE_ADS") {
     try {
       await fetch("https://oauth2.googleapis.com/revoke", {

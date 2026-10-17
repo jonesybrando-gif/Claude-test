@@ -92,3 +92,15 @@ Account managers can also click **Refresh now** next to an account on its client
 ## Verification status
 
 The integration is unit-tested against the documented REST request and response formats. Its requests have also been checked against Google's real endpoints, using deliberately invalid credentials to confirm request format and error handling. **It has not yet been run against a real, authorized Google Ads account.** The first live connection is the remaining step before it can be marked verified.
+
+## Google Local Services Ads
+
+Local Services Ads come through the **same Google Ads connection**. There's nothing extra to set up in Cloud Console.
+
+- **Linking:** in **Choose accounts** on a Google Ads connection, the **"Local Services Ads → client"** column links an account's Local Services campaigns. You can assign them to the same client as the regular Google Ads campaigns or to a different one.
+- **No double counting:** campaigns of type `LOCAL_SERVICES` are always excluded from "Google Ads" and reported only under "Google LSA".
+- **Spend:** comes from those campaigns' cost in the Google Ads API.
+- **Leads:** come from the `local_services_lead` resource. *Leads* counts every lead created that day; *conversions* counts charged leads, the ones the advertiser pays for.
+- **If Google reports no cost:** when Google reports charged leads but no cost for the period, the account is marked **spend not reported** and its pacing line carries a warning. The app does not invent an estimate.
+- **Access:** Local Services data is generally only available when the account is reached through a manager (MCC) account.
+- **Not imported:** lead details such as phone numbers.

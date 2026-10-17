@@ -16,6 +16,8 @@ const NOW = new Date("2026-10-17T15:00:00Z"); // 11:00 in New York
 function fakeAdapter(rowsFor: (from: string, to: string) => RemoteDailyRow[], overrides: Partial<PlatformAdapter> = {}): PlatformAdapter {
   return {
     platform: "GOOGLE_ADS",
+    connectionPlatform: "GOOGLE_ADS",
+    linkablePlatforms: ["GOOGLE_ADS"],
     isConfigured: () => true,
     authorizationUrl: () => "",
     exchangeCode: async () => ({ accessToken: "x" }),
@@ -187,5 +189,11 @@ describe.skipIf(!hasDb)("syncAccount (database)", () => {
     ]);
     // The mock returns the same rows for every chunk; only the chunk that covers them stores them.
     expect(r.rowsUpserted).toBe(2);
+  });
+
+  it("stores unverified spend when the adapter reports it", async () => {
+    const adapter = fakeAdapter(() => [], { fetchDailyPerformance: async (_t, _a, from) => ({ rows: [{ ...row(from, 0), leads: 2 }], campaigns: [], spendVerified: false }) });
+    await syncAccount(accountId, "manual", deps(adapter));
+    expect((await prisma.adAccount.findUniqueOrThrow({ where: { id: accountId } })).spendIsVerified).toBe(false);
   });
 });
