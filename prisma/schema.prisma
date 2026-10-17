@@ -144,6 +144,9 @@ model PlatformConnection {
   // Platform login identifier (e.g. MCC customer id, Meta business id)
   externalId String?
   status    ConnectionStatus @default(ACTIVE)
+  // Last connection-level error (e.g. revoked token, developer token not approved)
+  lastError String?
+  createdById String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -174,7 +177,9 @@ model AdAccount {
   connectionId String?
   connection   PlatformConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
   platform     Platform
-  externalId   String   // e.g. Google Ads customer id "123-456-7890"
+  externalId   String   // platform account id, digits only for Google Ads (e.g. "1234567890")
+  // Google Ads: manager (MCC) id sent as login-customer-id when access is through a manager.
+  loginCustomerId String?
   name         String
   currency     String   @db.Char(3)
   timezone     String?

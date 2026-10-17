@@ -2,7 +2,7 @@
 
 A multi-tenant advertising reporting and **budget pacing** app for agencies. Enter each client's monthly budget, and the app works out whether campaigns are spending too fast, too slow, or on target, forecasts month-end spend, and tells account managers exactly what daily spend to aim for.
 
-> **Status: Phase 1 (core application) is built and tested with demo data. No live ad-platform integration is connected yet.** All sample data is flagged `isDemo` and labelled "Demo data" in the UI. See [What's built and what isn't](#whats-built-and-what-isnt).
+> **Status:** Phase 1 (core application) is built and tested with demo data. Phase 2 (the Google Ads integration and background sync) is built and tested against the documented API, but **has not yet been run against a real Google Ads account**. Setup steps are in [docs/google-ads-setup.md](docs/google-ads-setup.md). All sample data is flagged `isDemo` and labelled "Demo data" in the UI. See [What's built and what isn't](#whats-built-and-what-isnt).
 
 ## Quick start
 
@@ -24,6 +24,9 @@ npm run dev                   # http://localhost:3000
 | `AUTH_SECRET` | Random secret for signing session cookies: `openssl rand -base64 32` |
 | `TOKEN_ENCRYPTION_KEY` | 32-byte key for encrypting OAuth tokens at rest: `openssl rand -base64 32` |
 | `SHOW_DEMO_LOGINS` | Optional. `1` shows the demo login hints on the sign-in page in production |
+| `APP_URL` | Public base URL; must match the OAuth redirect URI registered with Google |
+| `CRON_SECRET` | Bearer secret for `/api/cron/sync` |
+| `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN` | Google Ads API credentials; see [docs/google-ads-setup.md](docs/google-ads-setup.md) |
 
 Demo logins (password `demo-password`):
 
@@ -46,6 +49,7 @@ The demo data is generated relative to today, so the current month always has re
 | `npm run typecheck` | TypeScript |
 | `npm run lint` | ESLint |
 | `npm run db:seed` | Reset and reload the demo agency |
+| `npm run sync` | Sync all live accounts that are due (`-- --account <id> [--backfill]` for one account) |
 
 ## How pacing works
 
@@ -103,7 +107,8 @@ prisma/seed.ts              Demo data
 src/lib/pacing/             Pure pacing engine, distributions, roll-ups, thresholds (no I/O)
 src/lib/                    Money, metrics, date ranges, recommendations, access policy (pure)
 src/server/                 Database access, auth, access control, pacing/reporting services
-src/server/integrations/    Platform adapter contract + integration status registry
+src/server/integrations/    Platform adapter contract, registry, OAuth token storage, Google Ads adapter
+src/server/sync/            Sync runner (windowed re-import, retries, failure handling, run log)
 src/app/                    Next.js App Router pages and server actions
 src/components/             UI (shadcn-style primitives, charts, dashboard)
 ```
@@ -143,12 +148,27 @@ src/components/             UI (shadcn-style primitives, charts, dashboard)
 - 58 unit tests: ABC Plumbing and Dental Group examples, 28/29/30/31-day months, leap year, timezones, DST, mid-month increases and cuts, zero spend, zero budget, period not started or ended, every distribution, pauses, both forecast models, threshold boundaries, roll-ups without double counting, permissions, recommendations, budget validation, money parsing
 - End-to-end browser checks (run manually during development; not yet committed as an automated suite): login, client isolation, manager scoping, budget create, duplicate rejection, mid-month revision, threshold validation, mobile layout
 
+### Phase 2: Google Ads ✅ built · ⏳ awaiting a live account to verify
+
+- OAuth 2.0 connection flow (admin only). The `state` parameter is signed and bound to the user and a nonce cookie, refresh tokens are encrypted at rest, and disconnecting revokes the grant at Google.
+- MCC support: lists every account in the manager hierarchy, and the admin assigns each account to a client. `login-customer-id` is set automatically for accounts reached through a manager.
+- Sync runner:
+  - imports about 13 months of history on first link, in 92-day chunks
+  - hourly incremental syncs that re-fetch a 14-day restatement window, replaced atomically
+  - retries with backoff on rate limits and temporary errors
+  - a per-account lock so two syncs never overlap
+  - every run logged with range, row count and error
+- Failure handling: revoked tokens, unapproved developer tokens and lost account access each surface as a distinct status in the UI.
+- Entry points: `/api/cron/sync` (Bearer `CRON_SECRET`), `npm run sync`, and a **Refresh now** button on client pages.
+- Data-completeness rule (yesterday counts after 3am account time). Pacing never uses today's partial data.
+- Tests: 28 Google Ads and sync tests, covering GAQL building and injection safety, micros-to-cents conversion, response parsing, error classification, retry behavior, the hierarchy listing, and database-backed sync scenarios.
+- Checked against Google's real OAuth and Ads endpoints using deliberately invalid credentials, to confirm the request format and error handling.
+
 ### Not built yet
 
 | Phase | Item | Notes |
 |---|---|---|
-| 2 | Google Ads live integration | Needs a Google Cloud OAuth client and an approved Google Ads **developer token** from your MCC (Basic access or higher). Adapter contract is in place. |
-| 2 | Background sync runner | Scheduled and manual refresh, retries with backoff, rate-limit handling, re-syncing recent days to pick up restated conversions, and `SyncRun` logging. Schema exists; the runner does not. |
+| 2 | First live Google Ads connection | Needs the Cloud Console and MCC setup in [docs/google-ads-setup.md](docs/google-ads-setup.md). This is the step that moves Google Ads from "built" to "verified". |
 | 3 | Meta Ads | Needs a Meta app with Marketing API access, App Review for `ads_read`, and business verification. |
 | 3 | Microsoft Advertising | Needs a developer token and an Azure app registration. |
 | 3 | Google Local Services Ads | **Not verified yet.** Before building, confirm from current Google documentation which official API exposes LSA leads and charges, and whether it reports verified daily cost. Until then, LSA spend is labelled *estimated* everywhere. |
