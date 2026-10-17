@@ -12,7 +12,7 @@ export function KpiCard({ kv, currency, trend, note }: { kv: KpiValue; currency:
     <div className="flex flex-col gap-1 rounded-xl border border-border bg-surface px-4 py-3" title={def.description}>
       <div className="flex min-w-0 items-start justify-between gap-2">
         <p className="text-xs leading-tight text-text-3">{def.label}</p>
-        {trend && <span className="shrink-0"><Sparkline values={trend} width={48} height={18} /></span>}
+        {trend && kv.value !== null && <span className="shrink-0"><Sparkline values={trend} width={48} height={18} /></span>}
       </div>
       <p className="truncate text-xl font-semibold tabular">{formatKpi(kv.key, kv.value, currency)}</p>
       <p className="flex items-center gap-1 text-xs tabular">

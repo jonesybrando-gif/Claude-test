@@ -267,13 +267,26 @@ src/components/             UI (shadcn-style primitives, charts, dashboard)
 - **Data sent to Anthropic:** the client's name, account and campaign names, and their metrics. No logins or tokens are sent.
 - **Model:** `claude-opus-5-5` with structured output. Server-side fallback (`fallbacks: "default"`) is on, so if the model declines a request, Anthropic retries it on its recommended fallback model.
 
+### Phase 5c: Shareable report links ✅
+
+- **Share link** on a client page creates a private link to that client's report. Anyone with the link can open it in a browser, without signing in, and download the PDF.
+- **What viewers see:** the client-facing report, following the client's report layout, with your agency's branding. They never see internal recommendations, AI suggestions or account controls.
+- **Each link has:**
+  - a date range: the report default, or a fixed preset such as "Last month", which moves forward with the calendar
+  - an optional expiry
+  - a view count and last-viewed time
+  - a Turn off button that stops it working immediately
+- **Security:**
+  - Tokens carry 192 bits of randomness and are looked up by SHA-256 hash. The copy kept for re-copying is encrypted with `TOKEN_ENCRYPTION_KEY`.
+  - Link pages send `Referrer-Policy: no-referrer` and `noindex`.
+  - Unknown, expired and turned-off links all return 404, and links stop working when the client is archived.
+
 ### Not built yet
 
 | Phase | Item | Notes |
 |---|---|---|
 | 2 | First live Google Ads connection | Needs the Cloud Console and MCC setup in [docs/google-ads-setup.md](docs/google-ads-setup.md). This is the step that moves Google Ads from "built" to "verified". |
 | 3 | First live Meta, Microsoft and LSA connections | Needs the setup in the guides above. Meta also needs App Review and Advanced Access for client-owned ad accounts. |
-| 4 | Scheduled email reports | PDF/CSV export and the report builder are done; the `ReportSchedule` table is ready for scheduled sending. |
 | 4 | Branded client portal | Client users already get a read-only view of their own client; a custom domain and branded login are not built. |
 | 5 | More forecast models, seasonality learned from history, custom weekday and daily weights in the UI | The engine already supports custom weights; the budget form exposes only even, business-days and weekend-weighted. |
 | — | Currency conversion | Original currency is stored per account and an `ExchangeRate` table exists. If an account's currency differs from its budget's, the row shows a warning; conversion is not applied. Agency totals assume one currency. |
