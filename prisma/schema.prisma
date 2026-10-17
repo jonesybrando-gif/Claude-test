@@ -1,0 +1,469 @@
+// Advertising Budget Pacing — database schema.
+//
+// Conventions
+// - Every tenant-owned row carries agencyId (directly or through its parent) so
+//   queries can always be scoped to one agency.
+// - Money is stored as integer minor units (cents) in BigInt columns, never floats.
+//   Each money column sits next to a currency code.
+// - Calendar dates for reporting ("the day the spend happened in the client's
+//   timezone") are stored as DATE columns, not timestamps.
+// - Daily performance rows are stored at the leaf level only (campaign, or
+//   account when the platform has no campaign granularity). Rollups are always
+//   computed from leaves so spend is never double-counted.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy, users and permissions
+// ---------------------------------------------------------------------------
+
+model Agency {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  // White-label branding
+  logoUrl       String?
+  brandColor    String  @default("#4f46e5")
+  reportHeader  String?
+  reportFooter  String?
+  // Default pacing thresholds (percent of expected spend). Overridable per client.
+  thresholdUnder         Decimal @default(85) @db.Decimal(6, 2)
+  thresholdSlightlyUnder Decimal @default(95) @db.Decimal(6, 2)
+  thresholdSlightlyOver  Decimal @default(105) @db.Decimal(6, 2)
+  thresholdOver          Decimal @default(115) @db.Decimal(6, 2)
+  defaultTimezone String @default("America/New_York")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users             User[]
+  clients           Client[]
+  platformConnections PlatformConnection[]
+  alerts            Alert[]
+  reports           Report[]
+}
+
+enum Role {
+  AGENCY_ADMIN
+  ACCOUNT_MANAGER
+  CLIENT_USER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  agencyId     String
+  agency       Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role
+  // CLIENT_USER only: the single client this user may read.
+  clientId     String?
+  client       Client?  @relation("ClientUsers", fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // ACCOUNT_MANAGER: clients explicitly assigned to them.
+  assignments ClientAssignment[]
+  managedClients Client[] @relation("PrimaryManager")
+  budgetRevisions BudgetRevision[]
+  notifications Notification[]
+
+  @@index([agencyId])
+}
+
+model ClientAssignment {
+  userId   String
+  clientId String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, clientId])
+}
+
+// ---------------------------------------------------------------------------
+// Clients and advertising accounts
+// ---------------------------------------------------------------------------
+
+model Client {
+  id        String  @id @default(cuid())
+  agencyId  String
+  agency    Agency  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name      String
+  timezone  String  @default("America/New_York")
+  currency  String  @default("USD") @db.Char(3)
+  primaryManagerId String?
+  primaryManager   User?  @relation("PrimaryManager", fields: [primaryManagerId], references: [id], onDelete: SetNull)
+  // Per-client threshold overrides (null = use agency defaults)
+  thresholdUnder         Decimal? @db.Decimal(6, 2)
+  thresholdSlightlyUnder Decimal? @db.Decimal(6, 2)
+  thresholdSlightlyOver  Decimal? @db.Decimal(6, 2)
+  thresholdOver          Decimal? @db.Decimal(6, 2)
+  archivedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  accounts    AdAccount[]
+  budgets     Budget[]
+  users       User[]  @relation("ClientUsers")
+  assignments ClientAssignment[]
+  alerts      Alert[]
+  reports     Report[]
+
+  @@index([agencyId])
+}
+
+enum Platform {
+  GOOGLE_ADS
+  META_ADS
+  MICROSOFT_ADS
+  GOOGLE_LSA
+}
+
+enum ConnectionStatus {
+  ACTIVE
+  NEEDS_REAUTH
+  DISCONNECTED
+  PENDING_APPROVAL
+}
+
+// One OAuth grant (e.g. a Google Ads MCC login). Several AdAccounts can hang off it.
+model PlatformConnection {
+  id        String   @id @default(cuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  platform  Platform
+  label     String
+  // Platform login identifier (e.g. MCC customer id, Meta business id)
+  externalId String?
+  status    ConnectionStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  credential OAuthCredential?
+  accounts   AdAccount[]
+
+  @@index([agencyId, platform])
+}
+
+// Tokens are encrypted with AES-256-GCM (see src/server/crypto.ts) before storage
+// and are only ever decrypted on the server.
+model OAuthCredential {
+  id                    String   @id @default(cuid())
+  connectionId          String   @unique
+  connection            PlatformConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  encryptedAccessToken  String?
+  encryptedRefreshToken String?
+  accessTokenExpiresAt  DateTime?
+  scopes                String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model AdAccount {
+  id           String   @id @default(cuid())
+  clientId     String
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  connectionId String?
+  connection   PlatformConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  platform     Platform
+  externalId   String   // e.g. Google Ads customer id "123-456-7890"
+  name         String
+  currency     String   @db.Char(3)
+  timezone     String?
+  // True for sample data. Demo rows are always labelled in the UI and are never
+  // mixed into an account backed by a live integration.
+  isDemo       Boolean  @default(false)
+  // Whether the platform reports verified spend for this account. Google LSA may not.
+  spendIsVerified Boolean @default(true)
+  status       ConnectionStatus @default(ACTIVE)
+  lastSyncAttemptAt   DateTime?
+  lastSuccessfulSyncAt DateTime?
+  // Last local date for which the platform's reporting is considered complete.
+  dataCompleteThrough DateTime? @db.Date
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  campaigns   Campaign[]
+  budgets     Budget[]
+  performance DailyPerformance[]
+  syncRuns    SyncRun[]
+  alerts      Alert[]
+
+  @@unique([platform, externalId, clientId])
+  @@index([clientId])
+}
+
+enum CampaignStatus {
+  ENABLED
+  PAUSED
+  REMOVED
+  UNKNOWN
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     AdAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  externalId  String
+  name        String
+  status      CampaignStatus @default(UNKNOWN)
+  // Platform-side daily budget, informational only (minor units).
+  platformDailyBudgetMinor BigInt?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  budgets     Budget[]
+  performance DailyPerformance[]
+
+  @@unique([accountId, externalId])
+}
+
+// ---------------------------------------------------------------------------
+// Budgets
+// ---------------------------------------------------------------------------
+
+enum BudgetScope {
+  CLIENT   // combined budget across all of a client's accounts
+  ACCOUNT  // one advertising account
+  CAMPAIGN // one campaign
+}
+
+enum DistributionMode {
+  EVEN             // every calendar day weighted equally
+  BUSINESS_DAYS    // Mon–Fri only
+  WEEKEND_WEIGHTED // weekend days get weekendWeight
+  CUSTOM_WEEKDAY   // explicit weight per weekday (weekdayWeights)
+  CUSTOM_DAILY     // explicit weight per date (dailyWeights) — seasonal patterns
+}
+
+enum ForecastModel {
+  STRAIGHT_LINE
+  TRAILING_7_DAY
+}
+
+// A budget for one scope over one period. Mid-period changes are BudgetRevisions.
+model Budget {
+  id         String      @id @default(cuid())
+  clientId   String
+  client     Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  scope      BudgetScope
+  accountId  String?
+  account    AdAccount?  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  campaignId String?
+  campaign   Campaign?   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Budget period, inclusive local dates in the client's timezone.
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+  currency    String   @db.Char(3)
+  distribution  DistributionMode @default(EVEN)
+  weekendWeight Decimal? @db.Decimal(6, 3)
+  // JSON array of 7 numbers, Sunday first.
+  weekdayWeights Json?
+  // JSON object {"YYYY-MM-DD": weight}
+  dailyWeights   Json?
+  // JSON array of {"start":"YYYY-MM-DD","end":"YYYY-MM-DD"} pauses (no planned spend)
+  pauses         Json?
+  forecastModel  ForecastModel @default(STRAIGHT_LINE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  revisions BudgetRevision[]
+
+  @@index([clientId, periodStart])
+  @@index([accountId])
+  @@index([campaignId])
+}
+
+// Every budget amount is a revision. The first revision's effectiveDate equals
+// periodStart; later revisions model mid-period changes.
+model BudgetRevision {
+  id            String   @id @default(cuid())
+  budgetId      String
+  budget        Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  amountMinor   BigInt
+  effectiveDate DateTime @db.Date
+  note          String?
+  createdById   String?
+  createdBy     User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+
+  @@index([budgetId, effectiveDate])
+}
+
+// ---------------------------------------------------------------------------
+// Performance data
+// ---------------------------------------------------------------------------
+
+// One row per leaf entity per local date. campaignId is null only for platforms
+// that report at the account level (e.g. Google LSA).
+model DailyPerformance {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     AdAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  campaignId  String?
+  campaign    Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  date        DateTime @db.Date
+  currency    String   @db.Char(3)
+  costMinor   BigInt   @default(0)
+  // Set when cost is an estimate (e.g. LSA charged leads × lead price).
+  costIsEstimated Boolean @default(false)
+  impressions BigInt   @default(0)
+  clicks      BigInt   @default(0)
+  reach       BigInt?
+  // Platform-reported conversions. Platform definitions differ; never sum
+  // these across platforms without labelling them as platform-reported.
+  conversions      Decimal @default(0) @db.Decimal(14, 4)
+  conversionValueMinor BigInt @default(0)
+  leads            Decimal? @db.Decimal(14, 4)
+  isDemo      Boolean  @default(false)
+  syncedAt    DateTime @default(now())
+
+  conversionMetrics ConversionMetric[]
+
+  @@unique([accountId, campaignId, date])
+  @@index([accountId, date])
+  @@index([campaignId, date])
+}
+
+// Named conversion actions (e.g. Meta "lead", "purchase"; LSA "charged lead").
+model ConversionMetric {
+  id            String @id @default(cuid())
+  performanceId String
+  performance   DailyPerformance @relation(fields: [performanceId], references: [id], onDelete: Cascade)
+  name          String
+  source        String // "platform" | "crm" | ...
+  value         Decimal @db.Decimal(14, 4)
+  valueMinor    BigInt?
+
+  @@index([performanceId])
+}
+
+model ExchangeRate {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  base      String   @db.Char(3)
+  quote     String   @db.Char(3)
+  rate      Decimal  @db.Decimal(18, 8)
+  source    String
+
+  @@unique([date, base, quote])
+}
+
+// ---------------------------------------------------------------------------
+// Sync, alerts, reports
+// ---------------------------------------------------------------------------
+
+enum SyncStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+}
+
+model SyncRun {
+  id         String   @id @default(cuid())
+  accountId  String
+  account    AdAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  kind       String   // "scheduled" | "manual" | "backfill"
+  status     SyncStatus
+  rangeStart DateTime? @db.Date
+  rangeEnd   DateTime? @db.Date
+  rowsUpserted Int    @default(0)
+  error      String?
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+
+  @@index([accountId, startedAt])
+}
+
+enum AlertType {
+  OVERSPENDING
+  UNDERSPENDING
+  PROJECTED_OVERRUN
+  SPEND_SPIKE
+  SPEND_STOPPED
+  CAMPAIGN_NO_SPEND
+  SYNC_FAILED
+  ACCOUNT_DISCONNECTED
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model Alert {
+  id        String   @id @default(cuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  accountId String?
+  account   AdAccount? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  type      AlertType
+  status    AlertStatus @default(OPEN)
+  // Deduplication key: one OPEN/ACKNOWLEDGED alert per key.
+  dedupeKey String
+  message   String
+  details   Json?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  resolvedAt  DateTime?
+
+  notifications Notification[]
+
+  @@index([agencyId, status])
+  @@index([dedupeKey, status])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alertId   String?
+  alert     Alert?   @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  channel   String   // "in_app" | "email"
+  title     String
+  body      String
+  readAt    DateTime?
+  sentAt    DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+model Report {
+  id        String   @id @default(cuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  clientId  String?  // null = agency-wide report
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name      String
+  // Widget layout and settings
+  config    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  schedules ReportSchedule[]
+}
+
+model ReportSchedule {
+  id         String   @id @default(cuid())
+  reportId   String
+  report     Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  frequency  String   // "weekly" | "monthly"
+  dayOfWeek  Int?
+  dayOfMonth Int?
+  recipients String[]
+  lastSentAt DateTime?
+  nextRunAt  DateTime?
+  enabled    Boolean  @default(true)
+}

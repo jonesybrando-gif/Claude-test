@@ -1,0 +1,34 @@
+import { LoginForm } from "./login-form";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
+// Rendered per request so SHOW_DEMO_LOGINS can be toggled without a rebuild.
+export const dynamic = "force-dynamic";
+
+export default function LoginPage() {
+  const showDemo = process.env.NODE_ENV !== "production" || process.env.SHOW_DEMO_LOGINS === "1";
+  return (
+    <main className="flex min-h-screen items-center justify-center p-4">
+      <div className="w-full max-w-sm">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Budget Pacing Monitor</CardTitle>
+            <CardDescription>Sign in to your agency workspace</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LoginForm />
+          </CardContent>
+        </Card>
+        {showDemo && (
+          <div className="mt-4 rounded-lg border border-border bg-surface p-3 text-xs text-text-2">
+            <p className="font-medium text-text">Demo logins (password: demo-password)</p>
+            <ul className="mt-1 space-y-0.5">
+              <li>admin@demo.test — agency administrator</li>
+              <li>manager@demo.test — account manager (6 clients)</li>
+              <li>client@demo.test — client user (ABC Plumbing, read-only)</li>
+            </ul>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
