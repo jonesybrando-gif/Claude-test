@@ -1,0 +1,67 @@
+import { describe, expect, it } from "vitest";
+import { buildAiContext, type AiContextInput } from "../ai-context";
+import { emptyTotals, type MetricTotals } from "../metrics";
+
+const t = (o: Partial<MetricTotals>): MetricTotals => ({ ...emptyTotals(), ...o });
+
+const base: AiContextInput = {
+  clientName: "ABC Plumbing",
+  currency: "USD",
+  isDemo: false,
+  rangeLabel: "Last month",
+  range: { from: "2026-09-01", to: "2026-09-30" },
+  comparison: { from: "2026-08-01", to: "2026-08-31" },
+  kpis: ["spend", "clicks", "costPerLead", "roas"],
+  totals: t({ costMinor: 575000, clicks: 880, conversions: 79.4 }),
+  previous: t({ costMinor: 538600, clicks: 821, conversions: 75.5 }),
+  accounts: [{ platform: "Google Ads", name: "Search", totals: t({ costMinor: 575000, clicks: 880 }), spendVerified: true, dataNote: null }],
+  campaigns: [],
+  pacing: null,
+  notes: [],
+};
+
+describe("AI grounding context", () => {
+  it("formats money in currency, never minor units, with changes and direction", () => {
+    const text = buildAiContext(base);
+    expect(text).toContain("- Ad spend: $5,750; comparison $5,386; change +6.8%");
+    expect(text).toContain("- Clicks: 880; comparison 821; change +7.2% (favourable)");
+    expect(text).not.toContain("575000");
+  });
+
+  it("says 'not reported' rather than zero for metrics nobody reported", () => {
+    const text = buildAiContext(base);
+    expect(text).toContain("- Cost per lead: not reported");
+    expect(text).toContain("- Return on ad spend: not reported");
+  });
+
+  it("flags demo data, estimated spend, stale accounts and missing budgets", () => {
+    const text = buildAiContext({
+      ...base,
+      isDemo: true,
+      totals: { ...base.totals, hasEstimatedCost: true },
+      accounts: [{ platform: "Google LSA", name: "LSA", totals: null, spendVerified: false, dataNote: "stale: last synced Sep 2" }],
+    });
+    expect(text).toContain("illustrative demo data");
+    expect(text).toContain("estimated Local Services Ads cost");
+    expect(text).toContain("Google LSA · LSA: no data in this period [spend estimated or incomplete] [stale: last synced Sep 2]");
+    expect(text).toContain("No budget is set for the current month.");
+  });
+
+  it("lists campaigns by spend, capped at 15, and describes pacing", () => {
+    const campaigns = Array.from({ length: 20 }, (_, i) => ({ name: `C${i}`, platform: "Meta", status: "ENABLED", totals: t({ costMinor: (i + 1) * 1000 }), previous: null }));
+    const text = buildAiContext({
+      ...base,
+      campaigns,
+      pacing: {
+        periodStart: "2026-10-01", periodEnd: "2026-10-31", asOf: "2026-10-16", status: "OVERSPENDING", forecastStatus: "OVERSPENDING",
+        budgetMinor: 500000, actualToDateMinor: 322500, expectedToDateMinor: 258100, projectedMinor: 624900, requiredDailyMinor: 11800, currentDailyRateMinor: 20000, remainingActiveDays: 15, pacingPct: 125,
+      },
+    });
+    expect(text).toContain("Campaigns by spend (top 15 of 20)");
+    expect(text.indexOf("- C19 ")).toBeLessThan(text.indexOf("- C18 "));
+    expect(text).not.toContain("- C4 ");
+    expect(text).toContain("Budget $5,000; spent $3,225; expected by now $2,581; pacing 125");
+    expect(text).toContain("projected $6,249 (+$1,249 vs budget)");
+    expect(text).toContain("$118 over 15 remaining days");
+  });
+});

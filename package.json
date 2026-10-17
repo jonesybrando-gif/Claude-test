@@ -17,6 +17,7 @@
     "setup:owner": "tsx --conditions=react-server scripts/setup-owner.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@prisma/client": "^6.16.2",
     "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",

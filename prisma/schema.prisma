@@ -124,7 +124,7 @@ model EmailMessage {
   subject   String
   text      String
   html      String?
-  kind      String   // "invite" | "password_reset" | "alert" | "daily_summary"
+  kind      String   // "invite" | "password_reset" | "alert" | "daily_summary" | "client_email"
   status    EmailStatus
   error     String?
   createdAt DateTime @default(now())
@@ -167,6 +167,7 @@ model Client {
   accounts    AdAccount[]
   budgets     Budget[]
   users       User[]  @relation("ClientUsers")
+  aiInsights  AiInsight[]
   assignments ClientAssignment[]
   alerts      Alert[]
   reports     Report[]
@@ -542,4 +543,21 @@ model LoginThrottle {
   windowStart DateTime @default(now())
   lockedUntil DateTime?
   updatedAt   DateTime @updatedAt
+}
+
+// Saved output of the AI assistant (see src/server/ai). Kept so suggestions
+// aren't regenerated (and billed) on every page view.
+model AiInsight {
+  id          String   @id @default(cuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  kind        String   // "suggestions"
+  content     Json
+  model       String
+  rangeFrom   String   // ISO date the data covered
+  rangeTo     String
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([clientId, kind, createdAt])
 }

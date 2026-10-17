@@ -8,7 +8,9 @@ export interface OutgoingEmail {
   subject: string;
   text: string;
   html?: string;
-  kind: "invite" | "password_reset" | "alert" | "daily_summary";
+  kind: "invite" | "password_reset" | "alert" | "daily_summary" | "client_email";
+  /** Replies go here instead of EMAIL_FROM (e.g. the account manager). */
+  replyTo?: string;
   /**
    * Strings (e.g. one-time links) to replace with "[link removed]" in the
    * stored copy, so secrets never sit in the database.
@@ -47,7 +49,7 @@ export async function sendEmail(msg: OutgoingEmail): Promise<SendResult> {
     result = { status: "NOT_CONFIGURED" };
   } else {
     try {
-      await t.sendMail({ from: process.env.EMAIL_FROM, to: msg.to, subject: msg.subject, text: msg.text, html: msg.html });
+      await t.sendMail({ from: process.env.EMAIL_FROM, to: msg.to, replyTo: msg.replyTo, subject: msg.subject, text: msg.text, html: msg.html });
       result = { status: "SENT" };
     } catch (e) {
       result = { status: "FAILED", error: (e as Error).message.slice(0, 500) };
