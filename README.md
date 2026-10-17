@@ -27,6 +27,7 @@ npm run dev                   # http://localhost:3000
 | `APP_URL` | Public base URL; must match the OAuth redirect URI registered with Google |
 | `CRON_SECRET` | Bearer secret for `/api/cron/sync` |
 | `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN` | Google Ads API credentials (also used for Local Services Ads); see [docs/google-ads-setup.md](docs/google-ads-setup.md) |
+| `SMTP_URL`, `EMAIL_FROM` | Outgoing email for invitations, password resets, alerts and daily summaries. Without them, emails are recorded in **Settings → Email log** but not delivered, and invite/reset links are shown to the admin to share. |
 | `META_APP_ID`, `META_APP_SECRET` | Meta app credentials; see [docs/meta-ads-setup.md](docs/meta-ads-setup.md) |
 | `MICROSOFT_ADS_CLIENT_ID`, `MICROSOFT_ADS_CLIENT_SECRET`, `MICROSOFT_ADS_DEVELOPER_TOKEN` | Microsoft Advertising credentials; see [docs/microsoft-ads-setup.md](docs/microsoft-ads-setup.md) |
 
@@ -52,6 +53,7 @@ The demo data is generated relative to today, so the current month always has re
 | `npm run lint` | ESLint |
 | `npm run db:seed` | Reset and reload the demo agency |
 | `npm run sync` | Sync all live accounts that are due (`-- --account <id> [--backfill]` for one account) |
+| `npm run alerts` | Evaluate alerts and send any due daily summaries (also runs after every `/api/cron/sync`) |
 
 ## How pacing works
 
@@ -185,16 +187,38 @@ src/components/             UI (shadcn-style primitives, charts, dashboard)
 - **Shared framework:** one OAuth route for every platform (`/api/integrations/<platform>/connect`), an account picker with one column per platform (Google offers Google Ads and Local Services), and "Don't monitor" to stop syncing an account while keeping its history.
 - **Tests:** 34 new, covering parsing, money conversion, error classification, OAuth and token behavior, paging and host safety, report polling, ZIP/CSV handling, and LSA lead attribution and spend verification.
 
+### Phase 4a: Team management and alerts ✅
+
+- **Team (Settings → Team):**
+  - invite administrators, account managers (with their assigned clients) and read-only client users
+  - change roles and access, and deactivate users, which signs them out immediately
+  - resend invitations or send a password reset
+  - the agency always keeps at least one active administrator, and admins can't lock themselves out
+- **Invitations and password resets:**
+  - single-use links (72 hours for invitations, 60 minutes for resets); only a hash of each token is stored
+  - "Forgot password" never reveals whether an email has an account
+  - changing or resetting a password signs out every other session
+- **Your account:** change name and password, and opt in or out of alert emails and the daily summary.
+- **Alerts (Alerts page, with an unread count in the navigation):**
+  - overspending and underspending, including a forecast that will miss a mid-month budget increase
+  - projected overrun beyond a set %
+  - spend spike, spend stopped, enabled campaign not spending
+  - failed or stale sync, disconnected account
+  
+  Every rule has adjustable thresholds (**Settings → Alerts**). Each issue alerts once (deduplicated by a stable key), stays open while true, can be acknowledged, and resolves itself when it clears. Alerts go to admins and to the managers assigned to the client: in the app, plus one email per person per run.
+- **Daily summary email:** weekday mornings from 7:00 in the agency's time zone, once per person per day, covering only that person's clients.
+- **Email:** sent over SMTP with white-labelled templates. Every message is recorded in **Settings → Email log**, with one-time links removed from the stored copy.
+- **Tests:** 25 new, including database-backed tests of recipients, deduplication, resolution, acknowledgement and summary timing, plus 28 browser checks.
+
 ### Not built yet
 
 | Phase | Item | Notes |
 |---|---|---|
 | 2 | First live Google Ads connection | Needs the Cloud Console and MCC setup in [docs/google-ads-setup.md](docs/google-ads-setup.md). This is the step that moves Google Ads from "built" to "verified". |
 | 3 | First live Meta, Microsoft and LSA connections | Needs the setup in the guides above. Meta also needs App Review and Advanced Access for client-owned ad accounts. |
-| 4 | Alerts and notifications | Schema (`Alert`, with a dedupe key, and `Notification`) is ready. The evaluator, email delivery and daily summary are not built. |
 | 4 | PDF and CSV export, scheduled email reports, custom report builder | Schema (`Report`, `ReportSchedule`) is ready. |
 | 4 | Branded client portal | Client users already get a read-only view of their own client; a custom domain and branded login are not built. |
 | 5 | More forecast models, seasonality learned from history, custom weekday and daily weights in the UI | The engine already supports custom weights; the budget form exposes only even, business-days and weekend-weighted. |
 | — | Currency conversion | Original currency is stored per account and an `ExchangeRate` table exists. If an account's currency differs from its budget's, the row shows a warning; conversion is not applied. Agency totals assume one currency. |
-| — | User management UI, password reset, SSO | Users are created by the seed or directly in the database for now. |
+| — | Single sign-on (Google / Microsoft) and two-factor authentication | Email and password only for now. Login attempts are not rate-limited yet; add that (or put the app behind your host's protection) before going public. |
 | — | Multiple agencies | Data model and access checks are agency-scoped; agency sign-up and onboarding are not built. |

@@ -42,7 +42,9 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     const { payload } = await jwtVerify(token, secret());
     if (!payload.sub) return null;
     const u = await prisma.user.findUnique({ where: { id: payload.sub } });
-    if (!u) return null;
+    if (!u || u.deactivatedAt) return null;
+    // Sessions issued before a password change or deactivation are no longer valid.
+    if (u.sessionsValidAfter && (payload.iat ?? 0) * 1000 < u.sessionsValidAfter.getTime() - 1000) return null;
     return { id: u.id, agencyId: u.agencyId, role: u.role, clientId: u.clientId, name: u.name, email: u.email };
   } catch {
     return null;

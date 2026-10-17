@@ -39,6 +39,8 @@ model Agency {
   thresholdSlightlyOver  Decimal @default(105) @db.Decimal(6, 2)
   thresholdOver          Decimal @default(115) @db.Decimal(6, 2)
   defaultTimezone String @default("America/New_York")
+  // Alert thresholds; see src/lib/alerts.ts for defaults.
+  alertSettings Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -61,8 +63,17 @@ model User {
   agency       Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   email        String   @unique
   name         String
-  passwordHash String
+  // Null until an invited user sets a password.
+  passwordHash String?
   role         Role
+  deactivatedAt DateTime?
+  lastLoginAt   DateTime?
+  // Sessions issued before this instant are rejected (set on password change, deactivation).
+  sessionsValidAfter DateTime?
+  // Notification preferences (agency staff only)
+  emailAlerts   Boolean  @default(true)
+  dailySummary  Boolean  @default(true)
+  lastDailySummaryAt DateTime?
   // CLIENT_USER only: the single client this user may read.
   clientId     String?
   client       Client?  @relation("ClientUsers", fields: [clientId], references: [id], onDelete: Cascade)
@@ -74,8 +85,51 @@ model User {
   managedClients Client[] @relation("PrimaryManager")
   budgetRevisions BudgetRevision[]
   notifications Notification[]
+  authTokens AuthToken[]
 
   @@index([agencyId])
+}
+
+enum AuthTokenType {
+  INVITE
+  PASSWORD_RESET
+}
+
+// Single-use links for invitations and password resets. Only a SHA-256 hash
+// of the token is stored; the token itself exists only in the emailed link.
+model AuthToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      AuthTokenType
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, type])
+}
+
+enum EmailStatus {
+  SENT
+  FAILED
+  NOT_CONFIGURED // no email provider configured; kept in the outbox only
+}
+
+// Every email the app sends (or would send) is recorded here.
+model EmailMessage {
+  id        String   @id @default(cuid())
+  agencyId  String?
+  to        String
+  subject   String
+  text      String
+  html      String?
+  kind      String   // "invite" | "password_reset" | "alert" | "daily_summary"
+  status    EmailStatus
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([agencyId, createdAt])
 }
 
 model ClientAssignment {
@@ -416,6 +470,9 @@ model Alert {
   account   AdAccount? @relation(fields: [accountId], references: [id], onDelete: Cascade)
   type      AlertType
   status    AlertStatus @default(OPEN)
+  severity  String   @default("warning") // "critical" | "warning" | "info"
+  acknowledgedAt DateTime?
+  acknowledgedById String?
   // Deduplication key: one OPEN/ACKNOWLEDGED alert per key.
   dedupeKey String
   message   String
