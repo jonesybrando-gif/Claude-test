@@ -1,4 +1,5 @@
 import { LoginForm } from "./login-form";
+import { site } from "@/lib/site";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 // Rendered per request so SHOW_DEMO_LOGINS can be toggled without a rebuild.
@@ -11,7 +12,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Budget Pacing Monitor</CardTitle>
+            <CardTitle className="text-lg">{site.appName}</CardTitle>
             <CardDescription>Sign in to your agency workspace</CardDescription>
           </CardHeader>
           <CardContent>

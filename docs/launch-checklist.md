@@ -23,7 +23,7 @@ on your computer. Work top to bottom; tick items off as you go.
 
 ## 2. Database (Neon, free plan)
 
-- [ ] Create a free Neon account and a project, for example "pacing-monitor", in the US East region (close to Railway's default).
+- [ ] Create a free Neon account and a project, for example "marketing-nexus", in the US East region (close to Railway's default).
 - [ ] Copy the connection string (Dashboard → Connect). It becomes `DATABASE_URL` in step 3. Don't paste it anywhere else.
 
 ## 3. Hosting (Railway, Hobby plan, about $5/month)
@@ -38,19 +38,19 @@ on your computer. Work top to bottom; tick items off as you go.
   | `TOKEN_ENCRYPTION_KEY` | a different random secret (keep a private backup: losing it means reconnecting ad accounts) |
   | `CRON_SECRET` | a different random secret |
   | `INTERNAL_SCHEDULER` | `1` (turns on the built-in hourly sync; no external scheduler needed) |
-  | `APP_NAME` | the app's public name, for example `Ad Reports HQ` |
+  | `APP_NAME` | `Marketing Nexus` |
   | `PUBLIC_COMPANY_NAME` | your business's legal name, for example `Example Marketing LLC` |
   | `PUBLIC_CONTACT_EMAIL` | an inbox you read, for privacy and data-deletion requests |
-  | `APP_URL` | `https://app.<yourdomain>` (see the Domain step below) |
+  | `APP_URL` | `https://app.marketingnexus.us` (see the Domain step below) |
 
   For each random secret, generate it in the browser's developer console with
   `btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))`
   and paste the result straight into the Railway variable field.
 - [ ] **Domain.** The app gets its own domain, separate from any client's website.
   - Buy it before step 4: Google, Meta and Microsoft all register redirect addresses on it, so changing it later means redoing those.
-  - Use the address `app.<yourdomain>` (for example `app.adreportshq.com`).
-  - In Railway: **Settings → Networking → Custom Domain**, enter `app.<yourdomain>`, then add the CNAME record Railway shows at the domain's registrar or DNS host. Railway issues the HTTPS certificate automatically.
-  - Set `APP_URL` to `https://app.<yourdomain>` and redeploy.
+  - The app's address is `app.marketingnexus.us`, which leaves `marketingnexus.us` itself free for a website later.
+  - In Railway: **Settings → Networking → Custom Domain**, enter `app.marketingnexus.us`, then add the CNAME record Railway shows at the domain's registrar or DNS host. Railway issues the HTTPS certificate automatically.
+  - Set `APP_URL` to `https://app.marketingnexus.us` and redeploy.
 - [ ] Open the site. The homepage, `/privacy` and `/terms` should show your app name, company and contact email, and **Sign in** should open the sign-in page.
 - [ ] Create your login. On your computer, in a terminal in the repo, with `DATABASE_URL` set to the Neon value, run:
   `APP_URL=<your app address> npm run setup:owner -- --email you@youragency.com --name "Your Name" --agency "Your Agency" --timezone America/New_York`
@@ -61,10 +61,10 @@ on your computer. Work top to bottom; tick items off as you go.
 ## 4. Google Ads and Local Services Ads
 
 Follow [google-ads-setup.md](google-ads-setup.md). On the OAuth consent screen (Branding), use:
-- application home page: `https://app.<yourdomain>/`
-- privacy policy: `https://app.<yourdomain>/privacy`
-- terms of service: `https://app.<yourdomain>/terms`
-- authorized domain: `<yourdomain>`
+- application home page: `https://app.marketingnexus.us/`
+- privacy policy: `https://app.marketingnexus.us/privacy`
+- terms of service: `https://app.marketingnexus.us/terms`
+- authorized domain: `marketingnexus.us`
 
 In short:
 - [ ] Google Cloud Console: create a project, enable the Google Ads API, configure the OAuth consent screen, and create an OAuth client (Web). The redirect URI is `<APP_URL>/api/integrations/google-ads/callback` (check the exact path in the setup guide).
@@ -76,10 +76,10 @@ In short:
 Follow [meta-ads-setup.md](meta-ads-setup.md):
 - [ ] Create a Business app in Meta for Developers, add Marketing API and Facebook Login, and set the redirect URI.
 - [ ] In App settings → Basic, set:
-  - Privacy Policy URL: `https://app.<yourdomain>/privacy`
-  - Terms of Service URL: `https://app.<yourdomain>/terms`
-  - User data deletion: choose "Data deletion instructions URL" and enter `https://app.<yourdomain>/privacy#delete`
-  - App domain: `<yourdomain>`
+  - Privacy Policy URL: `https://app.marketingnexus.us/privacy`
+  - Terms of Service URL: `https://app.marketingnexus.us/terms`
+  - User data deletion: choose "Data deletion instructions URL" and enter `https://app.marketingnexus.us/privacy#delete`
+  - App domain: `marketingnexus.us`
 - [ ] Add `META_APP_ID` and `META_APP_SECRET` in Railway Variables.
 - [ ] To read ad accounts your clients own, request Advanced Access through App Review (you submit).
 
