@@ -30,6 +30,14 @@ export async function verifyOAuthState(state: string, nonceCookie: string | unde
   return { agencyId: String(payload.aid), clientId: typeof payload.cid === "string" ? payload.cid : null };
 }
 
+/**
+ * Public URL for a path. Behind a proxy (Railway) the request URL is the
+ * internal address (e.g. localhost:8080), so APP_URL comes first.
+ */
+export function publicUrl(path: string, requestUrl: string): URL {
+  return new URL(path, process.env.APP_URL ?? new URL(requestUrl).origin);
+}
+
 /** Redirect URI registered with the OAuth client. APP_URL must match it exactly in production. */
 export function redirectUri(path: string, requestUrl: string): string {
   const base = process.env.APP_URL ?? new URL(requestUrl).origin;

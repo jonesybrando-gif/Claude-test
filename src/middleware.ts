@@ -13,7 +13,8 @@ export async function middleware(req: NextRequest) {
       /* fall through */
     }
   }
-  const url = req.nextUrl.clone();
+  // Behind a proxy the request URL can be the internal address, so prefer APP_URL.
+  const url = process.env.APP_URL ? new URL("/login", process.env.APP_URL) : req.nextUrl.clone();
   url.pathname = "/login";
   url.search = "";
   return NextResponse.redirect(url);
