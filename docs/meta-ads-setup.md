@@ -11,14 +11,22 @@ The app reads data through the official Meta Graph / Marketing API, version `v26
 3. In **Facebook Login → Settings**, add each valid OAuth redirect URI:
    - `https://YOUR-DOMAIN/api/integrations/meta-ads/callback`
    - `http://localhost:3000/api/integrations/meta-ads/callback` (local testing; Meta may only allow `localhost` while the app is in development mode)
-4. Request the **`ads_read`** and **`business_management`** permissions. To read ad accounts your agency doesn't own (client accounts shared with your Business Manager), Meta requires **Advanced Access**, which needs **App Review** and **business verification**. Describe the use as read-only reporting and budget pacing.
-5. Copy the **App ID** and **App Secret**.
+4. In **Facebook Login for Business → Configurations**, create a configuration:
+   - **Login variation:** General.
+   - **Access token type:** User access token.
+   - **Assets:** Ad accounts.
+   - **Permissions:** `ads_read` and `business_management`.
+
+   Copy its **Configuration ID**. Business-type apps sign people in with this configuration instead of a permission list.
+5. Request the **`ads_read`** and **`business_management`** permissions. To read ad accounts your agency doesn't own (client accounts shared with your Business Manager), Meta requires **Advanced Access**, which needs **App Review** and **business verification**. Describe the use as read-only reporting and budget pacing.
+6. Copy the **App ID** and **App Secret**.
 
 ## 2. Configure the app
 
 ```bash
 META_APP_ID="…"
 META_APP_SECRET="…"
+META_LOGIN_CONFIG_ID="…"           # Facebook Login for Business configuration ID
 # META_GRAPH_API_VERSION="v26.0"   # optional
 ```
 
@@ -36,7 +44,7 @@ META_APP_SECRET="…"
 
 The app checks the token with Meta, confirms it belongs to your app and includes `ads_read`, then stores it encrypted. System-user tokens don't expire unless you revoke them.
 
-After either option, click **Choose accounts** and assign each ad account to a client.
+After either option, assign accounts: per client from **client → Ad accounts** (one Meta ad account per client), or several at once from **Integrations → Choose accounts**.
 
 ## What gets imported
 

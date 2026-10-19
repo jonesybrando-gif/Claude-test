@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/server/auth";
 import { getAdapter, platformForSlug } from "@/server/integrations/registry";
 import { createOAuthState, OAUTH_NONCE_COOKIE, redirectUri } from "@/server/integrations/oauth-state";
+import { prisma } from "@/server/db";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -12,7 +13,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   const adapter = getAdapter(platform);
   if (!adapter.isConfigured()) return NextResponse.redirect(new URL(`/integrations?error=${encodeURIComponent(`${slug}_not_configured`)}`, req.url));
 
-  const { state, nonce, maxAge } = await createOAuthState(user.id, user.agencyId, platform);
+  // ?client=<id>: started from a client record, so return there to pick that client's account.
+  const clientId = req.nextUrl.searchParams.get("client");
+  if (clientId && !(await prisma.client.findFirst({ where: { id: clientId, agencyId: user.agencyId }, select: { id: true } }))) {
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
+  }
+  const { state, nonce, maxAge } = await createOAuthState(user.id, user.agencyId, platform, clientId ?? undefined);
   const res = NextResponse.redirect(adapter.authorizationUrl(state, redirectUri(`/api/integrations/${slug}/callback`, req.url)));
   res.cookies.set(OAUTH_NONCE_COOKIE, nonce, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge, path: "/api/integrations" });
   return res;

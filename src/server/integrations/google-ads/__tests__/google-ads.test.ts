@@ -105,7 +105,7 @@ describe("Google Ads adapter (mocked HTTP)", () => {
     expect(url.origin + url.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
     expect(url.searchParams.get("scope")).toBe("https://www.googleapis.com/auth/adwords");
     expect(url.searchParams.get("access_type")).toBe("offline");
-    expect(url.searchParams.get("prompt")).toBe("consent");
+    expect(url.searchParams.get("prompt")).toBe("select_account consent"); // pick the Google login every time
     expect(url.searchParams.get("state")).toBe("st");
   });
 
@@ -159,6 +159,22 @@ describe("Google Ads adapter (mocked HTTP)", () => {
     expect(a.dataCompleteThrough("America/New_York", new Date("2026-10-17T06:30:00Z"))).toBe("2026-10-15");
     // 2026-10-17 08:30 UTC = 04:30 in New York → yesterday
     expect(a.dataCompleteThrough("America/New_York", new Date("2026-10-17T08:30:00Z"))).toBe("2026-10-16");
+  });
+
+  it("works without a developer token (retired by Google) and omits the header", async () => {
+    const m = mockFetch(() => ({ body: [] }));
+    const adapter = createGoogleAdsAdapter({ config: { ...config, developerToken: null }, fetch: m.fn });
+    await adapter.fetchDailyPerformance("tok", { externalId: "2222222222" }, "2026-10-01", "2026-10-01");
+    const h = m.calls[0].init!.headers as Record<string, string>;
+    expect(h).not.toHaveProperty("developer-token");
+    expect(h).not.toHaveProperty("login-customer-id");
+  });
+
+  it("is configured with just the OAuth client; the token is optional", async () => {
+    const { googleAdsConfig, missingGoogleAdsEnv } = await import("../config");
+    expect(missingGoogleAdsEnv({ GOOGLE_ADS_CLIENT_ID: "a", GOOGLE_ADS_CLIENT_SECRET: "b" } as unknown as NodeJS.ProcessEnv)).toEqual([]);
+    expect(googleAdsConfig({ GOOGLE_ADS_CLIENT_ID: "a", GOOGLE_ADS_CLIENT_SECRET: "b" } as unknown as NodeJS.ProcessEnv)?.developerToken).toBeNull();
+    expect(googleAdsConfig({ GOOGLE_ADS_CLIENT_ID: "a", GOOGLE_ADS_CLIENT_SECRET: "b", GOOGLE_ADS_DEVELOPER_TOKEN: "t" } as unknown as NodeJS.ProcessEnv)?.developerToken).toBe("t");
   });
 
   it("refuses to run without server credentials", async () => {

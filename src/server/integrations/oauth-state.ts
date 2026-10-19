@@ -10,9 +10,10 @@ const TTL_SECONDS = 600;
 
 const secret = () => new TextEncoder().encode(process.env.AUTH_SECRET!);
 
-export async function createOAuthState(userId: string, agencyId: string, platform: string) {
+export async function createOAuthState(userId: string, agencyId: string, platform: string, clientId?: string) {
   const nonce = randomBytes(16).toString("base64url");
-  const state = await new SignJWT({ nonce, aid: agencyId, p: platform })
+  // `cid`: the client record the connection was started from, if any.
+  const state = await new SignJWT({ nonce, aid: agencyId, p: platform, ...(clientId ? { cid: clientId } : {}) })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(userId)
     .setIssuedAt()
@@ -26,7 +27,7 @@ export async function verifyOAuthState(state: string, nonceCookie: string | unde
   if (!nonceCookie || payload.nonce !== nonceCookie) throw new Error("OAuth state does not match this browser session");
   if (payload.sub !== userId) throw new Error("OAuth flow was started by a different user");
   if (payload.p !== platform) throw new Error("OAuth state is for a different platform");
-  return { agencyId: String(payload.aid) };
+  return { agencyId: String(payload.aid), clientId: typeof payload.cid === "string" ? payload.cid : null };
 }
 
 /** Redirect URI registered with the OAuth client. APP_URL must match it exactly in production. */

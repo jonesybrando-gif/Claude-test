@@ -78,9 +78,11 @@ Follow [google-ads-setup.md](google-ads-setup.md). On the OAuth consent screen (
 - authorized domain: `marketingnexus.us`
 
 In short:
-- [ ] Google Cloud Console: create a project, enable the Google Ads API, configure the OAuth consent screen, and create an OAuth client (Web). The redirect URI is `<APP_URL>/api/integrations/google-ads/callback` (check the exact path in the setup guide).
-- [ ] Google Ads MCC → API Center: get the developer token and **apply for Basic access** (you submit). Until it's approved, the token only works with test accounts.
-- [ ] Add `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET` and `GOOGLE_ADS_DEVELOPER_TOKEN` in Railway Variables (Railway redeploys automatically).
+- [ ] Google Cloud project with the Google Ads API enabled; OAuth consent screen **External** (clients' accounts may need different Google logins); OAuth client (Web) with redirect URI `https://app.marketingnexus.us/api/integrations/google-ads/callback`.
+- [ ] Add `GOOGLE_ADS_CLIENT_ID` and `GOOGLE_ADS_CLIENT_SECRET` in Railway Variables. No developer token is needed: Google retired them on 9 September 2026.
+- [ ] In the Cloud Console, check the project's Google Ads API **access level**. Apply for Basic if it's Test (you submit).
+- [ ] While the consent screen is in **Testing**, only listed test users can connect and connections expire after 7 days. Before relying on syncs, publish to **In production**. Google may ask for verification of the Google Ads scope (you submit).
+- [ ] Per client: **client → Ad accounts → Connect Google Ads**, choose the account (and Local Services Ads), **Link to this client**.
 
 ## 5. Meta Ads
 
@@ -91,7 +93,9 @@ Follow [meta-ads-setup.md](meta-ads-setup.md):
   - Terms of Service URL: `https://app.marketingnexus.us/terms`
   - User data deletion: choose "Data deletion instructions URL" and enter `https://app.marketingnexus.us/privacy#delete`
   - App domain: `marketingnexus.us`
-- [ ] Add `META_APP_ID` and `META_APP_SECRET` in Railway Variables.
+- [ ] Create a Facebook Login for Business configuration (user access token; ad accounts; `ads_read`, `business_management`) and copy its Configuration ID.
+- [ ] Add `META_APP_ID`, `META_APP_SECRET` and `META_LOGIN_CONFIG_ID` in Railway Variables.
+- [ ] Per client: **client → Ad accounts → Connect Meta Ads**.
 - [ ] To read ad accounts your clients own, request Advanced Access through App Review (you submit).
 
 ## 6. Microsoft Advertising
@@ -100,8 +104,9 @@ Follow [microsoft-ads-setup.md](microsoft-ads-setup.md):
 - [ ] Register an app in Microsoft Entra (Azure), add the redirect URI, and create a client secret.
 - [ ] Get a developer token from the Microsoft Advertising Developer Portal.
 - [ ] Add `MICROSOFT_ADS_CLIENT_ID`, `MICROSOFT_ADS_CLIENT_SECRET` and `MICROSOFT_ADS_DEVELOPER_TOKEN` in Railway Variables.
+- [ ] Per client: **client → Ad accounts → Connect Microsoft Ads**.
 
 ## 7. First live check
 
-- [ ] In the app: Integrations → connect one platform, link one ad account to a client, and run a sync.
+- [ ] In the app: open a client → **Ad accounts**, connect one platform, link the client's account, and let it import.
 - [ ] Compare last month's spend, clicks and conversions in the app against the platform's own interface for the same dates and time zone. Note any differences and bring them back to a coding session to fix.

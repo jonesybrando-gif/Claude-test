@@ -33,11 +33,11 @@ npm run dev                   # http://localhost:3000
 | `APP_NAME`, `PUBLIC_COMPANY_NAME`, `PUBLIC_CONTACT_EMAIL` | Shown on the public homepage (`/`), privacy policy (`/privacy`) and terms (`/terms`). Google and Meta require those pages, with a working contact email, before approving the app. |
 | `SETUP_TOKEN` | Temporary. While set (24+ characters) and no user exists, `/setup` lets you create the first administrator in the browser. Remove it once you've signed in. |
 | `INTERNAL_SCHEDULER` | `1` runs the hourly sync and alerts inside the app (for always-on hosts such as Railway), instead of an external scheduler calling `/api/cron/sync`. Run a single instance with it on. |
-| `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN` | Google Ads API credentials (also used for Local Services Ads); see [docs/google-ads-setup.md](docs/google-ads-setup.md) |
+| `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET` | Google Ads API credentials (also used for Local Services Ads). `GOOGLE_ADS_DEVELOPER_TOKEN` is optional: Google retired developer tokens on 9 September 2026; see [docs/google-ads-setup.md](docs/google-ads-setup.md) |
 | `SMTP_URL`, `EMAIL_FROM` | Outgoing email for invitations, password resets, alerts and daily summaries. Without them, emails are recorded in **Settings → Email log** but not delivered, and invite/reset links are shown to the admin to share. |
 | `ANTHROPIC_API_KEY` | Optional. Turns on the AI assistant (Claude API). Usage is billed by Anthropic to that key, separately from this app. Without it, the AI buttons explain how to turn it on. |
 | `ANTHROPIC_MODEL` | Optional. Defaults to `claude-opus-5-5`. |
-| `META_APP_ID`, `META_APP_SECRET` | Meta app credentials; see [docs/meta-ads-setup.md](docs/meta-ads-setup.md) |
+| `META_APP_ID`, `META_APP_SECRET`, `META_LOGIN_CONFIG_ID` | Meta app credentials; see [docs/meta-ads-setup.md](docs/meta-ads-setup.md) |
 | `MICROSOFT_ADS_CLIENT_ID`, `MICROSOFT_ADS_CLIENT_SECRET`, `MICROSOFT_ADS_DEVELOPER_TOKEN` | Microsoft Advertising credentials; see [docs/microsoft-ads-setup.md](docs/microsoft-ads-setup.md) |
 
 Demo logins (password `demo-password`):
