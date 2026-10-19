@@ -24,12 +24,18 @@ on your computer. Work top to bottom; tick items off as you go.
 ## 2. Database (Neon, free plan)
 
 - [ ] Create a free Neon account and a project, for example "marketing-nexus", in the US East region (close to Railway's default).
-- [ ] Copy the connection string (Dashboard → Connect). It becomes `DATABASE_URL` in step 3. Don't paste it anywhere else.
+- [ ] Copy the **direct** connection string: Dashboard → Connect, turn **Connection pooling off**; the host must not contain `-pooler`. Database migrations can fail through the pooled connection. It becomes `DATABASE_URL` in step 3. Don't paste it anywhere else.
 
 ## 3. Hosting (Railway, Hobby plan, about $5/month)
 
 - [ ] Sign up at railway.com with GitHub and choose the Hobby plan (you add the payment card).
-- [ ] New Project → Deploy from GitHub repo → `jonesybrando-gif/Claude-test`, branch `main`. `railway.json` in the repo sets the build, runs database migrations on every start, and runs one instance.
+- [ ] New Project → Deploy from GitHub repo → `jonesybrando-gif/Claude-test`, branch `main`.
+- [ ] In the service's **Settings**, set the following. New Railway services no longer read `railway.json`, so these must be entered by hand:
+  - Custom Build Command: `npm run build`
+  - Custom Start Command: `npx prisma migrate deploy && npm start` (this creates and updates the database tables on every start)
+  - Healthcheck Path: `/login`
+  - Restart policy: on failure; replicas: 1
+  - Auto deploy: **on**, so every merge to `main` deploys
 - [ ] In the service's **Variables**, add:
   | Name | Value |
   |---|---|
@@ -42,6 +48,7 @@ on your computer. Work top to bottom; tick items off as you go.
   | `PUBLIC_COMPANY_NAME` | your business's legal name, for example `Example Marketing LLC` |
   | `PUBLIC_CONTACT_EMAIL` | an inbox you read, for privacy and data-deletion requests |
   | `APP_URL` | `https://app.marketingnexus.us` (see the Domain step below) |
+  | `SETUP_TOKEN` | a random secret, only until your login exists (see "Create your login") |
 
   For each random secret, generate it in the browser's developer console with
   `btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))`
@@ -52,9 +59,13 @@ on your computer. Work top to bottom; tick items off as you go.
   - In Railway: **Settings → Networking → Custom Domain**, enter `app.marketingnexus.us`, then add the CNAME record Railway shows at the domain's registrar or DNS host. Railway issues the HTTPS certificate automatically.
   - Set `APP_URL` to `https://app.marketingnexus.us` and redeploy.
 - [ ] Open the site. The homepage, `/privacy` and `/terms` should show your app name, company and contact email, and **Sign in** should open the sign-in page.
-- [ ] Create your login. On your computer, in a terminal in the repo, with `DATABASE_URL` set to the Neon value, run:
-  `APP_URL=<your app address> npm run setup:owner -- --email you@youragency.com --name "Your Name" --agency "Your Agency" --timezone America/New_York`
-  It prints a one-time link: open it to set your password.
+- [ ] **Create your login (in the browser):**
+  1. Set `SETUP_TOKEN` in Railway Variables to a fresh random secret and let it redeploy.
+  2. Open `https://app.marketingnexus.us/setup` and enter the setup code (the `SETUP_TOKEN` value), the agency name, your name, your email and the time zone.
+  3. Choose your password on the next screen. You're signed in.
+  4. **Delete `SETUP_TOKEN`** from Railway Variables.
+
+  The page only works while no account exists. After that it shows "not found", even if the token is still set. Alternative from a terminal: `npm run setup:owner`; see the script for its options.
 - [ ] Optional: `ANTHROPIC_API_KEY` (console.anthropic.com → API keys) for the AI features, and `SMTP_URL` + `EMAIL_FROM` for email.
 - [ ] Usage: Railway → Usage should stay near the $5 included each month. Set a usage limit (Workspace → Usage → limits) so it can never surprise you.
 
