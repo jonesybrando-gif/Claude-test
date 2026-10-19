@@ -82,7 +82,9 @@ export function createGoogleAdsAdapter(opts: { config?: GoogleAdsConfig | null; 
         response_type: "code",
         scope: GOOGLE_ADS_SCOPE,
         access_type: "offline", // we need a refresh token for background syncs
-        prompt: "consent", // always return a refresh token, even on reconnect
+        // Always ask which Google login to use (each client may need a different
+        // one) and always return a refresh token, even on reconnect.
+        prompt: "select_account consent",
         include_granted_scopes: "true",
         state,
       });

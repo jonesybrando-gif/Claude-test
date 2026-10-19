@@ -29,11 +29,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   const code = q.get("code");
   const state = q.get("state");
   if (!code || !state) return back(req, "Missing authorization code");
+  let clientId: string | null;
   try {
-    await verifyOAuthState(state, req.cookies.get(OAUTH_NONCE_COOKIE)?.value, user.id, platform);
+    ({ clientId } = await verifyOAuthState(state, req.cookies.get(OAUTH_NONCE_COOKIE)?.value, user.id, platform));
   } catch (e) {
     return back(req, (e as Error).message);
   }
+  const client = clientId ? await prisma.client.findFirst({ where: { id: clientId, agencyId: user.agencyId }, select: { id: true, name: true } }) : null;
 
   const adapter = getAdapter(platform);
   try {
@@ -42,10 +44,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
       return back(req, `${label} did not return a refresh token. Remove this app's access in your account's security settings and connect again.`);
     }
     const connection = await prisma.platformConnection.create({
-      data: { agencyId: user.agencyId, platform, label: `${label} — connected by ${user.name}`, status: "ACTIVE", createdById: user.id },
+      data: { agencyId: user.agencyId, platform, label: client ? `${label} — ${client.name}` : `${label} — connected by ${user.name}`, status: "ACTIVE", createdById: user.id },
     });
     await storeTokens(connection.id, tokens);
-    const res = NextResponse.redirect(new URL(`/integrations/${slug}/${connection.id}`, req.url));
+    const next = client ? `/clients/${client.id}/accounts/${slug}?connection=${connection.id}` : `/integrations/${slug}/${connection.id}`;
+    const res = NextResponse.redirect(new URL(next, req.url));
     res.cookies.delete({ name: OAUTH_NONCE_COOKIE, path: "/api/integrations" });
     return res;
   } catch (e) {
