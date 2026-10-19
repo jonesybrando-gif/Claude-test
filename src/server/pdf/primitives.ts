@@ -1,4 +1,5 @@
 import "server-only";
+import { site } from "@/lib/site";
 import PDFDocument from "pdfkit";
 
 // Drawing helpers shared by the PDF reports. Uses PDFKit's built-in
@@ -61,7 +62,7 @@ export function newDoc(opts: { landscape?: boolean; compress?: boolean; title: s
     margins: { top: 64, bottom: 56, left: 40, right: 40 },
     bufferPages: true,
     compress: opts.compress ?? true,
-    info: { Title: pdfText(opts.title), Author: pdfText(opts.author), Creator: "Budget Pacing Monitor" },
+    info: { Title: pdfText(opts.title), Author: pdfText(opts.author), Creator: site.appName },
   });
 }
 

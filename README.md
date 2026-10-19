@@ -1,4 +1,4 @@
-# Budget Pacing Monitor
+# Marketing Nexus
 
 A multi-tenant advertising reporting and **budget pacing** app for agencies.
 
