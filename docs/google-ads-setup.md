@@ -9,8 +9,8 @@ The integration uses only the official Google Ads API (REST, API version `v26` b
 | Item | Where it comes from |
 |---|---|
 | OAuth client ID and client secret | Google Cloud Console |
-| Developer token | Google Ads manager (MCC) account → API Center |
-| A Google user with access to the MCC | Used once to authorize the connection |
+| Google Ads API access for the Cloud project | Google Cloud Console (see section 2). Developer tokens were retired on 9 September 2026 and are no longer needed |
+| A Google login per client account | Any login that can see the client's Google Ads account: your MCC login, a login the client added as a user, or the client's own |
 | The app running at a stable URL | Production domain, or `http://localhost:3000` for local testing |
 
 ## 1. Google Cloud Console
@@ -28,14 +28,14 @@ The integration uses only the official Google Ads API (REST, API version `v26` b
      - `http://localhost:3000/api/integrations/google-ads/callback` (local testing only)
 5. Copy the **client ID** and **client secret**.
 
-## 2. Google Ads manager account (MCC)
+## 2. Google Ads API access (Google Cloud Console)
 
-1. Sign in to the manager account that contains your clients' accounts.
-2. Open **Admin → API Center**. If you can't find it, search for "API Center" in Google Ads.
-3. Apply for a **developer token** and copy it.
-4. Check its **access level**:
+Google retired Google Ads API developer tokens on **9 September 2026**. API access now belongs to the **Google Cloud project** behind the OAuth client, and the API Center in Google Ads no longer processes requests.
+
+1. In the Cloud project, open the Google Ads API's access settings and check the **access level**:
    - **Test access** only works with Google Ads *test* accounts. Calls to real accounts fail, and the app shows "Waiting on platform approval".
-   - Real client accounts need a higher level, such as **Basic access**, which requires an application that Google reviews. Apply in the API Center, and describe the use as read-only reporting and budget pacing for your agency's clients.
+   - Real client accounts need **Explorer**, **Basic** or **Standard** access. Apply in the Cloud Console and describe the use as read-only reporting and budget pacing for your agency's clients. New Basic and Standard applications need brand verification. The app's homepage, privacy policy and terms (`/`, `/privacy`, `/terms`) support it.
+2. An existing developer token still works for now, and the app sends it if `GOOGLE_ADS_DEVELOPER_TOKEN` is set. Google recommends removing it, and a future API version will reject it.
 
 ## 3. Configure the app
 
@@ -44,7 +44,7 @@ Set these environment variables on the server, then restart it:
 ```bash
 GOOGLE_ADS_CLIENT_ID="…apps.googleusercontent.com"
 GOOGLE_ADS_CLIENT_SECRET="…"
-GOOGLE_ADS_DEVELOPER_TOKEN="…"
+# GOOGLE_ADS_DEVELOPER_TOKEN="…"   # optional, legacy; Google retired developer tokens
 APP_URL="https://YOUR-DOMAIN"      # must match the redirect URI registered above
 CRON_SECRET="$(openssl rand -hex 24)"
 # GOOGLE_ADS_API_VERSION="v26"     # optional; Google retires old versions on a schedule
@@ -52,16 +52,23 @@ CRON_SECRET="$(openssl rand -hex 24)"
 
 The **Integrations** page shows which values are still missing.
 
-## 4. Connect and choose accounts
+## 4. Connect each client's account
 
-1. Sign in as an **agency administrator** and open **Integrations**.
-2. Click **Connect Google Ads**, sign in as a Google user with access to the MCC, and approve.
-3. You land on the account list. It contains every account under your manager hierarchy. Pick a client for each account you want to monitor and click **Save account links**.
-4. Each linked account imports about **13 months** of daily history in the background, then keeps syncing.
+**From the client (one account per client):**
+1. As an **agency administrator**, open the client and choose **Ad accounts**.
+2. Under Google Ads, click **Connect Google Ads**. Google asks which login to use: pick one that can see this client's account.
+3. Choose the client's account. Tick **Local Services Ads** too if the client runs them, then click **Link to this client**.
+4. A login you've already connected can be reused for another client with **Use this login**, with no new sign-in.
+
+Each client has one account per platform. Linking a different one replaces it; the old one stops syncing and keeps its history. An account can't be live under two clients at once.
+
+**In bulk, from one MCC login:** **Integrations → Connect Google Ads** lists every account under the manager hierarchy and lets you assign several at once.
+
+Each linked account imports about **13 months** of daily history in the background, then keeps syncing.
 
 ## 5. Keep data fresh
 
-Call the sync endpoint about every hour:
+With `INTERNAL_SCHEDULER=1` (the Railway setup), the app syncs every hour by itself. Otherwise, call the sync endpoint about every hour:
 
 ```bash
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://YOUR-DOMAIN/api/cron/sync

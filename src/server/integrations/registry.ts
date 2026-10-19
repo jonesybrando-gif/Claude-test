@@ -66,8 +66,8 @@ export function integrationStatus(): IntegrationInfo[] {
       requirements: [
         "Google Cloud project with the Google Ads API enabled and an OAuth client (type: web application)",
         "Authorized redirect URI: <APP_URL>/api/integrations/google-ads/callback",
-        "Developer token from your manager (MCC) account's API Center. Test access only works with test accounts; production accounts need Basic access or higher",
-        "Server env vars: GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_DEVELOPER_TOKEN",
+        "Google Ads API access level for that Cloud project (requested in Google Cloud Console). Test access only works with test accounts; real accounts need Explorer, Basic or Standard access",
+        "Server env vars: GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET (GOOGLE_ADS_DEVELOPER_TOKEN is no longer needed; Google retired developer tokens on 9 September 2026)",
       ],
       limitations: [
         "Local Services campaigns are excluded here and reported under Google LSA, so their cost is never counted twice.",
@@ -86,7 +86,8 @@ export function integrationStatus(): IntegrationInfo[] {
         "Meta developer app (type Business) with the Marketing API product",
         "Facebook Login redirect URI: <APP_URL>/api/integrations/meta-ads/callback",
         "ads_read and business_management permissions (Advanced Access requires Meta App Review and business verification for accounts you don't own)",
-        "Server env vars: META_APP_ID, META_APP_SECRET",
+        "Facebook Login for Business configuration (user access token, ad accounts, ads_read + business_management)",
+        "Server env vars: META_APP_ID, META_APP_SECRET, META_LOGIN_CONFIG_ID",
       ],
       limitations: [
         "Facebook Login tokens last about 60 days and cannot be refreshed; reconnect before they expire, or use a Business Manager system-user token, which does not expire.",

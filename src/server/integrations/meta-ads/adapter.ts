@@ -236,7 +236,15 @@ export function createMetaAdsAdapter(opts: { config?: MetaAdsConfig | null; fetc
     isConfigured: () => opts.config !== undefined ? !!opts.config : metaAdsConfig() !== null,
 
     authorizationUrl(state, redirectUri) {
-      const q = new URLSearchParams({ client_id: cfg().appId, redirect_uri: redirectUri, state, response_type: "code", scope: META_SCOPES.join(",") });
+      const q = new URLSearchParams({ client_id: cfg().appId, redirect_uri: redirectUri, state, response_type: "code" });
+      const configId = cfg().loginConfigId;
+      if (configId) {
+        // Facebook Login for Business: the configuration carries the permissions.
+        q.set("config_id", configId);
+        q.set("override_default_response_type", "true");
+      } else {
+        q.set("scope", META_SCOPES.join(","));
+      }
       return `https://www.facebook.com/${cfg().apiVersion}/dialog/oauth?${q.toString()}`;
     },
 

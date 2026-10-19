@@ -1,0 +1,66 @@
+"use client";
+
+import { useActionState, useState } from "react";
+import { linkClientAccountAction } from "./actions";
+import { useFormSubmit } from "@/components/use-form-submit";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+
+export interface PickRow {
+  externalId: string;
+  display: string;
+  name: string;
+  currency: string;
+  timezone: string;
+  isTestAccount: boolean;
+  statusNote: string | null;
+  /** Client this account is already live under, if not this one. */
+  linkedElsewhere: string | null;
+  current: boolean;
+}
+
+export function AccountChoice({ clientId, connectionId, rows, google, defaultLsa }: { clientId: string; connectionId: string; rows: PickRow[]; google: boolean; defaultLsa: boolean }) {
+  const [state, action, pending] = useActionState(linkClientAccountAction.bind(null, clientId, connectionId), undefined);
+  const form = useFormSubmit(action);
+  const [chosen, setChosen] = useState(rows.find((r) => r.current)?.externalId ?? (rows.filter((r) => !r.linkedElsewhere).length === 1 ? rows.find((r) => !r.linkedElsewhere)!.externalId : ""));
+  return (
+    <form {...form} className="flex flex-col gap-4">
+      <fieldset className="flex flex-col divide-y divide-border rounded-lg border border-border">
+        <legend className="sr-only">Advertising account</legend>
+        {rows.map((r) => (
+          <label key={r.externalId} className={`flex items-start gap-3 px-4 py-3 text-sm ${r.linkedElsewhere ? "opacity-60" : "cursor-pointer hover:bg-surface-2"}`}>
+            <input type="radio" name="account" value={r.externalId} checked={chosen === r.externalId} onChange={() => setChosen(r.externalId)} disabled={!!r.linkedElsewhere} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="font-medium">
+                {r.name} {r.isTestAccount && <Badge variant="info">Test account</Badge>} {r.current && <Badge variant="good">Linked now</Badge>}
+              </span>
+              <span className="text-xs text-text-3">{r.display} · {r.currency} · {r.timezone}</span>
+              {r.statusNote && <span className="text-xs text-warning-ink">{r.statusNote}</span>}
+              {r.linkedElsewhere && <span className="text-xs text-text-3">Already linked to {r.linkedElsewhere}</span>}
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      {google && (
+        <fieldset className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+          <legend className="mb-1 text-xs font-medium text-text-2">Track from this account</legend>
+          <label className="flex items-center gap-2"><input type="checkbox" name="ads" defaultChecked className="h-4 w-4 accent-[var(--brand)]" /> Google Ads campaigns</label>
+          <label className="flex items-center gap-2"><input type="checkbox" name="lsa" defaultChecked={defaultLsa} className="h-4 w-4 accent-[var(--brand)]" /> Local Services Ads</label>
+        </fieldset>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={pending || !chosen}>{pending ? "Linking…" : "Link to this client"}</Button>
+        {state?.error && <p className="text-sm text-critical-ink" role="alert">{state.error}</p>}
+      </div>
+      <p className="text-xs text-text-3">A client has one account per platform. Linking a different one replaces the current one, which stops syncing and keeps its history. About 13 months of history imports in the background.</p>
+    </form>
+  );
+}
+
+export function StopTrackingButton({ action }: { action: () => Promise<void> }) {
+  return (
+    <form action={action} onSubmit={(e) => { if (!window.confirm("Stop tracking this account? It stops syncing; its history stays in reports.")) e.preventDefault(); }}>
+      <Button type="submit" variant="outline" size="sm">Stop tracking</Button>
+    </form>
+  );
+}

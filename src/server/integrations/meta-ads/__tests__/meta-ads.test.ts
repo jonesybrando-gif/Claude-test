@@ -3,7 +3,7 @@ import { createHmac } from "node:crypto";
 import { classifyMetaError, createMetaAdsAdapter, parseInsights, pickAction } from "../adapter";
 import { decimalToMinor } from "../../common";
 
-const config = { appId: "123", appSecret: "shh", apiVersion: "v26.0" };
+const config = { appId: "123", appSecret: "shh", apiVersion: "v26.0", loginConfigId: null };
 
 function mockFetch(handler: (url: URL) => { status?: number; body: unknown; headers?: Record<string, string> }) {
   const calls: { url: URL; init?: RequestInit }[] = [];
@@ -85,6 +85,14 @@ describe("Meta adapter (mocked HTTP)", () => {
     expect(url.origin + url.pathname).toBe("https://www.facebook.com/v26.0/dialog/oauth");
     expect(url.searchParams.get("scope")).toBe("ads_read,business_management");
     expect(url.searchParams.get("state")).toBe("st");
+  });
+
+  it("uses a Facebook Login for Business configuration instead of scopes when set", () => {
+    const url = new URL(createMetaAdsAdapter({ config: { ...config, loginConfigId: "987654" } }).authorizationUrl("st", "https://app.example.com/cb"));
+    expect(url.searchParams.get("config_id")).toBe("987654");
+    expect(url.searchParams.get("override_default_response_type")).toBe("true");
+    expect(url.searchParams.get("response_type")).toBe("code");
+    expect(url.searchParams.has("scope")).toBe(false);
   });
 
   it("exchanges the code for a long-lived token", async () => {

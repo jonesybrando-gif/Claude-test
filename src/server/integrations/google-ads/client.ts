@@ -79,9 +79,9 @@ export class GoogleAdsClient {
   private headers(loginCustomerId?: string | null): HeadersInit {
     const h: Record<string, string> = {
       Authorization: `Bearer ${this.accessToken}`,
-      "developer-token": this.config.developerToken,
       "Content-Type": "application/json",
     };
+    if (this.config.developerToken) h["developer-token"] = this.config.developerToken;
     if (loginCustomerId) h["login-customer-id"] = normalizeCustomerId(loginCustomerId);
     return h;
   }
