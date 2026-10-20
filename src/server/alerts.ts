@@ -1,6 +1,7 @@
 import "server-only";
 import type { AlertType, Prisma } from "@prisma/client";
 import { prisma } from "./db";
+import { INCLUDED_ROWS } from "./campaign-selection";
 import { loadPacing, type PacingRow } from "./pacing-service";
 import { appUrl, sendEmail } from "./email";
 import { evaluateAlerts, resolveAlertSettings, type AccountInput, type AlertCandidate, type CampaignInput, type PacingRowInput } from "@/lib/alerts";
@@ -65,10 +66,10 @@ export async function evaluateAgencyAlerts(agencyId: string, now: Date = new Dat
   const [accounts, perf] = await Promise.all([
     prisma.adAccount.findMany({
       where: { client: { agencyId, archivedAt: null } },
-      include: { client: { select: { name: true } }, campaigns: { select: { id: true, name: true, status: true } }, syncRuns: { orderBy: { startedAt: "desc" }, take: 1 } },
+      include: { client: { select: { name: true } }, campaigns: { where: { excludedAt: null }, select: { id: true, name: true, status: true } }, syncRuns: { orderBy: { startedAt: "desc" }, take: 1 } },
     }),
     prisma.dailyPerformance.findMany({
-      where: { account: { client: { agencyId, archivedAt: null } }, date: { gte: since } },
+      where: { account: { client: { agencyId, archivedAt: null } }, date: { gte: since }, ...INCLUDED_ROWS },
       select: { accountId: true, campaignId: true, date: true, costMinor: true },
     }),
   ]);

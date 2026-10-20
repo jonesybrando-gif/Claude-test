@@ -47,8 +47,8 @@ describe("AI grounding context", () => {
     expect(text).toContain("No budget is set for the current month.");
   });
 
-  it("lists campaigns by spend, capped at 15, and describes pacing", () => {
-    const campaigns = Array.from({ length: 20 }, (_, i) => ({ name: `C${i}`, platform: "Meta", status: "ENABLED", totals: t({ costMinor: (i + 1) * 1000 }), previous: null }));
+  it("lists campaigns by spend, capped at 25, and describes pacing", () => {
+    const campaigns = Array.from({ length: 30 }, (_, i) => ({ name: `C${i}`, platform: "Meta", status: "ENABLED", totals: t({ costMinor: (i + 1) * 1000 }), previous: null }));
     const text = buildAiContext({
       ...base,
       campaigns,
@@ -57,8 +57,8 @@ describe("AI grounding context", () => {
         budgetMinor: 500000, actualToDateMinor: 322500, expectedToDateMinor: 258100, projectedMinor: 624900, requiredDailyMinor: 11800, currentDailyRateMinor: 20000, remainingActiveDays: 15, pacingPct: 125,
       },
     });
-    expect(text).toContain("Campaigns by spend (top 15 of 20)");
-    expect(text.indexOf("- C19 ")).toBeLessThan(text.indexOf("- C18 "));
+    expect(text).toContain("Campaigns by spend (top 25 of 30)");
+    expect(text.indexOf("- C29 ")).toBeLessThan(text.indexOf("- C28 "));
     expect(text).not.toContain("- C4 ");
     expect(text).toContain("Budget $5,000; spent $3,225; expected by now $2,581; pacing 125");
     expect(text).toContain("projected $6,249 (+$1,249 vs budget)");

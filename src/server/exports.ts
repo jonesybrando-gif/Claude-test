@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "./db";
+import { INCLUDED_ROWS } from "./campaign-selection";
 import { loadPacing } from "./pacing-service";
 import type { DateRange } from "@/lib/date-ranges";
 import { isoToDate, dateToIso } from "@/lib/pacing/dates";
@@ -12,7 +13,7 @@ import type { Prisma } from "@prisma/client";
 /** One row per date × account × campaign (leaf rows as stored), for a client and range. */
 export async function clientDailyCsv(clientId: string, range: DateRange): Promise<string> {
   const rows = await prisma.dailyPerformance.findMany({
-    where: { account: { clientId }, date: { gte: isoToDate(range.from), lte: isoToDate(range.to) } },
+    where: { account: { clientId }, date: { gte: isoToDate(range.from), lte: isoToDate(range.to) }, ...INCLUDED_ROWS },
     include: { account: { select: { name: true, platform: true, externalId: true, client: { select: { name: true } } } }, campaign: { select: { name: true, externalId: true } } },
     orderBy: [{ date: "asc" }, { accountId: "asc" }, { campaignId: "asc" }],
   });

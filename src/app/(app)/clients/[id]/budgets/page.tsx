@@ -18,7 +18,7 @@ export default async function BudgetsPage({ params }: { params: Promise<{ id: st
   await requireClientEdit(id);
   const client = await prisma.client.findUniqueOrThrow({
     where: { id },
-    include: { accounts: { include: { campaigns: true } } },
+    include: { accounts: { include: { campaigns: { where: { excludedAt: null } } } } },
   });
   const today = todayInTimeZone(client.timezone);
   const month = monthBounds(today);

@@ -5,7 +5,7 @@
 
 import { formatKpi, KPI_BY_KEY, kpiValues, type KpiKey } from "./kpis";
 import { formatMoney, formatPct } from "./money";
-import type { MetricTotals } from "./metrics";
+import { derive, type MetricTotals } from "./metrics";
 import { STATUS_LABEL, type PacingStatus } from "./pacing/status";
 
 export interface AiPacing {
@@ -43,8 +43,8 @@ export interface AiContextInput {
 }
 
 const ACCOUNT_KPIS: KpiKey[] = ["spend", "impressions", "clicks", "ctr", "cpc", "conversions", "costPerConversion", "leads", "costPerLead", "roas"];
-const CAMPAIGN_KPIS: KpiKey[] = ["spend", "clicks", "conversions", "costPerConversion", "leads"];
-const MAX_CAMPAIGNS = 15;
+const CAMPAIGN_KPIS: KpiKey[] = ["spend", "clicks", "ctr", "conversions", "conversionRate", "costPerConversion", "leads", "costPerLead"];
+const MAX_CAMPAIGNS = 25;
 
 const pct = (p: number) => (Math.abs(p) < 0.05 ? "no change" : `${p > 0 ? "+" : ""}${p.toFixed(1)}%`);
 
@@ -88,8 +88,13 @@ export function buildAiContext(i: AiContextInput): string {
   const campaigns = [...i.campaigns].sort((a, b) => b.totals.costMinor - a.totals.costMinor);
   lines.push("", `## Campaigns by spend${campaigns.length > MAX_CAMPAIGNS ? ` (top ${MAX_CAMPAIGNS} of ${campaigns.length})` : ""}`);
   if (campaigns.length === 0) lines.push("- No campaign spend in this period.");
+  // Pre-computed comparisons with the whole report, so the model quotes them instead of doing arithmetic.
+  const avgCpa = derive(i.totals).costPerConversionMinor;
   for (const cmp of campaigns.slice(0, MAX_CAMPAIGNS)) {
-    lines.push(`- ${cmp.name} (${cmp.platform}, ${cmp.status.toLowerCase()}): ${kpiLine(CAMPAIGN_KPIS, cmp.totals, cmp.previous, c)}`);
+    const share = i.totals.costMinor > 0 ? `; share of spend: ${formatPct((cmp.totals.costMinor / i.totals.costMinor) * 100, 0)}` : "";
+    const cpa = derive(cmp.totals).costPerConversionMinor;
+    const vsAvg = cpa !== null && avgCpa ? `; cost per conversion vs report average: ${formatPct(Math.abs(cpa / avgCpa - 1) * 100, 0)} ${cpa <= avgCpa ? "lower" : "higher"}` : "";
+    lines.push(`- ${cmp.name} (${cmp.platform}, ${cmp.status.toLowerCase()}): ${kpiLine(CAMPAIGN_KPIS, cmp.totals, cmp.previous, c)}${share}${vsAvg}`);
   }
 
   lines.push("", "## Monthly budget pacing");

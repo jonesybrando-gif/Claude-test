@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "./db";
+import { INCLUDED_ROWS } from "./campaign-selection";
 import { dateToIso, eachDay, isoToDate, type IsoDate } from "@/lib/pacing/dates";
 import { addInto, emptyTotals, reportsLeads, type MetricTotals } from "@/lib/metrics";
 import type { DateRange } from "@/lib/date-ranges";
@@ -22,7 +23,7 @@ export interface ClientPerformance {
  */
 export async function getClientPerformance(clientId: string, range: DateRange): Promise<ClientPerformance> {
   const rows = await prisma.dailyPerformance.findMany({
-    where: { account: { clientId }, date: { gte: isoToDate(range.from), lte: isoToDate(range.to) } },
+    where: { account: { clientId }, date: { gte: isoToDate(range.from), lte: isoToDate(range.to) }, ...INCLUDED_ROWS },
     select: {
       accountId: true,
       campaignId: true,

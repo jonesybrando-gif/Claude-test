@@ -244,6 +244,8 @@ model AdAccount {
   isDemo       Boolean  @default(false)
   // Whether the platform reports verified spend for this account. Google LSA may not.
   spendIsVerified Boolean @default(true)
+  // When false, campaigns first seen in a sync start out left out of reports.
+  includeNewCampaigns Boolean @default(true)
   status       ConnectionStatus @default(ACTIVE)
   lastSyncAttemptAt   DateTime?
   lastSuccessfulSyncAt DateTime?
@@ -278,6 +280,9 @@ model Campaign {
   status      CampaignStatus @default(UNKNOWN)
   // Platform-side daily budget, informational only (minor units).
   platformDailyBudgetMinor BigInt?
+  // Set when the campaign is left out of the client's reports, pacing and
+  // alerts. Its data is still synced and kept, so it can be added back.
+  excludedAt  DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

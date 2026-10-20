@@ -24,7 +24,7 @@ export interface ReportParams {
 export async function loadClientReport(clientId: string, params: ReportParams, now: Date = new Date()) {
   const client = await prisma.client.findUniqueOrThrow({
     where: { id: clientId },
-    include: { accounts: { include: { campaigns: true, syncRuns: { orderBy: { startedAt: "desc" }, take: 1 } }, orderBy: { platform: "asc" } } },
+    include: { accounts: { include: { campaigns: { where: { excludedAt: null } }, syncRuns: { orderBy: { startedAt: "desc" }, take: 1 } }, orderBy: { platform: "asc" } } },
   });
   const today = todayInTimeZone(client.timezone, now);
   const { template, custom: hasCustomTemplate } = await getClientTemplate(client.agencyId, clientId);
