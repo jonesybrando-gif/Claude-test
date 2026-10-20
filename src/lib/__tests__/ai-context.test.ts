@@ -47,6 +47,16 @@ describe("AI grounding context", () => {
     expect(text).toContain("No budget is set for the current month.");
   });
 
+  it("adds campaign budget pacing and warns about placeholder conversion values", () => {
+    const text = buildAiContext({
+      ...base,
+      totals: t({ costMinor: 100000, conversions: 50, conversionValueMinor: 5000 }),
+      campaigns: [{ name: "Summer", platform: "Google Ads", status: "ENABLED", totals: t({ costMinor: 100000, conversions: 50 }), previous: null, budget: { status: "UNDERSPENDING", currentDailyRateMinor: 6200, requiredDailyMinor: 7900 } }],
+    });
+    expect(text).toContain("own budget this month: underspending, spending $62 a day against $79 a day needed to land on budget");
+    expect(text).toContain("conversion value is exactly 1 per conversion");
+  });
+
   it("lists campaigns by spend, capped at 25, and describes pacing", () => {
     const campaigns = Array.from({ length: 30 }, (_, i) => ({ name: `C${i}`, platform: "Meta", status: "ENABLED", totals: t({ costMinor: (i + 1) * 1000 }), previous: null }));
     const text = buildAiContext({

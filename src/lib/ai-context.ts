@@ -7,6 +7,7 @@ import { formatKpi, KPI_BY_KEY, kpiValues, type KpiKey } from "./kpis";
 import { formatMoney, formatPct } from "./money";
 import { derive, type MetricTotals } from "./metrics";
 import { STATUS_LABEL, type PacingStatus } from "./pacing/status";
+import { hasPlaceholderValues } from "./insights";
 
 export interface AiPacing {
   periodStart: string;
@@ -24,6 +25,13 @@ export interface AiPacing {
   pacingPct: number | null;
 }
 
+/** A campaign's own budget for the current month, when it has one. */
+export interface CampaignBudget {
+  status: PacingStatus;
+  currentDailyRateMinor: number;
+  requiredDailyMinor: number | null;
+}
+
 export interface AiContextInput {
   clientName: string;
   currency: string;
@@ -35,7 +43,7 @@ export interface AiContextInput {
   totals: MetricTotals;
   previous: MetricTotals | null;
   accounts: { platform: string; name: string; totals: MetricTotals | null; spendVerified: boolean; dataNote: string | null }[];
-  campaigns: { name: string; platform: string; status: string; totals: MetricTotals; previous: MetricTotals | null }[];
+  campaigns: { name: string; platform: string; status: string; totals: MetricTotals; previous: MetricTotals | null; budget?: CampaignBudget | null }[];
   pacing: AiPacing | null;
   /** Final budget result when the reporting period is exactly a past budget month. */
   pastBudget?: { month: string; budgetMinor: number; spentMinor: number; status: PacingStatus } | null;
@@ -77,6 +85,7 @@ export function buildAiContext(i: AiContextInput): string {
     lines.push(`- ${def.label}: ${v}${prev}${change}`);
   }
   if (i.totals.hasEstimatedCost) lines.push("- Note: spend includes estimated Local Services Ads cost.");
+  if (hasPlaceholderValues(i.totals)) lines.push("- Note: conversion value is exactly 1 per conversion, the ad platform's default when no values are set, so conversion value and ROAS don't reflect revenue. Don't present them as results.");
 
   lines.push("", "## By ad account");
   if (i.accounts.length === 0) lines.push("- No ad accounts connected.");
@@ -94,7 +103,9 @@ export function buildAiContext(i: AiContextInput): string {
     const share = i.totals.costMinor > 0 ? `; share of spend: ${formatPct((cmp.totals.costMinor / i.totals.costMinor) * 100, 0)}` : "";
     const cpa = derive(cmp.totals).costPerConversionMinor;
     const vsAvg = cpa !== null && avgCpa ? `; cost per conversion vs report average: ${formatPct(Math.abs(cpa / avgCpa - 1) * 100, 0)} ${cpa <= avgCpa ? "lower" : "higher"}` : "";
-    lines.push(`- ${cmp.name} (${cmp.platform}, ${cmp.status.toLowerCase()}): ${kpiLine(CAMPAIGN_KPIS, cmp.totals, cmp.previous, c)}${share}${vsAvg}`);
+    const b = cmp.budget;
+    const own = b ? `; own budget this month: ${STATUS_LABEL[b.status].toLowerCase()}, spending ${m(b.currentDailyRateMinor)} a day${b.requiredDailyMinor === null ? "" : ` against ${m(b.requiredDailyMinor)} a day needed to land on budget`}` : "";
+    lines.push(`- ${cmp.name} (${cmp.platform}, ${cmp.status.toLowerCase()}): ${kpiLine(CAMPAIGN_KPIS, cmp.totals, cmp.previous, c)}${share}${vsAvg}${own}`);
   }
 
   lines.push("", "## Monthly budget pacing");
