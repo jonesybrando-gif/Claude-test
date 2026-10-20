@@ -56,6 +56,9 @@ export default async function ClientCampaignsPage({ params, searchParams }: { pa
       })
     : [];
   const spendIn = new Map(spend.map((s) => [s.campaignId!, Number(s._sum.costMinor ?? 0)]));
+  const includedSpend = (a: (typeof client.accounts)[number]) => a.campaigns.filter((c) => !c.excludedAt).reduce((sum, c) => sum + (spendIn.get(c.id) ?? 0), 0);
+  // One total for the page, when every account reports in the same currency.
+  const includedTotal = client.accounts.length && new Set(client.accounts.map((a) => a.currency)).size === 1 ? client.accounts.reduce((sum, a) => sum + includedSpend(a), 0) : null;
 
   return (
     <div className="mx-auto flex max-w-[1000px] flex-col gap-5">
@@ -65,7 +68,10 @@ export default async function ClientCampaignsPage({ params, searchParams }: { pa
         <p className="text-sm text-text-2">
           Choose which campaigns count for {client.name}. A removed campaign is left out of the dashboard, reports, share links, exports, budget pacing and alerts. Nothing changes in the ad account, and its data keeps syncing, so you can add it back at any time.
         </p>
-        <p className="mt-1 text-sm text-text-3">Spend shown for {rangeText}, the same dates as the report.</p>
+        <p className="mt-1 text-sm text-text-3">
+          Spend shown for {rangeText}, the same dates as the report.
+          {includedTotal !== null && <> Included campaigns spent <strong className="font-medium text-text-2">{formatMoney(includedTotal, client.accounts[0].currency, { whole: true })}</strong>.</>}
+        </p>
       </div>
       {sp.notice && <p className="rounded-lg border border-border bg-good-bg px-4 py-3 text-sm text-good-ink" role="status">{sp.notice}</p>}
       {sp.error && <p className="rounded-lg border border-border bg-critical-bg px-4 py-3 text-sm text-critical-ink" role="alert">{sp.error}</p>}
@@ -128,7 +134,7 @@ export default async function ClientCampaignsPage({ params, searchParams }: { pa
                 <div className="flex min-w-0 flex-col gap-1">
                   <CardTitle className="flex flex-wrap items-center gap-2"><PlatformLabel platform={a.platform} /> <span>{a.name}</span>{a.status === "DISCONNECTED" && <Badge>No longer synced</Badge>}</CardTitle>
                   <CardDescription>
-                    {campaigns.length - removed} of {campaigns.length} campaign{campaigns.length === 1 ? "" : "s"} in reports
+                    {campaigns.length - removed} of {campaigns.length} campaign{campaigns.length === 1 ? "" : "s"} in reports, spending {formatMoney(includedSpend(a), a.currency, { whole: true })}
                     {" · "}New campaigns: {a.includeNewCampaigns ? "added automatically" : "start out removed"}
                   </CardDescription>
                 </div>
