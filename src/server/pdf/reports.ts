@@ -5,6 +5,7 @@ import type { AgencySummary, ClientPacing } from "../pacing-service";
 import { derive } from "@/lib/metrics";
 import { dailyKpiValue, formatKpi, KPI_BY_KEY, kpiValues, type KpiKey } from "@/lib/kpis";
 import type { DailyMetrics } from "../reporting";
+import type { ExecSummary } from "../exec-summary";
 import { formatMoney, formatMoneyCompact, formatNumber, formatPct } from "@/lib/money";
 import { formatDate } from "@/lib/time";
 import { PLATFORM_LABEL } from "@/lib/platforms";
@@ -169,7 +170,7 @@ function pacingFacts(r: PacingResult, currency: string): string[][] {
 export async function renderClientReportPdf(
   rep: ClientReport,
   brand: Brand,
-  opts: { internal: boolean; compress?: boolean; generatedAt?: Date; executiveSummary?: { text: string; source: "ai" | "auto" } },
+  opts: { internal: boolean; compress?: boolean; generatedAt?: Date; executiveSummary?: ExecSummary },
 ) {
   const { client, pacing, perf, cmpPerf, range, cmpRange, preset, history, template } = rep;
   const on = template.sections;
@@ -193,11 +194,27 @@ export async function renderClientReportPdf(
 
   if (on.executive && opts.executiveSummary) {
     sectionTitle(doc, "Executive summary");
-    for (const para of opts.executiveSummary.text.split(/\n{2,}/)) {
+    const es = opts.executiveSummary;
+    for (const para of es.overview.split(/\n{2,}/)) {
       paragraph(doc, para, { size: 10, color: C.text });
       doc.moveDown(0.5);
     }
-    paragraph(doc, opts.executiveSummary.source === "ai" ? "Written by AI from the figures in this report." : "Summarised automatically from the figures in this report.", { size: 7.5 });
+    const list = (title: string, items: string[], numbered = false) => {
+      if (!items.length) return;
+      doc.moveDown(0.3);
+      ensureSpace(doc, 40);
+      doc.font("Helvetica-Bold").fontSize(10).fillColor(C.text).text(pdfText(title), doc.page.margins.left, doc.y);
+      doc.moveDown(0.2);
+      items.forEach((x, n) => {
+        paragraph(doc, `${numbered ? `${n + 1}.` : "•"}  ${x}`, { size: 9.5, color: C.text });
+        doc.moveDown(0.25);
+      });
+    };
+    list("What's working", es.working);
+    list("What needs attention", es.notWorking);
+    list("Recommendations", es.recommendations, true);
+    doc.moveDown(0.3);
+    paragraph(doc, `${es.source === "ai" ? "Written by AI" : "Worked out automatically"} from the figures in this report. Recommendations are suggestions; nothing has been changed in the ad accounts.`, { size: 7.5 });
     doc.moveDown(1);
   }
 

@@ -272,7 +272,10 @@ export function ClientReportView({
       {/* Campaigns */}
       {show("campaigns") && <Card>
         <CardHeader>
-          <div className="flex flex-wrap items-center gap-2"><CardTitle>Campaigns</CardTitle>{hiddenMark("campaigns")}</div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2"><CardTitle>Campaigns</CardTitle>{hiddenMark("campaigns")}</div>
+            {staff && <Link href={`${basePath}/campaigns`} className="text-sm font-medium text-brand hover:underline">Add or remove campaigns</Link>}
+          </div>
           <CardDescription>{PRESET_LABEL[preset]}</CardDescription>
         </CardHeader>
         <Table>

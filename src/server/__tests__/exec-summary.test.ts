@@ -17,6 +17,7 @@ let clientId = "";
 let agencyId = "";
 let calls = 0;
 let fail = false;
+const AI_REPLY = { overview: "AI wrote this.", working: ["- Search did well."], notWorking: ["Display spent with no leads."], recommendations: ["1. Move budget to Search."] };
 
 describe.skipIf(!hasDb)("executive summary (database)", () => {
   beforeAll(async () => {
@@ -28,7 +29,7 @@ describe.skipIf(!hasDb)("executive summary (database)", () => {
         fetch: async () => {
           calls++;
           if (fail) return new Response(JSON.stringify({ type: "error", error: { type: "api_error", message: "down" } }), { status: 500 });
-          const msg = { id: "m", type: "message", role: "assistant", model: "x", stop_reason: "end_turn", stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: "text", text: JSON.stringify({ summary: "AI wrote this." }) }] };
+          const msg = { id: "m", type: "message", role: "assistant", model: "x", stop_reason: "end_turn", stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: "text", text: JSON.stringify(AI_REPLY) }] };
           return new Response(JSON.stringify(msg), { status: 200, headers: { "content-type": "application/json" } });
         },
       }),
@@ -52,10 +53,11 @@ describe.skipIf(!hasDb)("executive summary (database)", () => {
     expect(await getExecutiveSummary(rep, { generate: false })).toMatchObject({ source: "auto" });
     expect(calls).toBe(0);
     const [a, b] = await Promise.all([getExecutiveSummary(rep, { generate: true }), getExecutiveSummary(rep, { generate: true })]);
-    expect(a).toEqual({ text: "AI wrote this.", source: "ai" });
-    expect(b.text).toBe("AI wrote this.");
+    // List markers the model adds are stripped.
+    expect(a).toEqual({ overview: "AI wrote this.", working: ["Search did well."], notWorking: ["Display spent with no leads."], recommendations: ["Move budget to Search."], source: "ai" });
+    expect(b.overview).toBe("AI wrote this.");
     expect(calls).toBe(1); // concurrent viewers share one request
-    await getExecutiveSummary(rep, { generate: true });
+    expect(await getExecutiveSummary(rep, { generate: true })).toEqual(a); // served from the cache
     expect(calls).toBe(1);
     // A different comparison is a different summary.
     await getExecutiveSummary(await loadClientReport(clientId, { range: "last_7", compare: "none" }), { generate: true });
@@ -71,7 +73,8 @@ describe.skipIf(!hasDb)("executive summary (database)", () => {
     const rep = await loadClientReport(clientId, { range: "last_30" });
     const s = await getExecutiveSummary(rep, { generate: true });
     expect(s.source).toBe("auto");
-    expect(s.text).toContain("Exec Client's ads earned");
+    expect(s.overview).toContain("Exec Client's ads earned");
+    expect(s.recommendations.length).toBeGreaterThan(0);
     fail = false;
     await saveTemplate(agencyId, clientId, { ...DEFAULT_TEMPLATE, executiveAi: false });
     calls = 0;

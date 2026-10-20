@@ -106,17 +106,31 @@ export async function draftReportSummary(data: string, opts: { agencyName: strin
 
 // --- Executive summary ------------------------------------------------------
 
-export async function draftExecutiveSummary(data: string, opts: { agencyName: string; days: number }): Promise<string> {
-  const length = opts.days <= 10 ? "one paragraph of 50 to 90 words" : "two short paragraphs, 90 to 160 words in total";
+const ExecSummarySchema = z.object({
+  overview: z.string().describe("The headline paragraphs, separated by a blank line"),
+  working: z.array(z.string()).describe("What's working: one specific finding per item, each citing its figures"),
+  notWorking: z.array(z.string()).describe("What isn't working or needs attention: one specific finding per item, each citing its figures"),
+  recommendations: z.array(z.string()).describe("Strategic recommendations, most important first: what to do, where, and why, citing the figures"),
+});
+export type ExecSummaryDraft = z.infer<typeof ExecSummarySchema>;
+
+export async function draftExecutiveSummary(data: string, opts: { agencyName: string; days: number }): Promise<ExecSummaryDraft> {
+  const short = opts.days <= 10;
   const out = await generate(
-    SummarySchema,
-    `Write the executive summary at the top of this client's report, from ${opts.agencyName} to the client, covering exactly the reporting period in the data.
-Write ${length}, plain-spoken and specific. Start with the headline results and how they compare with the comparison period, then what drove them (platforms or campaigns) and the budget position if the data covers it.
-Write in the third person about the client's advertising ("your ads" is fine). Don't recommend actions, add greetings, or sign off. Separate paragraphs with a blank line.`,
+    ExecSummarySchema,
+    `Write the executive summary at the top of this client's report, from ${opts.agencyName} to the client, covering exactly the reporting period in the data. It should read like a strategist's analysis, not a list of numbers.
+
+overview: ${short ? "one paragraph of 60 to 100 words" : "two paragraphs, 120 to 200 words in total"}. Lead with the headline results and how they compare with the comparison period, then what drove them (which platforms and campaigns) and the budget position if the data covers it.
+working: ${short ? "2 to 3" : "3 to 5"} findings about what is performing well and why it matters: campaigns or platforms with a clearly lower cost per result than the account average, improvements against the comparison period, efficient use of budget. Compare each one with the average or the previous period using figures in the data.
+notWorking: ${short ? "2 to 3" : "3 to 5"} findings about what is underperforming or at risk: spend with few or no conversions or leads, campaigns whose cost per result is well above average or rising, falling click-through or conversion rates, budget pacing problems, tracking or data gaps. Be direct but not alarmist.
+recommendations: ${short ? "3 to 4" : "4 to 6"} strategic recommendations, most important first. Each one names the campaign, platform or setting, says what to change (for example move budget from one campaign to another, tighten targeting, refresh creative, fix landing pages or conversion tracking, adjust daily spend to land on budget) and gives the figures that justify it. Recommend only what the data supports, and say when a test is needed before committing.
+
+If there aren't enough results to judge something, say so in the relevant list rather than inventing a finding. Write to the client ("your ads" is fine), without greetings or a sign-off. Each list item is one or two sentences of plain text with no leading bullet or number.`,
     data,
-    "low",
+    "medium",
   );
-  return out.summary.trim();
+  const clean = (xs: string[]) => xs.map((x) => x.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, "").trim()).filter(Boolean);
+  return { overview: out.overview.trim(), working: clean(out.working), notWorking: clean(out.notWorking), recommendations: clean(out.recommendations) };
 }
 
 // --- Client email -----------------------------------------------------------

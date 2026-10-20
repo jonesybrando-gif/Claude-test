@@ -2,11 +2,11 @@
 
 A multi-tenant advertising reporting and **budget pacing** app for agencies.
 
-- **Reporting:** KPI dashboards (spend, impressions, clicks, CTR, CPC, conversions, CPA, leads, ROAS and more) across Google Ads, Meta, Microsoft Advertising and Local Services Ads, with branded client reports you can customize per client.
+- **Reporting:** KPI dashboards (spend, impressions, clicks, CTR, CPC, conversions, CPA, leads, ROAS and more) across Google Ads, Meta, Microsoft Advertising and Local Services Ads, with branded client reports you can customize per client. Each report opens with an executive summary covering what's working, what needs attention and strategic recommendations, and you can choose which campaigns count for each client.
 - **Budget pacing:** enter each client's monthly budget. The app works out whether campaigns are spending too fast, too slow or on target, forecasts month-end spend, and tells account managers exactly what daily spend to aim for.
 - **AI assistant:** proactive suggestions, report summaries and client email drafts, written only from the app's own data and always reviewed by a person before anything goes out.
 
-> **Status:** Phase 1 (core application) is built and tested with demo data. Phases 2–3 (Google Ads, Meta Ads, Microsoft Advertising and Google Local Services Ads integrations, plus background sync) are built and tested against each platform's documented API, but **none has yet been run against a real ad account**. Setup guides: [Google Ads + LSA](docs/google-ads-setup.md), [Meta Ads](docs/meta-ads-setup.md), [Microsoft Advertising](docs/microsoft-ads-setup.md). All sample data is flagged `isDemo` and labelled "Demo data" in the UI. See [What's built and what isn't](#whats-built-and-what-isnt).
+> **Status:** Phase 1 (core application) is built and tested with demo data. Phases 2–3 (Google Ads, Meta Ads, Microsoft Advertising and Google Local Services Ads integrations, plus background sync) are built and tested against each platform's documented API, but Google Ads and Meta Ads have been checked against live accounts; Microsoft Advertising and Local Services Ads have not yet. Setup guides: [Google Ads + LSA](docs/google-ads-setup.md), [Meta Ads](docs/meta-ads-setup.md), [Microsoft Advertising](docs/microsoft-ads-setup.md). All sample data is flagged `isDemo` and labelled "Demo data" in the UI. See [What's built and what isn't](#whats-built-and-what-isnt).
 
 ## Quick start
 
@@ -101,6 +101,8 @@ Budgets can be set for a whole client (across platforms), for an advertising acc
 4. Spend with no budget at any level is shown as *unbudgeted spend*, never mixed into pacing.
 
 Spend is stored only at the leaf level (campaign, or account for platforms without campaigns) and always rolled up from there, so it is counted once.
+
+Campaigns can be removed from a client on its **Campaigns** page (`src/server/campaign-selection.ts`). A removed campaign keeps syncing but is left out of every report, export, pacing figure and alert for that client until it is added back. Each ad account can also start new campaigns out removed instead of adding them automatically. A campaign with its own budget can't be removed until that budget is deleted.
 
 ### Daily Action Center
 

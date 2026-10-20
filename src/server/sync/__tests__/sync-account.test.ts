@@ -109,6 +109,18 @@ describe.skipIf(!hasDb)("syncAccount (database)", () => {
     expect(runs.map((r) => r.status)).toEqual(["SUCCEEDED", "SUCCEEDED"]);
   });
 
+  it("starts new campaigns out removed when the account says so, and leaves existing choices alone", async () => {
+    await prisma.campaign.create({ data: { accountId, externalId: "c1", name: "Search", excludedAt: new Date("2026-10-01") } });
+    await prisma.adAccount.update({ where: { id: accountId }, data: { includeNewCampaigns: false } });
+    await syncAccount(accountId, "scheduled", deps(fakeAdapter((from) => [row(from, 100)])));
+    const campaigns = await prisma.campaign.findMany({ where: { accountId }, orderBy: { externalId: "asc" } });
+    expect(campaigns.map((c) => [c.externalId, !!c.excludedAt])).toEqual([["c1", true], ["old", true]]);
+    await prisma.campaign.update({ where: { id: campaigns[0].id }, data: { excludedAt: null } });
+    await prisma.adAccount.update({ where: { id: accountId }, data: { includeNewCampaigns: true } });
+    await syncAccount(accountId, "manual", deps(fakeAdapter((from) => [row(from, 100)])));
+    expect((await prisma.campaign.findFirstOrThrow({ where: { accountId, externalId: "c1" } })).excludedAt).toBeNull();
+  });
+
   it("never syncs demo accounts", async () => {
     await prisma.adAccount.update({ where: { id: accountId }, data: { isDemo: true } });
     const r = await syncAccount(accountId, "manual", deps(fakeAdapter(() => [row("2026-10-16", 1)])));

@@ -1,6 +1,7 @@
 import "server-only";
 import type { Platform, Prisma } from "@prisma/client";
 import { prisma } from "./db";
+import { INCLUDED_ROWS } from "./campaign-selection";
 import { addInto, emptyTotals, reportsLeads, type MetricTotals } from "@/lib/metrics";
 import { dateToIso, eachDay, isoToDate, type IsoDate } from "@/lib/pacing/dates";
 import type { DateRange } from "@/lib/date-ranges";
@@ -37,7 +38,7 @@ export async function getAgencyPerformance(where: Prisma.ClientWhereInput, range
   const sums = accountInfo.size
     ? await prisma.dailyPerformance.groupBy({
         by: ["accountId", "date"],
-        where: { accountId: { in: [...accountInfo.keys()] }, date: { gte: isoToDate(range.from), lte: isoToDate(range.to) } },
+        where: { accountId: { in: [...accountInfo.keys()] }, date: { gte: isoToDate(range.from), lte: isoToDate(range.to) }, ...INCLUDED_ROWS },
         _sum: { costMinor: true, impressions: true, clicks: true, conversions: true, conversionValueMinor: true, leads: true },
       })
     : [];

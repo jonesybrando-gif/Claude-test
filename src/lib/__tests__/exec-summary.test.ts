@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autoExecutiveSummary } from "../exec-summary";
+import { autoOverview as autoExecutiveSummary } from "../exec-summary";
 import type { AiContextInput } from "../ai-context";
 import { emptyTotals, type MetricTotals } from "../metrics";
 

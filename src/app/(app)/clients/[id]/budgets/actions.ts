@@ -40,7 +40,7 @@ export async function createBudget(clientId: string, _prev: FormState, form: For
 
   const client = await prisma.client.findUniqueOrThrow({
     where: { id: clientId },
-    include: { accounts: { include: { campaigns: { select: { id: true } } } }, budgets: true },
+    include: { accounts: { include: { campaigns: { where: { excludedAt: null }, select: { id: true } } } }, budgets: true },
   });
   let accountId: string | null = null;
   let campaignId: string | null = null;

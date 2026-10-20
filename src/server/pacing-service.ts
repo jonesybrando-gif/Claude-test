@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
+import { INCLUDED_ROWS } from "./campaign-selection";
 import { addDays, dateToIso, isoToDate, minDate, monthBounds, todayInTimeZone, type IsoDate } from "@/lib/pacing/dates";
 import { combinePacing, computePacing, type PacingResult } from "@/lib/pacing/engine";
 import type { DistributionConfig, DateRange } from "@/lib/pacing/distribution";
@@ -14,7 +15,8 @@ export const STALE_AFTER_MS = 26 * 60 * 60 * 1000;
 
 const clientInclude = {
   primaryManager: { select: { id: true, name: true } },
-  accounts: { include: { campaigns: { select: { id: true, accountId: true, name: true, status: true } } } },
+  // Removed campaigns are left out of pacing, reports and alerts entirely.
+  accounts: { include: { campaigns: { where: { excludedAt: null }, select: { id: true, accountId: true, name: true, status: true } } } },
   agency: { select: { thresholdUnder: true, thresholdSlightlyUnder: true, thresholdSlightlyOver: true, thresholdOver: true } },
 } satisfies Prisma.ClientInclude;
 
@@ -357,7 +359,7 @@ export async function loadPacing(where: Prisma.ClientWhereInput, now: Date = new
   const minStart = new Date(Math.min(isoToDate(addDays(fallback.start, -1)).getTime(), ...starts));
   const maxEnd = new Date(Math.max(isoToDate(addDays(fallback.end, 1)).getTime(), ...ends));
   const perf = await prisma.dailyPerformance.findMany({
-    where: { account: { clientId: { in: ids } }, date: { gte: minStart, lte: maxEnd } },
+    where: { account: { clientId: { in: ids } }, date: { gte: minStart, lte: maxEnd }, ...INCLUDED_ROWS },
     select: { accountId: true, campaignId: true, date: true, costMinor: true, costIsEstimated: true },
   });
   return clients.map((c) => {

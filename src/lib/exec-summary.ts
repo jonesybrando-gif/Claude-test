@@ -1,8 +1,10 @@
 // The automatic executive summary: plain sentences built directly from the
-// report's figures for the selected date range. Used when the AI assistant
-// isn't set up or the layout asks for it, and while an AI version is written.
+// report's figures for the selected date range, plus what's working, what
+// isn't and recommendations. Used when the AI assistant isn't set up or the
+// layout asks for it, and while an AI version is written.
 
 import type { AiContextInput } from "./ai-context";
+import { analyzePerformance } from "./insights";
 import { derive, pctChange } from "./metrics";
 import { formatMoney, formatNumber, formatPct } from "./money";
 import { STATUS_LABEL } from "./pacing/status";
@@ -15,7 +17,20 @@ const change = (cur: number | null, prev: number | null | undefined) => {
   return Math.abs(p) < 0.5 ? " (about the same as the previous period)" : ` (${p > 0 ? "up" : "down"} ${formatPct(Math.abs(p), 0)})`;
 };
 
-export function autoExecutiveSummary(i: AiContextInput): string {
+export interface ExecutiveSummaryContent {
+  /** One or two paragraphs, separated by a blank line. */
+  overview: string;
+  working: string[];
+  notWorking: string[];
+  recommendations: string[];
+}
+
+export function autoExecutiveSummary(i: AiContextInput): ExecutiveSummaryContent {
+  return { overview: autoOverview(i), ...analyzePerformance(i) };
+}
+
+/** The headline paragraphs: results for the period, what drove them, and the budget. */
+export function autoOverview(i: AiContextInput): string {
   const c = i.currency;
   const money = (v: number) => formatMoney(v, c, { whole: v >= 10000 });
   const t = i.totals;

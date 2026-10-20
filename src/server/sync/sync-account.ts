@@ -50,12 +50,12 @@ export function syncRange(adapter: PlatformAdapter, today: IsoDate, kind: SyncKi
   return { from: addDays(minDate(dataCompleteThrough, today), -adapter.restatementWindowDays), to: today };
 }
 
-async function upsertCampaigns(accountId: string, campaigns: RemoteCampaign[]): Promise<Map<string, string>> {
+async function upsertCampaigns(accountId: string, campaigns: RemoteCampaign[], includeNew = true): Promise<Map<string, string>> {
   const ids = new Map<string, string>();
   for (const c of campaigns) {
     const row = await prisma.campaign.upsert({
       where: { accountId_externalId: { accountId, externalId: c.externalId } },
-      create: { accountId, externalId: c.externalId, name: c.name, status: c.status, platformDailyBudgetMinor: c.dailyBudgetMinor === undefined ? null : BigInt(c.dailyBudgetMinor) },
+      create: { accountId, externalId: c.externalId, name: c.name, status: c.status, excludedAt: includeNew ? null : new Date(), platformDailyBudgetMinor: c.dailyBudgetMinor === undefined ? null : BigInt(c.dailyBudgetMinor) },
       update: { name: c.name, status: c.status, ...(c.dailyBudgetMinor === undefined ? {} : { platformDailyBudgetMinor: BigInt(c.dailyBudgetMinor) }) },
       select: { id: true },
     });
@@ -90,7 +90,7 @@ export async function syncAccount(accountId: string, kind: SyncKind, deps: SyncD
   let rowsUpserted = 0;
   let spendVerified: boolean | undefined;
   try {
-    const campaignIds = await upsertCampaigns(accountId, await call((t) => adapter.listCampaigns(t, ref)));
+    const campaignIds = await upsertCampaigns(accountId, await call((t) => adapter.listCampaigns(t, ref)), account.includeNewCampaigns);
 
     for (const chunk of chunkRange(range.from, range.to, adapter.maxRangeDays)) {
       const result = await call((t) => adapter.fetchDailyPerformance(t, ref, chunk.from, chunk.to));
@@ -99,7 +99,7 @@ export async function syncAccount(accountId: string, kind: SyncKind, deps: SyncD
       if (result.spendVerified !== undefined) spendVerified = spendVerified === false ? false : result.spendVerified;
       // Campaigns that only appear in metrics (e.g. removed ones that spent earlier in the range)
       const unseen = campaigns.filter((c) => !campaignIds.has(c.externalId));
-      for (const [k, v] of await upsertCampaigns(accountId, unseen)) campaignIds.set(k, v);
+      for (const [k, v] of await upsertCampaigns(accountId, unseen, account.includeNewCampaigns)) campaignIds.set(k, v);
 
       // Only accept rows inside the window being replaced; anything else would
       // collide with rows kept outside the window.
