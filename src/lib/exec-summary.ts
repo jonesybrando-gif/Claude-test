@@ -4,7 +4,7 @@
 // layout asks for it, and while an AI version is written.
 
 import type { AiContextInput } from "./ai-context";
-import { analyzePerformance } from "./insights";
+import { analyzePerformance, hasPlaceholderValues } from "./insights";
 import { derive, pctChange } from "./metrics";
 import { formatMoney, formatNumber, formatPct } from "./money";
 import { STATUS_LABEL } from "./pacing/status";
@@ -53,7 +53,7 @@ export function autoOverview(i: AiContextInput): string {
   if (t.leads > 0) results.push(`${formatNumber(t.leads)} leads at ${d.costPerLeadMinor === null ? "—" : formatMoney(d.costPerLeadMinor, c)} each${change(d.costPerLeadMinor, pd?.costPerLeadMinor)}`);
   if (results.length) p1.push(`That produced ${results.join(" and ")}.`);
   else if (t.costMinor > 0) p1.push("No conversions or leads were reported for the period.");
-  if (d.roas !== null) p1.push(`Platforms reported ${money(t.conversionValueMinor)} in conversion value, a ${d.roas.toFixed(2)}× return on ad spend.`);
+  if (d.roas !== null && !hasPlaceholderValues(t)) p1.push(`Platforms reported ${money(t.conversionValueMinor)} in conversion value, a ${d.roas.toFixed(2)}× return on ad spend.`);
   if (t.hasEstimatedCost) p1.push("Spend includes estimated Local Services Ads cost.");
 
   // Paragraph 2: what drove it, and the budget.

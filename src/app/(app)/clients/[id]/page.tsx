@@ -46,7 +46,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               <Link href={`/clients/${id}/accounts`} className={buttonVariants({ variant: "outline" })}>
                 <Plug className="h-4 w-4" /> Ad accounts
               </Link>
-              <Link href={`/clients/${id}/campaigns`} className={buttonVariants({ variant: "outline" })}>
+              <Link href={`/clients/${id}/campaigns?range=${preset}&from=${range.from}&to=${range.to}`} className={buttonVariants({ variant: "outline" })}>
                 <ListChecks className="h-4 w-4" /> Campaigns
               </Link>
               <Link href={`/clients/${id}/share`} className={buttonVariants({ variant: "outline" })}>

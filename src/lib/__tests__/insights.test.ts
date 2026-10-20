@@ -68,7 +68,7 @@ describe("performance insights", () => {
 
     const stale = analyzePerformance({ ...base, accounts: [{ platform: "Meta Ads", name: "Main", totals: null, spendVerified: true, dataNote: "disconnected; data may be missing" }] });
     expect(stale.notWorking).toContain("Meta Ads · Main is disconnected; data may be missing, so these figures may be incomplete.");
-    expect(stale.recommendations.at(-1)).toBe("Reconnect Meta Ads · Main on the Ad accounts page so the report is complete.");
+    expect(stale.recommendations[0]).toBe("Reconnect Meta Ads · Main on the Ad accounts page so the report is complete.");
   });
 
   it("judges lead-gen reports on leads, and says nothing for an empty period", () => {
@@ -106,6 +106,35 @@ describe("performance insights", () => {
     expect(r.notWorking).toContain("September 2026 closed over budget: $5,476 against $5,000 (110%).");
     expect(r.recommendations).toContain("Rein in daily spend this month: September 2026 ran 10% over budget. At the same budget, campaign daily budgets should add up to about $167 a day.");
     expect(r.recommendations.some((x) => x.startsWith("Results are steady"))).toBe(false);
+  });
+
+  it("keeps a busy report consistent: placeholder values first, no mixed messages, budget-aware advice", () => {
+    // Shaped like a real account: one very cheap campaign, several costly ones, one with nothing,
+    // conversion value left at the platform default, and a costly campaign whose own budget is underspending.
+    const r = analyzePerformance({
+      ...base,
+      totals: t({ costMinor: 806_900, impressions: 325_041, clicks: 44_139, conversions: 2184, conversionValueMinor: 218_400 }),
+      previous: t({ costMinor: 661_000, impressions: 300_000, clicks: 57_300, conversions: 674 }),
+      campaigns: [
+        { name: "Opening", platform: "Google Ads", status: "ENABLED", totals: t({ costMinor: 51_600, conversions: 1289 }), previous: t({ costMinor: 30_000, conversions: 1172 }) },
+        { name: "YouTube", platform: "Google Ads", status: "ENABLED", totals: t({ costMinor: 106_400, conversions: 0 }), previous: null },
+        { name: "General", platform: "Google Ads", status: "ENABLED", totals: t({ costMinor: 203_500, conversions: 394 }), previous: null },
+        {
+          name: "Summer", platform: "Google Ads", status: "ENABLED", totals: t({ costMinor: 196_200, conversions: 21 }), previous: null,
+          budget: { status: "UNDERSPENDING", currentDailyRateMinor: 6200, requiredDailyMinor: 7900 },
+        },
+        { name: "Other", platform: "Google Ads", status: "ENABLED", totals: t({ costMinor: 249_200, conversions: 480 }), previous: null },
+      ],
+    });
+    expect(r.notWorking[0]).toBe("Conversion value ($2,184) is exactly one dollar per conversion, the ad platform's default, so return on ad spend (0.27×) doesn't reflect real revenue.");
+    expect(r.recommendations[0]).toMatch(/^Give conversions real values/);
+    // Opening is the star even though its cost per conversion rose; it isn't also listed as a problem.
+    expect(r.working[0]).toMatch(/^Opening \(Google Ads\) delivered 1,289 conversions/);
+    expect(r.notWorking.some((x) => x.startsWith("Opening"))).toBe(false);
+    expect(r.recommendations).toContain(
+      "Tighten Summer (Google Ads) before letting it spend more: its own budget is pacing under (about $62.00 a day against $79.00 needed), but at $93.43 per conversion extra spend would buy few results. Cut its weakest keywords, placements and audiences first, or lower its budget and move the difference to Opening (Google Ads).",
+    );
+    expect(r.working.some((x) => x.includes("ad spend returned"))).toBe(false);
   });
 
   it("is part of the automatic executive summary", () => {

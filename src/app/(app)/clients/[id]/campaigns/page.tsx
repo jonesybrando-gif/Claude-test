@@ -2,7 +2,10 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { prisma } from "@/server/db";
 import { requireClientEdit } from "@/server/access";
-import { addDays, isoToDate, todayInTimeZone } from "@/lib/pacing/dates";
+import { isoToDate, todayInTimeZone } from "@/lib/pacing/dates";
+import { PRESET_LABEL, resolveRange, type RangePreset } from "@/lib/date-ranges";
+import { formatDate } from "@/lib/time";
+import { getClientTemplate } from "@/server/report-templates";
 import { formatMoney } from "@/lib/money";
 import { PlatformLabel } from "@/components/platform-badge";
 import { Badge } from "@/components/ui/badge";
@@ -13,10 +16,10 @@ import { ActionButton } from "./forms";
 
 export const dynamic = "force-dynamic";
 
-export default async function ClientCampaignsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ notice?: string; error?: string }> }) {
+export default async function ClientCampaignsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ notice?: string; error?: string; range?: string; from?: string; to?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
-  await requireClientEdit(id);
+  const user = await requireClientEdit(id);
   const client = await prisma.client.findUniqueOrThrow({
     where: { id },
     select: {
@@ -33,24 +36,36 @@ export default async function ClientCampaignsPage({ params, searchParams }: { pa
     },
   });
   const today = todayInTimeZone(client.timezone);
+  // Spend covers the same dates as the report the user came from (else the report's default range).
+  const { template } = await getClientTemplate(user.agencyId, id);
+  const preset: RangePreset = sp.range && sp.range in PRESET_LABEL ? (sp.range as RangePreset) : template.defaultRange;
+  let range;
+  try {
+    range = resolveRange(preset, today, { from: sp.from, to: sp.to });
+  } catch {
+    range = resolveRange(template.defaultRange, today);
+  }
+  const rangeQuery = `range=${preset}${preset === "custom" ? `&from=${range.from}&to=${range.to}` : ""}`;
+  const rangeText = `${PRESET_LABEL[preset]}: ${formatDate(range.from)} – ${formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}`;
   const accountIds = client.accounts.map((a) => a.id);
   const spend = accountIds.length
     ? await prisma.dailyPerformance.groupBy({
         by: ["campaignId"],
-        where: { accountId: { in: accountIds }, campaignId: { not: null }, date: { gte: isoToDate(addDays(today, -30)), lte: isoToDate(addDays(today, -1)) } },
+        where: { accountId: { in: accountIds }, campaignId: { not: null }, date: { gte: isoToDate(range.from), lte: isoToDate(range.to) } },
         _sum: { costMinor: true },
       })
     : [];
-  const spend30 = new Map(spend.map((s) => [s.campaignId!, Number(s._sum.costMinor ?? 0)]));
+  const spendIn = new Map(spend.map((s) => [s.campaignId!, Number(s._sum.costMinor ?? 0)]));
 
   return (
     <div className="mx-auto flex max-w-[1000px] flex-col gap-5">
       <div>
-        <Link href={`/clients/${id}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
+        <Link href={`/clients/${id}?${rangeQuery}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
         <h1 className="mt-1 text-xl font-semibold">Campaigns</h1>
         <p className="text-sm text-text-2">
           Choose which campaigns count for {client.name}. A removed campaign is left out of the dashboard, reports, share links, exports, budget pacing and alerts. Nothing changes in the ad account, and its data keeps syncing, so you can add it back at any time.
         </p>
+        <p className="mt-1 text-sm text-text-3">Spend shown for {rangeText}, the same dates as the report.</p>
       </div>
       {sp.notice && <p className="rounded-lg border border-border bg-good-bg px-4 py-3 text-sm text-good-ink" role="status">{sp.notice}</p>}
       {sp.error && <p className="rounded-lg border border-border bg-critical-bg px-4 py-3 text-sm text-critical-ink" role="alert">{sp.error}</p>}
@@ -64,9 +79,48 @@ export default async function ClientCampaignsPage({ params, searchParams }: { pa
       )}
 
       {client.accounts.map((a) => {
-        // Included first, then by recent spend, so the campaigns that matter are on top.
-        const campaigns = [...a.campaigns].sort((x, y) => Number(!!x.excludedAt) - Number(!!y.excludedAt) || (spend30.get(y.id) ?? 0) - (spend30.get(x.id) ?? 0) || x.name.localeCompare(y.name));
+        // Included first, then by spend in the period, so the campaigns that matter are on top.
+        const campaigns = [...a.campaigns].sort((x, y) => Number(!!x.excludedAt) - Number(!!y.excludedAt) || (spendIn.get(y.id) ?? 0) - (spendIn.get(x.id) ?? 0) || x.name.localeCompare(y.name));
         const removed = campaigns.filter((c) => c.excludedAt).length;
+        // Included campaigns with no spend in the period are folded away; removed ones stay visible.
+        const active = campaigns.filter((c) => c.excludedAt || (spendIn.get(c.id) ?? 0) > 0);
+        const idle = campaigns.filter((c) => !active.includes(c));
+        const table = (rows: typeof campaigns) => (
+          <Table>
+            <THead>
+              <tr><TH className="pl-5">Campaign</TH><TH>Status</TH><TH className="text-right">Spend</TH><TH>In reports</TH><TH className="pr-5 text-right"><span className="sr-only">Action</span></TH></tr>
+            </THead>
+            <TBody>
+              {rows.map((c) => {
+                const budgeted = c._count.budgets > 0;
+                return (
+                  <TR key={c.id} className={c.excludedAt ? "text-text-3" : undefined}>
+                    <TD className="pl-5 font-medium">{c.name}</TD>
+                    <TD className="text-xs">{c.status.toLowerCase()}</TD>
+                    <TD className="text-right">{formatMoney(spendIn.get(c.id) ?? 0, a.currency, { whole: true })}</TD>
+                    <TD>{c.excludedAt ? <Badge>Removed</Badge> : <Badge variant="good">Included</Badge>}</TD>
+                    <TD className="pr-5">
+                      <div className="flex justify-end">
+                        {c.excludedAt ? (
+                          <ActionButton action={setCampaignIncludedAction.bind(null, id, c.id, true, rangeQuery)} label="Add back" />
+                        ) : (
+                          <ActionButton
+                            action={setCampaignIncludedAction.bind(null, id, c.id, false, rangeQuery)}
+                            label="Remove"
+                            variant="ghost"
+                            disabled={budgeted}
+                            title={budgeted ? "This campaign has its own budget. Delete that budget first." : undefined}
+                            confirm={`Remove ${c.name} from ${client.name}'s reports? You can add it back later.`}
+                          />
+                        )}
+                      </div>
+                    </TD>
+                  </TR>
+                );
+              })}
+            </TBody>
+          </Table>
+        );
         return (
           <Card key={a.id}>
             <CardHeader>
@@ -80,13 +134,13 @@ export default async function ClientCampaignsPage({ params, searchParams }: { pa
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <ActionButton
-                    action={setIncludeNewCampaignsAction.bind(null, id, a.id, !a.includeNewCampaigns)}
+                    action={setIncludeNewCampaignsAction.bind(null, id, a.id, !a.includeNewCampaigns, rangeQuery)}
                     label={a.includeNewCampaigns ? "Don't add new campaigns automatically" : "Add new campaigns automatically"}
                     variant="ghost"
                   />
-                  {removed > 0 && <ActionButton action={setAllCampaignsIncludedAction.bind(null, id, a.id, true)} label="Add all back" />}
+                  {removed > 0 && <ActionButton action={setAllCampaignsIncludedAction.bind(null, id, a.id, true, rangeQuery)} label="Add all back" />}
                   {removed < campaigns.length && (
-                    <ActionButton action={setAllCampaignsIncludedAction.bind(null, id, a.id, false)} label="Remove all" confirm={`Remove every campaign in ${a.name} from ${client.name}'s reports? Campaigns with their own budget are kept.`} />
+                    <ActionButton action={setAllCampaignsIncludedAction.bind(null, id, a.id, false, rangeQuery)} label="Remove all" confirm={`Remove every campaign in ${a.name} from ${client.name}'s reports? Campaigns with their own budget are kept.`} />
                   )}
                 </div>
               </div>
@@ -95,40 +149,15 @@ export default async function ClientCampaignsPage({ params, searchParams }: { pa
               <CardContent className="text-sm text-text-3">No campaigns found yet. They appear after the account&apos;s next sync.</CardContent>
             ) : (
               <>
-                <Table>
-                  <THead>
-                    <tr><TH className="pl-5">Campaign</TH><TH>Status</TH><TH className="text-right">Spend, last 30 days</TH><TH>In reports</TH><TH className="pr-5 text-right"><span className="sr-only">Action</span></TH></tr>
-                  </THead>
-                  <TBody>
-                    {campaigns.map((c) => {
-                      const budgeted = c._count.budgets > 0;
-                      return (
-                        <TR key={c.id} className={c.excludedAt ? "text-text-3" : undefined}>
-                          <TD className="pl-5 font-medium">{c.name}</TD>
-                          <TD className="text-xs">{c.status.toLowerCase()}</TD>
-                          <TD className="text-right">{formatMoney(spend30.get(c.id) ?? 0, a.currency, { whole: true })}</TD>
-                          <TD>{c.excludedAt ? <Badge>Removed</Badge> : <Badge variant="good">Included</Badge>}</TD>
-                          <TD className="pr-5">
-                            <div className="flex justify-end">
-                              {c.excludedAt ? (
-                                <ActionButton action={setCampaignIncludedAction.bind(null, id, c.id, true)} label="Add back" />
-                              ) : (
-                                <ActionButton
-                                  action={setCampaignIncludedAction.bind(null, id, c.id, false)}
-                                  label="Remove"
-                                  variant="ghost"
-                                  disabled={budgeted}
-                                  title={budgeted ? "This campaign has its own budget. Delete that budget first." : undefined}
-                                  confirm={`Remove ${c.name} from ${client.name}'s reports? You can add it back later.`}
-                                />
-                              )}
-                            </div>
-                          </TD>
-                        </TR>
-                      );
-                    })}
-                  </TBody>
-                </Table>
+                {active.length > 0 && table(active)}
+                {idle.length > 0 && (
+                  <details className="group border-t border-border">
+                    <summary className="cursor-pointer px-5 py-3 text-sm text-text-2 hover:text-text">
+                      {idle.length} campaign{idle.length === 1 ? "" : "s"} with no spend in this period
+                    </summary>
+                    {table(idle)}
+                  </details>
+                )}
                 <div className="h-4" />
               </>
             )}
