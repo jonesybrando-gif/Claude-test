@@ -8,7 +8,7 @@ export function DisconnectButton({ connectionId }: { connectionId: string }) {
     <form
       action={disconnectConnection.bind(null, connectionId)}
       onSubmit={(e) => {
-        if (!confirm("Disconnect this login? Syncing stops for every account linked through it. Existing data is kept.")) e.preventDefault();
+        if (!confirm("Disconnect this login? Syncing stops for every account linked through it. Existing data is kept. Other connections made with the same Google, Meta or Microsoft login keep working.")) e.preventDefault();
       }}
     >
       <Button type="submit" variant="ghost" size="sm" className="text-critical-ink">Disconnect</Button>

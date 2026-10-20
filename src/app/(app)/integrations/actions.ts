@@ -4,7 +4,7 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/server/db";
 import { requireAdmin, requireClientEdit } from "@/server/access";
-import { decryptSecret } from "@/server/crypto";
+import { disconnectPlatformConnection } from "@/server/integrations/disconnect";
 import { getAdapter } from "@/server/integrations/registry";
 import { storeTokens, withAccessToken } from "@/server/integrations/tokens";
 import { IntegrationError } from "@/server/integrations/errors";
@@ -105,25 +105,7 @@ export async function connectWithToken(platform: Platform, _prev: LinkState, for
 export async function disconnectConnection(connectionId: string): Promise<void> {
   const user = await requireAdmin();
   const connection = await loadConnection(connectionId, user.agencyId);
-  const cred = await prisma.oAuthCredential.findUnique({ where: { connectionId: connection.id } });
-  // Best effort: revoke the grant at Google so the refresh token stops working.
-  // Google supports token revocation; Meta and Microsoft grants are removed from the user's account settings.
-  if (cred?.encryptedRefreshToken && connection.platform === "GOOGLE_ADS") {
-    try {
-      await fetch("https://oauth2.googleapis.com/revoke", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ token: decryptSecret(cred.encryptedRefreshToken) }).toString(),
-      });
-    } catch {
-      /* revocation is best effort */
-    }
-  }
-  await prisma.$transaction([
-    prisma.oAuthCredential.deleteMany({ where: { connectionId: connection.id } }),
-    prisma.platformConnection.update({ where: { id: connection.id }, data: { status: "DISCONNECTED", lastError: "Disconnected by an administrator" } }),
-    prisma.adAccount.updateMany({ where: { connectionId: connection.id }, data: { status: "DISCONNECTED" } }),
-  ]);
+  await disconnectPlatformConnection(user.agencyId, connection.id);
   revalidatePath("/integrations", "layout");
   revalidatePath("/dashboard");
 }

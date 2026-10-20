@@ -73,7 +73,7 @@ export default function PrivacyPage() {
       <section className="flex flex-col gap-3" id="delete">
         <h2>Removing access and deleting your data</h2>
         <ul>
-          <li><strong>Disconnect an ad account in the app</strong> (Integrations → Disconnect). This deletes the stored tokens and, for Google, revokes the access at Google.</li>
+          <li><strong>Disconnect an ad account in the app</strong> (Integrations → Disconnect). This deletes the stored tokens immediately. For Google, it also revokes the access at Google when it&apos;s the last Google login connected; otherwise remove it at Google yourself as described next.</li>
           <li>
             <strong>Remove the app&apos;s access from the ad platform yourself:</strong>
             {" "}Google at <a className="underline" href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">myaccount.google.com/permissions</a>,
