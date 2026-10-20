@@ -1,7 +1,7 @@
 import "server-only";
 import type { Platform, Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { addInto, emptyTotals, type MetricTotals } from "@/lib/metrics";
+import { addInto, emptyTotals, reportsLeads, type MetricTotals } from "@/lib/metrics";
 import { dateToIso, eachDay, isoToDate, type IsoDate } from "@/lib/pacing/dates";
 import type { DateRange } from "@/lib/date-ranges";
 
@@ -56,6 +56,7 @@ export async function getAgencyPerformance(where: Prisma.ClientWhereInput, range
       conversionValueMinor: Number(s._sum.conversionValueMinor ?? 0),
       leads: Number(s._sum.leads ?? 0),
       hasEstimatedCost: !a.spendIsVerified,
+      leadsReported: reportsLeads(a.platform),
     };
     addInto(totals, m);
     addInto(byDate.get(dateToIso(s.date))!, m);

@@ -304,7 +304,7 @@ export async function renderClientReportPdf(
           lsa || x?.cpcMinor == null ? (lsa ? "n/a" : "—") : formatMoney(x.cpcMinor, c),
           m ? formatNumber(m.conversions, 1) : "—",
           x?.costPerConversionMinor == null ? "—" : formatMoney(x.costPerConversionMinor, c),
-          m?.leads ? formatNumber(m.leads) : "—",
+          m && (m.leads || m.leadsReported) ? formatNumber(m.leads) : "—",
           x?.roas == null || lsa ? "—" : `${x.roas.toFixed(2)}x`,
         ];
       }),

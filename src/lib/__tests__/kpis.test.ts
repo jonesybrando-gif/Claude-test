@@ -5,6 +5,16 @@ import { addInto, emptyTotals, type MetricTotals } from "../metrics";
 const t = (o: Partial<MetricTotals>): MetricTotals => ({ ...emptyTotals(), ...o });
 
 describe("KPI catalog", () => {
+  it("shows 0 leads when a lead-reporting platform had none, and — when no platform reports leads", () => {
+    const [none] = kpiValues(["leads"], t({ costMinor: 5000, clicks: 20 }), null);
+    expect(none.value).toBeNull();
+    const meta = addInto(emptyTotals(), { costMinor: 5000, impressions: 900, clicks: 20, conversions: 0, conversionValueMinor: 0, leads: 0, leadsReported: true });
+    const [zero, cpl] = kpiValues(["leads", "costPerLead"], meta, null);
+    expect(zero.value).toBe(0);
+    expect(cpl.value).toBeNull();
+    expect(addInto(meta, { costMinor: 100, impressions: 0, clicks: 0, conversions: 0, conversionValueMinor: 0, leads: 0 }).leadsReported).toBe(true);
+  });
+
   it("blends platforms as true ratios, not averages", () => {
     // Google: $100, 100 clicks (CPC $1). Meta: $100, 400 clicks (CPC $0.25). Blended CPC = $200/500 = $0.40.
     const blended = addInto(addInto(emptyTotals(), { costMinor: 10000, impressions: 2000, clicks: 100, conversions: 5, conversionValueMinor: 0, leads: 0 }), {

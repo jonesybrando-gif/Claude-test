@@ -1,6 +1,11 @@
 // Metric aggregation. Ratios are always recomputed from summed components,
 // never averaged, so totals reconcile with the underlying daily rows.
 
+import type { Platform } from "@prisma/client";
+
+/** Platforms whose APIs report leads, so a zero from them is a real zero. */
+export const reportsLeads = (p: Platform): boolean => p === "META_ADS" || p === "GOOGLE_LSA";
+
 export interface MetricTotals {
   costMinor: number;
   impressions: number;
@@ -9,6 +14,8 @@ export interface MetricTotals {
   conversionValueMinor: number;
   leads: number;
   hasEstimatedCost: boolean;
+  /** A platform that reports leads (Meta, LSA) contributed, so 0 leads means none, not unknown. */
+  leadsReported?: boolean;
 }
 
 export const emptyTotals = (): MetricTotals => ({
@@ -19,6 +26,7 @@ export const emptyTotals = (): MetricTotals => ({
   conversionValueMinor: 0,
   leads: 0,
   hasEstimatedCost: false,
+  leadsReported: false,
 });
 
 export function addInto(t: MetricTotals, r: Omit<MetricTotals, "hasEstimatedCost"> & { hasEstimatedCost?: boolean }): MetricTotals {
@@ -29,6 +37,7 @@ export function addInto(t: MetricTotals, r: Omit<MetricTotals, "hasEstimatedCost
   t.conversionValueMinor += r.conversionValueMinor;
   t.leads += r.leads;
   t.hasEstimatedCost ||= !!r.hasEstimatedCost;
+  t.leadsReported ||= !!r.leadsReported;
   return t;
 }
 

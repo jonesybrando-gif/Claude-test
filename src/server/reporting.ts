@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "./db";
 import { dateToIso, eachDay, isoToDate, type IsoDate } from "@/lib/pacing/dates";
-import { addInto, emptyTotals, type MetricTotals } from "@/lib/metrics";
+import { addInto, emptyTotals, reportsLeads, type MetricTotals } from "@/lib/metrics";
 import type { DateRange } from "@/lib/date-ranges";
 
 export interface DailyMetrics extends MetricTotals {
@@ -34,6 +34,7 @@ export async function getClientPerformance(clientId: string, range: DateRange): 
       conversions: true,
       conversionValueMinor: true,
       leads: true,
+      account: { select: { platform: true } },
     },
   });
   const byDateMap = new Map<IsoDate, MetricTotals>(eachDay(range.from, range.to).map((d) => [d, emptyTotals()]));
@@ -49,6 +50,7 @@ export async function getClientPerformance(clientId: string, range: DateRange): 
       conversionValueMinor: Number(r.conversionValueMinor),
       leads: r.leads === null ? 0 : Number(r.leads),
       hasEstimatedCost: r.costIsEstimated,
+      leadsReported: reportsLeads(r.account.platform),
     };
     addInto(totals, m);
     addInto(byDateMap.get(dateToIso(r.date))!, m);
