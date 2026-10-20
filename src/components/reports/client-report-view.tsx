@@ -234,7 +234,7 @@ export function ClientReportView({
                   <TD className="text-right">{lsa || x?.cpcMinor == null ? (lsa ? "n/a" : "—") : formatMoney(x.cpcMinor, c)}</TD>
                   <TD className="text-right">{m ? formatNumber(m.conversions, 1) : "—"}</TD>
                   <TD className="text-right">{x?.costPerConversionMinor == null ? "—" : formatMoney(x.costPerConversionMinor, c)}</TD>
-                  <TD className="text-right">{m?.leads ? formatNumber(m.leads) : "—"}</TD>
+                  <TD className="text-right">{m && (m.leads || m.leadsReported) ? formatNumber(m.leads) : "—"}</TD>
                   <TD className="text-right">{x?.roas == null || lsa ? "—" : `${x.roas.toFixed(2)}×`}</TD>
                   <TD className="pr-5 text-xs">
                     <div className="flex flex-col items-start gap-1">

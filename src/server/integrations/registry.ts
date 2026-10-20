@@ -55,12 +55,14 @@ export function integrationStatus(): IntegrationInfo[] {
   const ga = missingGoogleAdsEnv();
   const meta = missingMetaEnv();
   const ms = missingMicrosoftEnv();
-  const state = (missing: string[]): IntegrationState => (missing.length ? "awaiting_credentials" : "built_unverified");
+  // "verified" once checked against a live account's numbers in the platform's own UI.
+  const state = (missing: string[], liveTested = false): IntegrationState =>
+    missing.length ? "awaiting_credentials" : liveTested ? "verified" : "built_unverified";
   return [
     {
       platform: "GOOGLE_ADS",
       slug: "google-ads",
-      state: state(ga),
+      state: state(ga, true),
       missingEnv: ga,
       api: "Google Ads API (official REST interface, OAuth 2.0)",
       requirements: [
@@ -78,7 +80,7 @@ export function integrationStatus(): IntegrationInfo[] {
     {
       platform: "META_ADS",
       slug: "meta-ads",
-      state: state(meta),
+      state: state(meta, true),
       missingEnv: meta,
       supportsTokenConnect: true,
       api: "Meta Graph / Marketing API v26.0 (official, Facebook Login)",

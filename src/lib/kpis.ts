@@ -45,7 +45,7 @@ export const KPIS: KpiDef[] = [
   { key: "costPerConversion", label: "Cost per conversion", short: "CPA", kind: "money", better: "down", description: "Spend ÷ conversions.", value: (t) => derive(t).costPerConversionMinor },
   { key: "conversionValue", label: "Conversion value", short: "Value", kind: "money", better: "up", description: "Platform-reported revenue from conversions.", value: (t) => (t.conversionValueMinor > 0 ? t.conversionValueMinor : null) },
   { key: "roas", label: "Return on ad spend", short: "ROAS", kind: "ratio", better: "up", description: "Conversion value ÷ spend.", value: (t) => derive(t).roas },
-  { key: "leads", label: "Leads", short: "Leads", kind: "count", better: "up", description: "Leads reported by Meta and Local Services. Shown as — when no platform reported leads.", value: (t) => (t.leads > 0 ? t.leads : null) },
+  { key: "leads", label: "Leads", short: "Leads", kind: "count", better: "up", description: "Leads reported by Meta and Local Services. Shown as — when no connected platform reports leads.", value: (t) => (t.leads > 0 ? t.leads : t.leadsReported ? 0 : null) },
   { key: "costPerLead", label: "Cost per lead", short: "CPL", kind: "money", better: "down", description: "Spend ÷ leads.", value: (t) => derive(t).costPerLeadMinor },
 ];
 
