@@ -54,7 +54,8 @@ const ACCOUNT_KPIS: KpiKey[] = ["spend", "impressions", "clicks", "ctr", "cpc", 
 const CAMPAIGN_KPIS: KpiKey[] = ["spend", "clicks", "ctr", "conversions", "conversionRate", "costPerConversion", "leads", "costPerLead"];
 const MAX_CAMPAIGNS = 25;
 
-const pct = (p: number) => (Math.abs(p) < 0.05 ? "no change" : `${p > 0 ? "+" : ""}${p.toFixed(1)}%`);
+// Big increases read better as multiples ("3.2×") than as percentages ("+220%").
+const pct = (p: number) => (Math.abs(p) < 0.05 ? "no change" : p >= 100 ? `${((100 + p) / 100).toFixed(1)}×` : `${p > 0 ? "+" : ""}${p.toFixed(1)}%`);
 
 function kpiLine(keys: KpiKey[], cur: MetricTotals, prev: MetricTotals | null, currency: string): string {
   return kpiValues(keys, cur, prev)
@@ -102,7 +103,9 @@ export function buildAiContext(i: AiContextInput): string {
   for (const cmp of campaigns.slice(0, MAX_CAMPAIGNS)) {
     const share = i.totals.costMinor > 0 ? `; share of spend: ${formatPct((cmp.totals.costMinor / i.totals.costMinor) * 100, 0)}` : "";
     const cpa = derive(cmp.totals).costPerConversionMinor;
-    const vsAvg = cpa !== null && avgCpa ? `; cost per conversion vs report average: ${formatPct(Math.abs(cpa / avgCpa - 1) * 100, 0)} ${cpa <= avgCpa ? "lower" : "higher"}` : "";
+    const ratio = cpa !== null && avgCpa ? cpa / avgCpa : null;
+    const vsAvg =
+      ratio === null ? "" : ratio >= 2 ? `; cost per conversion vs report average: ${ratio.toFixed(1)}× the average` : `; cost per conversion vs report average: ${formatPct(Math.abs(ratio - 1) * 100, 0)} ${ratio <= 1 ? "lower" : "higher"}`;
     const b = cmp.budget;
     const own = b ? `; own budget this month: ${STATUS_LABEL[b.status].toLowerCase()}, spending ${m(b.currentDailyRateMinor)} a day${b.requiredDailyMinor === null ? "" : ` against ${m(b.requiredDailyMinor)} a day needed to land on budget`}` : "";
     lines.push(`- ${cmp.name} (${cmp.platform}, ${cmp.status.toLowerCase()}): ${kpiLine(CAMPAIGN_KPIS, cmp.totals, cmp.previous, c)}${share}${vsAvg}${own}`);
