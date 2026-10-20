@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/server/auth";
 import { getAdapter, platformForSlug } from "@/server/integrations/registry";
-import { createOAuthState, OAUTH_NONCE_COOKIE, redirectUri } from "@/server/integrations/oauth-state";
+import { createOAuthState, OAUTH_NONCE_COOKIE, publicUrl, redirectUri } from "@/server/integrations/oauth-state";
 import { prisma } from "@/server/db";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   const user = await getCurrentUser();
   if (!user || user.role !== "AGENCY_ADMIN") return NextResponse.json({ error: "Only agency administrators can connect platforms" }, { status: 403 });
   const adapter = getAdapter(platform);
-  if (!adapter.isConfigured()) return NextResponse.redirect(new URL(`/integrations?error=${encodeURIComponent(`${slug}_not_configured`)}`, req.url));
+  if (!adapter.isConfigured()) return NextResponse.redirect(publicUrl(`/integrations?error=${encodeURIComponent(`${slug}_not_configured`)}`, req.url));
 
   // ?client=<id>: started from a client record, so return there to pick that client's account.
   const clientId = req.nextUrl.searchParams.get("client");

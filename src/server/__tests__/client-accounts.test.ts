@@ -78,3 +78,15 @@ describe.skipIf(!hasDb)("per-client ad accounts (database)", () => {
     expect((await verifyOAuthState(plain.state, plain.nonce, "u1", "GOOGLE_ADS")).clientId).toBeNull();
   });
 });
+
+describe("public URLs behind a proxy", () => {
+  it("uses APP_URL rather than the internal request address", async () => {
+    const { publicUrl } = await import("../integrations/oauth-state");
+    const saved = process.env.APP_URL;
+    process.env.APP_URL = "https://app.marketingnexus.us";
+    expect(publicUrl("/integrations/google-ads/abc", "http://localhost:8080/api/integrations/google-ads/callback?code=x").toString()).toBe("https://app.marketingnexus.us/integrations/google-ads/abc");
+    delete process.env.APP_URL;
+    expect(publicUrl("/login", "http://localhost:3000/x").toString()).toBe("http://localhost:3000/login");
+    if (saved !== undefined) process.env.APP_URL = saved;
+  });
+});

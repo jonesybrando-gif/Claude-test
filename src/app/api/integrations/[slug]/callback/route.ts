@@ -2,13 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { getAdapter, platformForSlug } from "@/server/integrations/registry";
-import { OAUTH_NONCE_COOKIE, redirectUri, verifyOAuthState } from "@/server/integrations/oauth-state";
+import { OAUTH_NONCE_COOKIE, publicUrl, redirectUri, verifyOAuthState } from "@/server/integrations/oauth-state";
 import { storeTokens } from "@/server/integrations/tokens";
 import { IntegrationError } from "@/server/integrations/errors";
 import { PLATFORM_LABEL } from "@/lib/platforms";
 
 function back(req: NextRequest, error: string) {
-  const res = NextResponse.redirect(new URL(`/integrations?error=${encodeURIComponent(error)}`, req.url));
+  const res = NextResponse.redirect(publicUrl(`/integrations?error=${encodeURIComponent(error)}`, req.url));
   res.cookies.delete({ name: OAUTH_NONCE_COOKIE, path: "/api/integrations" });
   return res;
 }
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   const platform = platformForSlug(slug);
   if (!platform) return NextResponse.json({ error: "Unknown platform" }, { status: 404 });
   const user = await getCurrentUser();
-  if (!user || user.role !== "AGENCY_ADMIN") return NextResponse.redirect(new URL("/login", req.url));
+  if (!user || user.role !== "AGENCY_ADMIN") return NextResponse.redirect(publicUrl("/login", req.url));
   const label = PLATFORM_LABEL[platform];
   const q = req.nextUrl.searchParams;
   const providerError = q.get("error");
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     });
     await storeTokens(connection.id, tokens);
     const next = client ? `/clients/${client.id}/accounts/${slug}?connection=${connection.id}` : `/integrations/${slug}/${connection.id}`;
-    const res = NextResponse.redirect(new URL(next, req.url));
+    const res = NextResponse.redirect(publicUrl(next, req.url));
     res.cookies.delete({ name: OAUTH_NONCE_COOKIE, path: "/api/integrations" });
     return res;
   } catch (e) {
