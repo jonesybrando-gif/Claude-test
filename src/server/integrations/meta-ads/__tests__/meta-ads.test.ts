@@ -167,3 +167,27 @@ describe("Meta adapter (mocked HTTP)", () => {
     expect(createMetaAdsAdapter({ config }).refresh).toBeUndefined();
   });
 });
+
+describe("Meta ad detail for the AI assistant", () => {
+  it("reads each ad's creative separately (no multi-id lookup) and keeps going when one fails", async () => {
+    const urls: URL[] = [];
+    const fetchFn = async (u: string) => {
+      const url = new URL(u);
+      urls.push(url);
+      const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+      if (url.pathname.endsWith("/insights")) {
+        return json(200, { data: [
+          { ad_id: "1", ad_name: "Ad 1", campaign_name: "Leads", spend: "50.00", impressions: "100", clicks: "5", actions: [{ action_type: "lead", value: "2" }] },
+          { ad_id: "2", ad_name: "Ad 2", campaign_name: "Leads", spend: "10.00", impressions: "50", clicks: "1" },
+        ] });
+      }
+      if (url.pathname.endsWith("/1")) return json(200, { id: "1", creative: { title: "Book a cleaning" } });
+      return json(400, { error: { message: "Unsupported get request", type: "GraphMethodException", code: 100 } });
+    };
+    const adapter = createMetaAdsAdapter({ config, fetch: fetchFn });
+    const ads = await adapter.fetchDetail!("token", { externalId: "555", loginCustomerId: null, timezone: "UTC" }, "ads", "2026-09-01", "2026-09-30");
+    expect(ads.map((a) => [a.label, a.attributes?.headline])).toEqual([["Ad 1", "Book a cleaning"], ["Ad 2", undefined]]);
+    expect(urls.some((u) => u.searchParams.has("ids"))).toBe(false);
+    expect(urls.filter((u) => u.searchParams.get("fields")?.startsWith("creative")).map((u) => u.pathname.split("/").pop()).sort()).toEqual(["1", "2"]);
+  });
+});
