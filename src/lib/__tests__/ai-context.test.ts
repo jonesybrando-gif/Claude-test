@@ -57,6 +57,21 @@ describe("AI grounding context", () => {
     expect(text).toContain("conversion value is exactly 1 per conversion");
   });
 
+  it("writes large differences as multiples", () => {
+    const text = buildAiContext({
+      ...base,
+      totals: t({ costMinor: 100000, clicks: 400, conversions: 100 }),
+      previous: t({ costMinor: 100000, clicks: 100, conversions: 100 }),
+      campaigns: [
+        { name: "Cheap", platform: "Google Ads", status: "ENABLED", totals: t({ costMinor: 10000, conversions: 50 }), previous: null },
+        { name: "Costly", platform: "Google Ads", status: "ENABLED", totals: t({ costMinor: 90000, conversions: 2 }), previous: null },
+      ],
+    });
+    expect(text).toContain("- Clicks: 400; comparison 100; change 4.0× (favourable)");
+    expect(text).toContain("cost per conversion vs report average: 45.0× the average");
+    expect(text).toContain("cost per conversion vs report average: 80% lower");
+  });
+
   it("lists campaigns by spend, capped at 25, and describes pacing", () => {
     const campaigns = Array.from({ length: 30 }, (_, i) => ({ name: `C${i}`, platform: "Meta", status: "ENABLED", totals: t({ costMinor: (i + 1) * 1000 }), previous: null }));
     const text = buildAiContext({
