@@ -46,6 +46,7 @@ model Agency {
 
   users             User[]
   clients           Client[]
+  clientLabels      ClientLabel[]
   platformConnections PlatformConnection[]
   alerts            Alert[]
   reports           Report[]
@@ -172,8 +173,23 @@ model Client {
   assignments ClientAssignment[]
   alerts      Alert[]
   reports     Report[]
+  labels      ClientLabel[]
 
   @@index([agencyId])
+}
+
+// Agency-defined tags for grouping, sorting and filtering clients.
+model ClientLabel {
+  id        String   @id @default(cuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name      String
+  // One of the badge tones: neutral, info, good, warning, serious, critical.
+  color     String   @default("neutral")
+  createdAt DateTime @default(now())
+  clients   Client[]
+
+  @@unique([agencyId, name])
 }
 
 enum Platform {

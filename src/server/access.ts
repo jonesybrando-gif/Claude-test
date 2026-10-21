@@ -19,8 +19,9 @@ export function visibleClientsWhere(user: SessionUser): Prisma.ClientWhereInput 
 }
 
 async function loadClientFacts(clientId: string) {
-  const c = await prisma.client.findUnique({
-    where: { id: clientId },
+  // Removed (archived) clients are hidden everywhere until restored.
+  const c = await prisma.client.findFirst({
+    where: { id: clientId, archivedAt: null },
     select: { id: true, agencyId: true, primaryManagerId: true, assignments: { select: { userId: true } } },
   });
   return c && { id: c.id, agencyId: c.agencyId, primaryManagerId: c.primaryManagerId, assignedUserIds: c.assignments.map((a) => a.userId) };

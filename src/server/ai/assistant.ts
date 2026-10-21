@@ -2,6 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod/v4";
+import type { BetaRunnableTool } from "@anthropic-ai/sdk/lib/tools/BetaRunnableTool";
 
 // The AI assistant drafts text from report data. It never acts on ad
 // platforms; everything it writes is shown to a person to review first.
@@ -34,6 +35,18 @@ Rules:
 - Nobody has changed anything in the ad platforms. Never claim that a change was made; recommend changes for a person to make.
 - Write plain text without Markdown headings, tables or bold.`;
 
+/** Maps SDK errors to messages that are safe to show in the UI. */
+function toAiError(e: unknown): unknown {
+  if (e instanceof Anthropic.AuthenticationError) return new AiError("The Anthropic API key was rejected. Check ANTHROPIC_API_KEY.");
+  if (e instanceof Anthropic.PermissionDeniedError) return new AiError("The Anthropic API key doesn't have access to this model.");
+  if (e instanceof Anthropic.RateLimitError) return new AiError("The AI service is busy or the usage limit was reached. Try again in a minute.");
+  if (e instanceof Anthropic.APIConnectionError) return new AiError("Couldn't reach the AI service. Check the server's network access.");
+  if (e instanceof Anthropic.APIError) return new AiError(`The AI service returned an error (${e.status ?? "unknown"}). Try again.`);
+  // The SDK throws while parsing when the JSON is incomplete (e.g. the reply hit max_tokens).
+  if (e instanceof Anthropic.AnthropicError) return new AiError("The AI response was cut off or couldn't be read. Try again.");
+  return e;
+}
+
 async function generate<T extends z.ZodType>(schema: T, task: string, data: string, effort: "low" | "medium" | "high" = "medium"): Promise<z.infer<T>> {
   if (!aiConfigured() && !client) throw new AiError("The AI assistant isn't set up. Add ANTHROPIC_API_KEY to the server environment.");
   let res;
@@ -48,14 +61,7 @@ async function generate<T extends z.ZodType>(schema: T, task: string, data: stri
       messages: [{ role: "user", content: `<DATA>\n${data}\n</DATA>\n\n${task}` }],
     });
   } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError) throw new AiError("The Anthropic API key was rejected. Check ANTHROPIC_API_KEY.");
-    if (e instanceof Anthropic.PermissionDeniedError) throw new AiError("The Anthropic API key doesn't have access to this model.");
-    if (e instanceof Anthropic.RateLimitError) throw new AiError("The AI service is busy or the usage limit was reached. Try again in a minute.");
-    if (e instanceof Anthropic.APIConnectionError) throw new AiError("Couldn't reach the AI service. Check the server's network access.");
-    if (e instanceof Anthropic.APIError) throw new AiError(`The AI service returned an error (${e.status ?? "unknown"}). Try again.`);
-    // The SDK throws while parsing when the JSON is incomplete (e.g. the reply hit max_tokens).
-    if (e instanceof Anthropic.AnthropicError) throw new AiError("The AI response was cut off or couldn't be read. Try again.");
-    throw e;
+    throw toAiError(e);
   }
   if (res.stop_reason === "refusal") throw new AiError("The AI declined this request. Try rewording your notes.");
   if (res.stop_reason === "max_tokens") throw new AiError("The AI response was cut off. Try again with shorter notes.");
@@ -159,4 +165,63 @@ Keep it under 200 words, warm and professional, with short paragraphs and at mos
     data,
   );
   return { subject: out.subject.trim().slice(0, 200), body: out.body.trim() };
+}
+
+// --- Questions --------------------------------------------------------------
+
+export interface QaTurn {
+  question: string;
+  answer: string;
+}
+
+/**
+ * Answers a specific question about one client's advertising. Claude gets the
+ * report data up front and can call `tools` (read-only lookups such as ads,
+ * headlines, keywords and search terms) when the question needs more detail.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- tools of any input shape
+export async function answerQuestion(data: string, question: string, history: QaTurn[], tools: BetaRunnableTool<any>[], opts: { periodLabel: string }): Promise<string> {
+  if (!aiConfigured() && !client) throw new AiError("The AI assistant isn't set up. Add ANTHROPIC_API_KEY to the server environment.");
+  const messages: Anthropic.Beta.BetaMessageParam[] = [];
+  // Earlier questions in this session, so follow-ups ("and for Meta?") make sense.
+  for (const t of history.slice(-4)) {
+    messages.push({ role: "user", content: t.question }, { role: "assistant", content: t.answer });
+  }
+  messages.push({ role: "user", content: question });
+  let final;
+  try {
+    final = await getClient().beta.messages.toolRunner({
+      model: AI_MODEL,
+      max_tokens: 16000,
+      max_iterations: 8,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      system: [
+        { type: "text", text: BASE_RULES },
+        {
+          type: "text",
+          text: `You answer an account manager's specific questions about one client's advertising for ${opts.periodLabel}.
+The report data is below. When a question needs detail below campaign level (ads, headlines and descriptions, keywords, search terms), call get_detail; it reads live, read-only data from the ad platforms for the same dates. Call it only for the kinds you need.
+Answer the question directly first, then give the supporting figures, then 1 to 4 specific, actionable recommendations when they follow from the data (for example which headlines to keep, test or replace, which keywords to pause or bid up, which search terms to add as negatives or as keywords).
+Rank "top performing" by results (conversions or leads) and cost per result, not by clicks alone, and say what you ranked by. Flag small samples (few impressions or clicks) instead of drawing conclusions from them.
+Keep it under 300 words unless the question asks for a full list. Use short paragraphs and simple "- " bullet lists; no tables, headings or bold.
+
+<DATA>
+${data}
+</DATA>`,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      output_config: { effort: "medium" },
+      tools,
+      messages,
+    });
+  } catch (e) {
+    throw toAiError(e);
+  }
+  if (final.stop_reason === "refusal") throw new AiError("The AI declined this question. Try rewording it.");
+  if (final.stop_reason === "max_tokens") throw new AiError("The answer was cut off. Try a narrower question.");
+  const text = final.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim();
+  if (!text) throw new AiError("The AI didn't produce an answer. Try rewording the question.");
+  return text;
 }

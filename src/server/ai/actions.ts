@@ -6,7 +6,9 @@ import { requireClientEdit } from "../access";
 import { loadClientReport } from "../client-report";
 import { sendEmail, type SendResult } from "../email";
 import { contextForReport } from "./context";
-import { AI_MODEL, AiError, draftClientEmail, draftReportSummary, EMAIL_PURPOSES, generateSuggestions, type EmailDraft, type EmailPurpose } from "./assistant";
+import { AI_MODEL, AiError, answerQuestion, draftClientEmail, draftReportSummary, EMAIL_PURPOSES, generateSuggestions, type EmailDraft, type EmailPurpose, type QaTurn } from "./assistant";
+import { questionTools } from "./questions";
+import { PRESET_LABEL } from "@/lib/date-ranges";
 
 const fail = (e: unknown) => {
   if (e instanceof AiError) return { error: e.message };
@@ -87,4 +89,25 @@ export async function sendClientEmailAction(clientId: string, _prev: SendState, 
   if (results.every((r) => r.status === "NOT_CONFIGURED")) return { error: "Email sending isn't configured (SMTP_URL, EMAIL_FROM). The message was saved to the Email log but not sent." };
   const failed = to.filter((_, i) => results[i].status !== "SENT");
   return { error: `Couldn't send to ${failed.join(", ")}. See Settings → Email log.` };
+}
+
+export type AskResult = { answer?: string; error?: string };
+
+/** Answers one question about a client, using the page's date range. */
+export async function askQuestionAction(clientId: string, query: Record<string, string | undefined>, question: string, history: QaTurn[]): Promise<AskResult> {
+  await requireClientEdit(clientId);
+  const q = question.trim();
+  if (!q) return { error: "Type a question first." };
+  if (q.length > 500) return { error: "Keep questions under 500 characters." };
+  const turns = (Array.isArray(history) ? history : [])
+    .slice(-4)
+    .filter((t) => typeof t?.question === "string" && typeof t?.answer === "string")
+    .map((t) => ({ question: t.question.slice(0, 500), answer: t.answer.slice(0, 4000) }));
+  try {
+    const rep = await loadClientReport(clientId, { range: query.range, compare: query.compare, from: query.from, to: query.to });
+    const periodLabel = `${PRESET_LABEL[rep.preset].toLowerCase()} (${rep.range.from} to ${rep.range.to})`;
+    return { answer: await answerQuestion(contextForReport(rep), q, turns, questionTools(rep), { periodLabel }) };
+  } catch (e) {
+    return fail(e);
+  }
 }

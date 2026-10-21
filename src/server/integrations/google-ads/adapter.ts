@@ -1,10 +1,11 @@
 import { addDays, todayInTimeZone } from "@/lib/pacing/dates";
 import { IntegrationError } from "../errors";
-import type { AccountRef, OAuthTokens, PlatformAdapter, RemoteAccount } from "../types";
+import type { AccountRef, DetailKind, OAuthTokens, PlatformAdapter, RemoteAccount } from "../types";
 import { GoogleAdsClient, type FetchLike } from "./client";
 import { googleAdsConfig, type GoogleAdsConfig } from "./config";
 import { campaignsQuery, countLocalServicesLeads, CUSTOMER_CLIENT_QUERY, dailyPerformanceQuery, flattenStream, localServicesLeadsQuery, parseCampaigns, parseCustomerClients, parseDailyPerformance, type CampaignRow, type CustomerClientRow, type LocalServicesLeadRow, type PerformanceRow } from "./gaql";
 import type { RemoteDailyRow } from "../types";
+import { detailQuery, parseDetailRows, type DetailApiRow } from "./details";
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -166,6 +167,26 @@ export function createGoogleAdsAdapter(opts: { config?: GoogleAdsConfig | null; 
       const spendVerified = cost > 0 ? true : charged > 0 ? false : undefined;
       return { rows, campaigns: perf.campaigns, spendVerified };
     },
+
+    // Local Services has no ads, keywords or search terms to drill into.
+    ...(opts.localServices
+      ? {}
+      : {
+          detailKinds: ["ads", "headlines", "keywords", "search_terms"] as DetailKind[],
+          async fetchDetail(accessToken: string, account: AccountRef, kind: DetailKind, from: string, to: string) {
+            const c = client(accessToken);
+            const run = (q: string) => c.searchStream<DetailApiRow>(account.externalId, q, account.loginCustomerId).then(flattenStream);
+            let rows: DetailApiRow[];
+            try {
+              rows = await run(detailQuery(kind, from, to));
+            } catch (e) {
+              // Some API versions reject the asset performance label; retry without it.
+              if (kind !== "headlines" || !(e instanceof IntegrationError) || e.kind !== "INVALID_REQUEST") throw e;
+              rows = await run(detailQuery(kind, from, to, false));
+            }
+            return parseDetailRows(kind, rows);
+          },
+        }),
 
     dataCompleteThrough(accountTimezone, now) {
       const today = todayInTimeZone(accountTimezone, now);

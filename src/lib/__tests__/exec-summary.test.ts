@@ -50,3 +50,21 @@ describe("automatic executive summary", () => {
     expect(autoExecutiveSummary({ ...base, totals: emptyTotals(), isDemo: true })).toBe("These figures are illustrative demo data. No advertising activity was recorded for ABC Plumbing from Sep 17 – Oct 16, 2026.");
   });
 });
+
+describe("email-ready summary", () => {
+  const s = { overview: "Para one.\n\nPara <two> & more.", working: ["Search did well."], notWorking: [], recommendations: ["Move budget.", "Fix tracking."] };
+
+  it("formats plain text with headings, bullets and numbers, skipping empty sections", async () => {
+    const { summaryAsText } = await import("../exec-summary");
+    expect(summaryAsText(s, "ABC: summary")).toBe("ABC: summary\n\nPara one.\n\nPara <two> & more.\n\nWhat's working\n• Search did well.\n\nRecommendations\n1. Move budget.\n2. Fix tracking.");
+  });
+
+  it("formats escaped, inline-styled HTML for email clients", async () => {
+    const { summaryAsHtml } = await import("../exec-summary");
+    const html = summaryAsHtml(s, "ABC: summary");
+    expect(html).toContain("Para &lt;two&gt; &amp; more.");
+    expect(html).toContain("<ol ");
+    expect(html).not.toContain("What needs attention");
+    expect(html).toMatch(/style="[^"]*font-family:Arial/);
+  });
+});

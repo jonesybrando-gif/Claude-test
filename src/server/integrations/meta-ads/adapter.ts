@@ -9,6 +9,7 @@ import { createHmac } from "node:crypto";
 import { assertIsoDate } from "@/lib/pacing/dates";
 import { IntegrationError, type IntegrationErrorKind } from "../errors";
 import { completeThrough, decimalToMinor, readJson } from "../common";
+import { headlinesFromAds, parseAdInsights, type AdCreative, type AdInsightRow } from "./details";
 import type { DailyPerformanceResult, OAuthTokens, PlatformAdapter, RemoteAccount, RemoteCampaign, RemoteDailyRow } from "../types";
 import { metaAdsConfig, type MetaAdsConfig } from "./config";
 
@@ -327,6 +328,31 @@ export function createMetaAdsAdapter(opts: { config?: MetaAdsConfig | null; fetc
         limit: "500",
       });
       return parseInsights(rows);
+    },
+
+    detailKinds: ["ads", "headlines"],
+    async fetchDetail(token, account, kind, from, to) {
+      if (kind !== "ads" && kind !== "headlines") return [];
+      assertIsoDate(from);
+      assertIsoDate(to);
+      const rows = (
+        await getAll<AdInsightRow>(`act_${account.externalId}/insights`, token, {
+          level: "ad",
+          time_range: JSON.stringify({ since: from, until: to }),
+          fields: "ad_id,ad_name,adset_name,campaign_name,spend,impressions,clicks,actions,action_values",
+          limit: "500",
+        })
+      )
+        .sort((a, b) => Number(b.spend ?? 0) - Number(a.spend ?? 0))
+        .slice(0, 200);
+      // Creative text (headline, primary text) for those ads, 50 ids per request.
+      const creatives: Record<string, AdCreative> = {};
+      const ids = rows.map((r) => r.ad_id).filter((x): x is string => !!x);
+      for (let i = 0; i < ids.length; i += 50) {
+        Object.assign(creatives, await get<Record<string, AdCreative>>("", token, { ids: ids.slice(i, i + 50).join(","), fields: "creative{title,body,object_story_spec}" }));
+      }
+      const ads = parseAdInsights(rows, creatives);
+      return kind === "ads" ? ads : headlinesFromAds(ads);
     },
 
     dataCompleteThrough: (tz, now) => completeThrough(tz, now, 3),
