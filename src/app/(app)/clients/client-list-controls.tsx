@@ -71,3 +71,66 @@ export function LabelPicker({ action, labels, selected }: { action: (form: FormD
     </details>
   );
 }
+
+const BULK_FORM = "bulk-labels";
+const boxes = (root: ParentNode = document) => [...root.querySelectorAll<HTMLInputElement>(`input[form="${BULK_FORM}"][name="client"]`)];
+
+/** Row checkbox for bulk labelling; belongs to the bulk form wherever it sits in the table. */
+export function SelectClientBox({ id, name }: { id: string; name: string }) {
+  return <input type="checkbox" name="client" value={id} form={BULK_FORM} aria-label={`Select ${name}`} className="h-4 w-4 accent-[var(--brand)]" />;
+}
+
+/** Header checkbox: selects or clears every client row in its table. */
+export function SelectAllBox() {
+  return (
+    <input
+      type="checkbox"
+      aria-label="Select all clients in this list"
+      className="h-4 w-4 accent-[var(--brand)]"
+      onChange={(e) => {
+        const table = e.currentTarget.closest("table");
+        if (!table) return;
+        for (const b of boxes(table)) b.checked = e.currentTarget.checked;
+        document.dispatchEvent(new Event("bulk-selection"));
+      }}
+    />
+  );
+}
+
+/** Add or remove one label on all selected clients. */
+export function BulkLabelBar({ labels, action, returnQuery }: { labels: LabelInfo[]; action: (form: FormData) => Promise<void>; returnQuery: string }) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    // A client listed under several label groups counts once.
+    const update = () => setCount(new Set(boxes().filter((b) => b.checked).map((b) => b.value)).size);
+    const onChange = (e: Event) => {
+      if ((e.target as HTMLInputElement | null)?.getAttribute?.("form") === BULK_FORM) update();
+    };
+    document.addEventListener("change", onChange);
+    document.addEventListener("bulk-selection", update);
+    update();
+    return () => {
+      document.removeEventListener("change", onChange);
+      document.removeEventListener("bulk-selection", update);
+    };
+  }, []);
+  if (!labels.length) return null;
+  const clear = () => {
+    for (const b of boxes()) b.checked = false;
+    for (const b of document.querySelectorAll<HTMLInputElement>('input[aria-label="Select all clients in this list"]')) b.checked = false;
+    setCount(0);
+  };
+  return (
+    <form id={BULK_FORM} action={action} className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm ${count ? "border-brand bg-surface" : "border-border bg-surface-2"}`}>
+      <input type="hidden" name="return" value={returnQuery} />
+      <span className="font-medium">{count ? `${count} selected` : "Select clients to label them in bulk"}</span>
+      <Select name="label" required defaultValue="" className="w-full sm:w-48" aria-label="Label to add or remove" disabled={!count}>
+        <option value="" disabled>Choose a label…</option>
+        {labels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+      </Select>
+      <Button type="submit" name="mode" value="add" size="sm" disabled={!count}>Add label</Button>
+      <Button type="submit" name="mode" value="remove" size="sm" variant="outline" disabled={!count}>Remove label</Button>
+      {count > 0 && <Button type="button" size="sm" variant="ghost" onClick={clear}>Clear selection</Button>}
+    </form>
+  );
+}

@@ -12,8 +12,8 @@ import { PlatformLabel } from "@/components/platform-badge";
 import { LabelBadge, type LabelInfo } from "@/components/label-badge";
 import { ActionButton } from "@/components/action-button";
 import { NewClientForm } from "./new-client-form";
-import { ClientFilters, LabelPicker } from "./client-list-controls";
-import { createLabelAction, deleteClientAction, deleteLabelAction, removeClientAction, restoreClientAction, setClientLabelsAction } from "./actions";
+import { BulkLabelBar, ClientFilters, LabelPicker, SelectAllBox, SelectClientBox } from "./client-list-controls";
+import { bulkLabelAction, createLabelAction, deleteClientAction, deleteLabelAction, removeClientAction, restoreClientAction, setClientLabelsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -54,11 +54,16 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       : [];
   if (groups.length === 0) groups.push({ key: "all", label: null, rows: clients });
 
+  // Bulk labelling: a checkbox per row and a bar above the list (admins, once labels exist).
+  const bulk = admin && !removedView && labels.length > 0;
+  const returnQuery = new URLSearchParams(Object.entries({ q: sp.q, label: sp.label, sort: sp.sort, group: sp.group }).filter((e): e is [string, string] => !!e[1])).toString();
+
   const table = (rows: typeof clients) => (
     <Table>
       <THead>
         <tr>
-          <TH className="pl-5">Client</TH>
+          {bulk && <TH className="w-10 pl-5"><SelectAllBox /></TH>}
+          <TH className={bulk ? "" : "pl-5"}>Client</TH>
           <TH>Labels</TH>
           <TH>Platforms</TH>
           <TH>Account manager</TH>
@@ -69,7 +74,8 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       <TBody>
         {rows.map((c) => (
           <TR key={c.id}>
-            <TD className="pl-5">{removedView ? <span className="font-medium">{c.name}</span> : <Link className="font-medium hover:underline" href={`/clients/${c.id}`}>{c.name}</Link>}</TD>
+            {bulk && <TD className="w-10 pl-5"><SelectClientBox id={c.id} name={c.name} /></TD>}
+            <TD className={bulk ? "" : "pl-5"}>{removedView ? <span className="font-medium">{c.name}</span> : <Link className="font-medium hover:underline" href={`/clients/${c.id}`}>{c.name}</Link>}</TD>
             <TD><div className="flex flex-wrap gap-1">{c.labels.map((l) => <LabelBadge key={l.id} label={l} />)}{c.labels.length === 0 && <span className="text-xs text-text-3">—</span>}</div></TD>
             <TD className="text-xs"><div className="flex flex-wrap gap-3">{[...new Set(c.accounts.map((a) => a.platform))].map((p) => <PlatformLabel key={p} platform={p} />)}{c.accounts.length === 0 && <span className="text-text-3">No accounts linked</span>}</div></TD>
             <TD className="text-text-2">{c.primaryManager?.name ?? "Unassigned"}</TD>
@@ -94,7 +100,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
           </TR>
         ))}
         {rows.length === 0 && (
-          <tr><td colSpan={6} className="px-5 py-8 text-center text-sm text-text-3">{removedView ? "No removed clients." : "No clients match these filters."}</td></tr>
+          <tr><td colSpan={bulk ? 7 : 6} className="px-5 py-8 text-center text-sm text-text-3">{removedView ? "No removed clients." : "No clients match these filters."}</td></tr>
         )}
       </TBody>
     </Table>
@@ -150,6 +156,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       )}
 
       {!removedView && <ClientFilters labels={labels} />}
+      {bulk && <BulkLabelBar labels={labels} action={bulkLabelAction} returnQuery={returnQuery} />}
       {groups.map((g) => (
         <Card key={g.key}>
           {g.key !== "all" && (

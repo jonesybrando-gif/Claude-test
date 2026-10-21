@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/server/db";
 import { requireAdmin } from "@/server/access";
-import { archiveClient, ClientAdminError, createLabel, deleteClientPermanently, deleteLabel, restoreClient, setClientLabels } from "@/server/client-admin";
+import { archiveClient, bulkLabel, ClientAdminError, createLabel, deleteClientPermanently, deleteLabel, restoreClient, setClientLabels } from "@/server/client-admin";
 
 export type ClientFormState = { errors?: string[] } | undefined;
 
@@ -44,8 +44,11 @@ export async function createClient(_prev: ClientFormState, form: FormData): Prom
 
 // --- Removing clients and labels -------------------------------------------
 
-function back(notice: { notice?: string; error?: string }, view?: string): never {
-  const q = new URLSearchParams();
+function back(notice: { notice?: string; error?: string }, view?: string, keep = ""): never {
+  // Keep the list's search, filter, sort and grouping when they came with the form.
+  const q = new URLSearchParams(/^[\w=&%.+-]*$/.test(keep) ? keep : "");
+  q.delete("notice");
+  q.delete("error");
   if (view) q.set("view", view);
   if (notice.notice) q.set("notice", notice.notice);
   if (notice.error) q.set("error", notice.error);
@@ -53,16 +56,16 @@ function back(notice: { notice?: string; error?: string }, view?: string): never
   redirect(`/clients?${q}`);
 }
 
-async function run(fn: (agencyId: string) => Promise<string>, view?: string): Promise<never> {
+async function run(fn: (agencyId: string) => Promise<string>, view?: string, keep?: string): Promise<never> {
   const user = await requireAdmin();
   let message: string;
   try {
     message = await fn(user.agencyId);
   } catch (e) {
-    if (e instanceof ClientAdminError) back({ error: e.message }, view);
+    if (e instanceof ClientAdminError) back({ error: e.message }, view, keep);
     throw e;
   }
-  back({ notice: message }, view);
+  back({ notice: message }, view, keep);
 }
 
 export async function removeClientAction(clientId: string): Promise<void> {
@@ -92,4 +95,14 @@ export async function setClientLabelsAction(clientId: string, form: FormData): P
   const user = await requireAdmin();
   await setClientLabels(user.agencyId, clientId, form.getAll("label").map(String));
   revalidatePath("/", "layout");
+}
+
+export async function bulkLabelAction(form: FormData): Promise<void> {
+  const mode = form.get("mode") === "remove" ? "remove" : "add";
+  const keep = String(form.get("return") ?? "");
+  await run(async (agencyId) => {
+    const { label, changed } = await bulkLabel(agencyId, String(form.get("label") ?? ""), form.getAll("client").map(String), mode);
+    const n = `${changed} client${changed === 1 ? "" : "s"}`;
+    return mode === "add" ? `Added “${label}” to ${n}.` : `Removed “${label}” from ${n}.`;
+  }, undefined, keep);
 }

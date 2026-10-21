@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import { archiveClient, ClientAdminError, createLabel, deleteClientPermanently, deleteLabel, restoreClient, setClientLabels } from "../client-admin";
+import { archiveClient, bulkLabel, ClientAdminError, createLabel, deleteClientPermanently, deleteLabel, restoreClient, setClientLabels } from "../client-admin";
 
 const hasDb = !!process.env.DATABASE_URL;
 const prisma = new PrismaClient();
@@ -58,5 +58,23 @@ describe.skipIf(!hasDb)("removing clients and labels (database)", () => {
     expect(await prisma.clientLabel.count({ where: { id: food.id } })).toBe(1);
     await deleteLabel(agencyId, food.id);
     expect((await prisma.client.findUniqueOrThrow({ where: { id: c }, include: { labels: true } })).labels).toEqual([]);
+  });
+
+  it("adds and removes a label on many clients at once, ignoring other agencies' clients", async () => {
+    const a = (await prisma.client.create({ data: { agencyId, name: "Bulk A", timezone: "UTC" } })).id;
+    const b = (await prisma.client.create({ data: { agencyId, name: "Bulk B", timezone: "UTC" } })).id;
+    const outsider = (await prisma.client.create({ data: { agencyId: otherAgencyId, name: "Outsider", timezone: "UTC" } })).id;
+    const vip = await createLabel(agencyId, "VIP", "warning");
+    await setClientLabels(agencyId, a, [vip.id]);
+
+    expect(await bulkLabel(agencyId, vip.id, [a, b, b, outsider], "add")).toEqual({ label: "VIP", changed: 1 }); // a already had it
+    const has = async (id: string) => (await prisma.client.findUniqueOrThrow({ where: { id }, include: { labels: true } })).labels.some((l) => l.id === vip.id);
+    expect([await has(a), await has(b), await has(outsider)]).toEqual([true, true, false]);
+
+    expect(await bulkLabel(agencyId, vip.id, [a, b], "remove")).toEqual({ label: "VIP", changed: 2 });
+    expect([await has(a), await has(b)]).toEqual([false, false]);
+
+    await expect(bulkLabel(agencyId, vip.id, [], "add")).rejects.toThrow(/Select at least one client/);
+    await expect(bulkLabel(otherAgencyId, vip.id, [a], "add")).rejects.toThrow(/Choose a label/);
   });
 });

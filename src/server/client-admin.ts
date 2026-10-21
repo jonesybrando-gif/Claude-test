@@ -66,3 +66,21 @@ export async function setClientLabels(agencyId: string, clientId: string, labelI
   const valid = await prisma.clientLabel.findMany({ where: { agencyId, id: { in: labelIds } }, select: { id: true } });
   await prisma.client.update({ where: { id: c.id }, data: { labels: { set: valid.map((l) => ({ id: l.id })) } } });
 }
+
+/** Adds or removes one label on many clients; ids outside the agency are ignored. Returns how many clients changed. */
+export async function bulkLabel(agencyId: string, labelId: string, clientIds: string[], mode: "add" | "remove"): Promise<{ label: string; changed: number }> {
+  const label = await prisma.clientLabel.findFirst({ where: { id: labelId, agencyId }, select: { id: true, name: true } });
+  if (!label) throw new ClientAdminError("Choose a label.");
+  const ids = [...new Set(clientIds)];
+  if (!ids.length) throw new ClientAdminError("Select at least one client.");
+  // Only clients in this agency that would actually change.
+  const targets = await prisma.client.findMany({
+    where: { id: { in: ids }, agencyId, labels: mode === "add" ? { none: { id: label.id } } : { some: { id: label.id } } },
+    select: { id: true },
+  });
+  await prisma.clientLabel.update({
+    where: { id: label.id },
+    data: { clients: mode === "add" ? { connect: targets } : { disconnect: targets } },
+  });
+  return { label: label.name, changed: targets.length };
+}
