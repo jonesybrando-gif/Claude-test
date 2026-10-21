@@ -84,3 +84,10 @@ export async function bulkLabel(agencyId: string, labelId: string, clientIds: st
   });
   return { label: label.name, changed: targets.length };
 }
+
+/** The agency's label with this name (any case), created if it doesn't exist yet. */
+export async function findOrCreateLabel(agencyId: string, rawName: string): Promise<string> {
+  const name = rawName.trim().replace(/\s+/g, " ");
+  const existing = name ? await prisma.clientLabel.findFirst({ where: { agencyId, name: { equals: name, mode: "insensitive" } }, select: { id: true } }) : null;
+  return existing?.id ?? (await createLabel(agencyId, name, "info")).id;
+}
