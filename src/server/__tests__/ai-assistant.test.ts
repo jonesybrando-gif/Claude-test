@@ -72,3 +72,39 @@ describe("AI assistant", () => {
     expect(err.message).toMatch(/busy/);
   });
 });
+
+describe("AI questions", () => {
+  it("calls a read-only tool when the question needs detail, then answers", async () => {
+    const { betaZodTool } = await import("@anthropic-ai/sdk/helpers/beta/zod");
+    const { z } = await import("zod/v4");
+    const { answerQuestion } = await import("../ai/assistant");
+    const seen: unknown[] = [];
+    const tool = betaZodTool({
+      name: "get_detail",
+      description: "detail",
+      inputSchema: z.object({ kind: z.enum(["ads", "headlines", "keywords", "search_terms"]) }),
+      run: async (input) => {
+        seen.push(input);
+        return '- "Same-day plumber" spend $120; conv 9';
+      },
+    });
+    let turn = 0;
+    const calls = fakeApi(() => {
+      turn++;
+      if (turn === 1) {
+        return { json: { ...message(""), stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "get_detail", input: { kind: "headlines" } }] } };
+      }
+      return { json: message('Your best headline is "Same-day plumber": 9 conversions on $120.') };
+    });
+    const answer = await answerQuestion("Client: ABC", "What are the top performing headlines?", [{ question: "Earlier?", answer: "Yes." }], [tool], { periodLabel: "last month" });
+    expect(answer).toBe('Your best headline is "Same-day plumber": 9 conversions on $120.');
+    expect(seen).toEqual([{ kind: "headlines" }]);
+    expect(calls).toHaveLength(2);
+    const first = calls[0].body as Record<string, unknown> & { system: { text: string }[]; messages: { role: string; content: unknown }[] };
+    expect(first.system.map((s) => s.text).join("\n")).toContain("Client: ABC");
+    expect(first.messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    expect(first.fallbacks).toBe("default");
+    // The second request carries the tool's result back.
+    expect(JSON.stringify(calls[1].body)).toContain("Same-day plumber");
+  });
+});

@@ -42,6 +42,13 @@ export interface PlatformAdapter {
    * Days with no activity may be absent; absent means zero.
    */
   fetchDailyPerformance(accessToken: string, account: AccountRef, from: IsoDate, to: IsoDate): Promise<DailyPerformanceResult>;
+  /**
+   * Read-only detail below campaign level for one date range, fetched live for
+   * the AI assistant (never stored): ads, ad headlines and descriptions,
+   * keywords or search terms. Kinds the platform doesn't have are omitted.
+   */
+  detailKinds?: DetailKind[];
+  fetchDetail?(accessToken: string, account: AccountRef, kind: DetailKind, from: IsoDate, to: IsoDate): Promise<DetailRow[]>;
   /** Largest date range requested at once (default 92 days). */
   maxRangeDays?: number;
   /**
@@ -117,5 +124,23 @@ export interface RemoteDailyRow {
   reach?: number;
   conversions: number;
   conversionValueMinor: number;
+  leads?: number;
+}
+
+export type DetailKind = "ads" | "headlines" | "keywords" | "search_terms";
+
+/** One ad, ad text asset, keyword or search term with its totals for the range. */
+export interface DetailRow {
+  /** The thing itself: ad name or headline, keyword, search term. */
+  label: string;
+  /** Where it runs, e.g. "Campaign › Ad group". */
+  context: string;
+  /** Extra facts such as match type, asset type, Google's performance label, or the ad's text. */
+  attributes?: Record<string, string>;
+  costMinor: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  conversionValueMinor?: number;
   leads?: number;
 }

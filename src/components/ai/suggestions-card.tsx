@@ -5,6 +5,7 @@ import { formatDate, relativeTime } from "@/lib/time";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GenerateSuggestionsButton } from "./generate-button";
+import { AskPanel } from "./ask-panel";
 
 const PRIORITY = { high: "critical", medium: "warning", low: "neutral" } as const;
 
@@ -19,7 +20,7 @@ export async function AiSuggestionsCard({ clientId, query }: { clientId: string;
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <CardTitle className="flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-brand" aria-hidden /> AI suggestions</CardTitle>
+            <CardTitle className="flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-brand" aria-hidden /> AI assistant</CardTitle>
             <CardDescription>
               {latest
                 ? <>Generated {relativeTime(latest.createdAt.toISOString()).toLowerCase()} from data for {formatDate(latest.rangeFrom)} – {formatDate(latest.rangeTo)}. Drafted by AI from this page&apos;s data: check before acting. Only your team sees this.</>
@@ -49,6 +50,7 @@ export async function AiSuggestionsCard({ clientId, query }: { clientId: string;
             ))}
           </ol>
         )}
+        {configured && <div className="mt-4"><AskPanel clientId={clientId} query={query} /></div>}
       </CardContent>
     </Card>
   );

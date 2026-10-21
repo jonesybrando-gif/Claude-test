@@ -71,7 +71,7 @@ export function ClientReportView({
 
   return (
     <>
-      {show("executive") && <ExecutiveSummary rep={rep} marker={hiddenMark("executive")} />}
+      {show("executive") && <ExecutiveSummary rep={rep} marker={hiddenMark("executive")} copyable={staff} />}
 
       {show("summary") && template.summary.trim() && (
         <Card>

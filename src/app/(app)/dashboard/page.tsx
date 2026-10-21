@@ -1,4 +1,5 @@
 import { requireAgencyStaff, visibleClientsWhere } from "@/server/access";
+import { prisma } from "@/server/db";
 import { loadPacing, summarize } from "@/server/pacing-service";
 import { formatMoney, formatPct } from "@/lib/money";
 import { formatDate } from "@/lib/time";
@@ -14,7 +15,12 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await requireAgencyStaff();
-  const clients = await loadPacing(visibleClientsWhere(user));
+  const [clients, labels, clientLabels] = await Promise.all([
+    loadPacing(visibleClientsWhere(user)),
+    prisma.clientLabel.findMany({ where: { agencyId: user.agencyId }, select: { id: true, name: true, color: true }, orderBy: { name: "asc" } }),
+    prisma.client.findMany({ where: visibleClientsWhere(user), select: { id: true, labels: { select: { id: true } } } }),
+  ]);
+  const labelsByClient = Object.fromEntries(clientLabels.map((c) => [c.id, c.labels.map((l) => l.id)]));
   const rows = clients.flatMap((c) => c.rows);
   const s = summarize(clients);
   const isDemo = rows.some((r) => r.isDemo);
@@ -99,9 +105,9 @@ export default async function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle>Client budget pacing</CardTitle>
-          <CardDescription>Sorted by urgency. Click a column to re-sort.</CardDescription>
+          <CardDescription>Sorted by urgency. Click a column to re-sort, or filter by client or label.</CardDescription>
         </CardHeader>
-        <PacingTable rows={rows} />
+        <PacingTable rows={rows} labels={labels} labelsByClient={labelsByClient} />
       </Card>
     </div>
   );

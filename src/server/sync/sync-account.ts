@@ -159,6 +159,7 @@ export async function dueAccountIds(now: Date = new Date(), agencyId?: string): 
     where: {
       isDemo: false,
       status: "ACTIVE",
+      client: { archivedAt: null },
       connection: { status: "ACTIVE", ...(agencyId ? { agencyId } : {}) },
       OR: [{ lastSyncAttemptAt: null }, { lastSyncAttemptAt: { lt: new Date(now.getTime() - SYNC_INTERVAL_MS) } }],
     },

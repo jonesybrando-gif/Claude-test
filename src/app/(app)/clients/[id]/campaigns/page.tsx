@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { setAllCampaignsIncludedAction, setCampaignIncludedAction, setIncludeNewCampaignsAction } from "./actions";
-import { ActionButton } from "./forms";
+import { ActionButton } from "@/components/action-button";
 
 export const dynamic = "force-dynamic";
 
