@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import { archiveClient, bulkLabel, ClientAdminError, createLabel, deleteClientPermanently, deleteLabel, restoreClient, setClientLabels } from "../client-admin";
+import { archiveClient, bulkLabel, ClientAdminError, findOrCreateLabel, createLabel, deleteClientPermanently, deleteLabel, restoreClient, setClientLabels } from "../client-admin";
 
 const hasDb = !!process.env.DATABASE_URL;
 const prisma = new PrismaClient();
@@ -76,5 +76,12 @@ describe.skipIf(!hasDb)("removing clients and labels (database)", () => {
 
     await expect(bulkLabel(agencyId, vip.id, [], "add")).rejects.toThrow(/Select at least one client/);
     await expect(bulkLabel(otherAgencyId, vip.id, [a], "add")).rejects.toThrow(/Choose a label/);
+  });
+
+  it("finds a label by name in any case, or creates it", async () => {
+    const id = await findOrCreateLabel(agencyId, "  Med Spa ");
+    expect(await findOrCreateLabel(agencyId, "med spa")).toBe(id);
+    expect((await prisma.clientLabel.findUniqueOrThrow({ where: { id } })).name).toBe("Med Spa");
+    await expect(findOrCreateLabel(agencyId, "   ")).rejects.toThrow(/Enter a label name/);
   });
 });

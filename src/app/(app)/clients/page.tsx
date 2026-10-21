@@ -55,7 +55,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   if (groups.length === 0) groups.push({ key: "all", label: null, rows: clients });
 
   // Bulk labelling: a checkbox per row and a bar above the list (admins, once labels exist).
-  const bulk = admin && !removedView && labels.length > 0;
+  const bulk = admin && !removedView;
   const returnQuery = new URLSearchParams(Object.entries({ q: sp.q, label: sp.label, sort: sp.sort, group: sp.group }).filter((e): e is [string, string] => !!e[1])).toString();
 
   const table = (rows: typeof clients) => (

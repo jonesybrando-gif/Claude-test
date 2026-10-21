@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/server/db";
 import { requireAdmin } from "@/server/access";
-import { archiveClient, bulkLabel, ClientAdminError, createLabel, deleteClientPermanently, deleteLabel, restoreClient, setClientLabels } from "@/server/client-admin";
+import { archiveClient, bulkLabel, ClientAdminError, findOrCreateLabel, createLabel, deleteClientPermanently, deleteLabel, restoreClient, setClientLabels } from "@/server/client-admin";
 
 export type ClientFormState = { errors?: string[] } | undefined;
 
@@ -101,7 +101,14 @@ export async function bulkLabelAction(form: FormData): Promise<void> {
   const mode = form.get("mode") === "remove" ? "remove" : "add";
   const keep = String(form.get("return") ?? "");
   await run(async (agencyId) => {
-    const { label, changed } = await bulkLabel(agencyId, String(form.get("label") ?? ""), form.getAll("client").map(String), mode);
+    // "New label…" in the bar creates the label (or reuses one with that name) before applying it.
+    let labelId = String(form.get("label") ?? "");
+    if (labelId === "__new__") {
+      if (mode === "remove") throw new ClientAdminError("Choose an existing label to remove.");
+      if (!form.getAll("client").length) throw new ClientAdminError("Select at least one client.");
+      labelId = await findOrCreateLabel(agencyId, String(form.get("newLabel") ?? ""));
+    }
+    const { label, changed } = await bulkLabel(agencyId, labelId, form.getAll("client").map(String), mode);
     const n = `${changed} client${changed === 1 ? "" : "s"}`;
     return mode === "add" ? `Added “${label}” to ${n}.` : `Removed “${label}” from ${n}.`;
   }, undefined, keep);

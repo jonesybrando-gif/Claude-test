@@ -53,7 +53,6 @@ export function ClientFilters({ labels }: { labels: LabelInfo[] }) {
 
 /** A small dropdown of checkboxes that saves a client's labels. */
 export function LabelPicker({ action, labels, selected }: { action: (form: FormData) => Promise<void>; labels: LabelInfo[]; selected: string[] }) {
-  if (!labels.length) return null;
   return (
     <details className="relative">
       <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-md px-2 py-1 text-xs text-text-2 hover:bg-surface-2 hover:text-text" aria-label="Edit labels">
@@ -100,6 +99,8 @@ export function SelectAllBox() {
 /** Add or remove one label on all selected clients. */
 export function BulkLabelBar({ labels, action, returnQuery }: { labels: LabelInfo[]; action: (form: FormData) => Promise<void>; returnQuery: string }) {
   const [count, setCount] = useState(0);
+  // With no labels yet, start on "New label…" so the first one can be made here.
+  const [choice, setChoice] = useState(labels.length ? "" : "__new__");
   useEffect(() => {
     // A client listed under several label groups counts once.
     const update = () => setCount(new Set(boxes().filter((b) => b.checked).map((b) => b.value)).size);
@@ -124,12 +125,16 @@ export function BulkLabelBar({ labels, action, returnQuery }: { labels: LabelInf
     <form id={BULK_FORM} action={action} className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm ${count ? "border-brand bg-surface" : "border-border bg-surface-2"}`}>
       <input type="hidden" name="return" value={returnQuery} />
       <span className="font-medium">{count ? `${count} selected` : "Select clients to label them in bulk"}</span>
-      <Select name="label" required defaultValue="" className="w-full sm:w-48" aria-label="Label to add or remove" disabled={!count}>
+      <Select name="label" required value={choice} onChange={(e) => setChoice(e.target.value)} className="w-full sm:w-48" aria-label="Label to add or remove" disabled={!count}>
         <option value="" disabled>Choose a label…</option>
         {labels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+        <option value="__new__">+ New label…</option>
       </Select>
+      {choice === "__new__" && count > 0 && (
+        <Input name="newLabel" required maxLength={40} placeholder="New label name" className="w-full sm:w-44" aria-label="New label name" autoFocus />
+      )}
       <Button type="submit" name="mode" value="add" size="sm" disabled={!count}>Add label</Button>
-      <Button type="submit" name="mode" value="remove" size="sm" variant="outline" disabled={!count}>Remove label</Button>
+      <Button type="submit" name="mode" value="remove" size="sm" variant="outline" disabled={!count || choice === "__new__"}>Remove label</Button>
       {count > 0 && <Button type="button" size="sm" variant="ghost" onClick={clear}>Clear selection</Button>}
     </form>
   );
