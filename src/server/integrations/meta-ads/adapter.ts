@@ -27,6 +27,8 @@ const CREATIVE_LOOKUPS = 60;
 
 export const LEAD_ACTION_TYPES = ["lead", "onsite_conversion.lead_grouped", "offsite_conversion.fb_pixel_lead"];
 export const PURCHASE_ACTION_TYPES = ["omni_purchase", "purchase", "offsite_conversion.fb_pixel_purchase"];
+/** Phone calls from call ads ("Calls placed" in Ads Manager); the first type present is used. */
+export const CALL_ACTION_TYPES = ["click_to_call_native_call_placed", "click_to_call_call_confirm"];
 
 interface GraphError {
   error?: { message?: string; type?: string; code?: number; error_subcode?: number; is_transient?: boolean };
@@ -128,7 +130,7 @@ export interface InsightRow {
 
 /**
  * Insights rows (level=campaign, time_increment=1) → leaf daily rows.
- * Conversions = leads + purchases as reported by Meta under the ad account's
+ * Conversions = leads + purchases + calls placed, as reported by Meta under the ad account's
  * attribution setting; conversion value = purchase value.
  */
 export function parseInsights(rows: InsightRow[]): { rows: RemoteDailyRow[]; campaigns: RemoteCampaign[] } {
@@ -151,7 +153,7 @@ export function parseInsights(rows: InsightRow[]): { rows: RemoteDailyRow[]; cam
     // Daily reach is unique people that day; it must never be summed across days.
     row.reach = r.reach === undefined ? row.reach : Number(r.reach);
     row.leads = (row.leads ?? 0) + leads;
-    row.conversions += leads + purchases;
+    row.conversions += leads + purchases + pickAction(r.actions, CALL_ACTION_TYPES);
     row.conversionValueMinor += Math.round(purchaseValue * 100);
     out.set(key, row);
   }

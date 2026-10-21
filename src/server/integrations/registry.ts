@@ -93,7 +93,7 @@ export function integrationStatus(): IntegrationInfo[] {
       ],
       limitations: [
         "Facebook Login tokens last about 60 days and cannot be refreshed; reconnect before they expire, or use a Business Manager system-user token, which does not expire.",
-        "Conversions = leads + purchases as reported by Meta under each ad account's attribution setting; the last 28 days are re-fetched every sync.",
+        "Conversions = leads + purchases + calls placed, as reported by Meta under each ad account's attribution setting; the last 28 days are re-fetched every sync.",
         "Daily reach is stored per day and never summed across days.",
       ],
     },
