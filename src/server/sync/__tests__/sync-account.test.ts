@@ -109,6 +109,28 @@ describe.skipIf(!hasDb)("syncAccount (database)", () => {
     expect(runs.map((r) => r.status)).toEqual(["SUCCEEDED", "SUCCEEDED"]);
   });
 
+  it("keeps past days with spend when the platform returns nothing for them, but clears recent ones", async () => {
+    // Today is 2026-10-17 in New York. History: spend every day 10-07..10-17.
+    await syncAccount(accountId, "scheduled", deps(fakeAdapter((from, to) => {
+      const out: RemoteDailyRow[] = [];
+      for (let d = from; d <= to; d = new Date(Date.parse(d) + 86_400_000).toISOString().slice(0, 10)) out.push(row(d, 1000));
+      return out;
+    })));
+    // Incremental window 10-13..10-17, but the platform only returns 10-14.
+    const second = await syncAccount(accountId, "manual", deps(fakeAdapter(() => [row("2026-10-14", 700)])));
+    expect(second.status).toBe("SUCCEEDED");
+    const spend = await spendByDate();
+    // 10-13 and 10-15 are settled (2+ days old): kept. 10-16 and 10-17 are recent: cleared. 10-14 restated.
+    expect(Object.entries(spend).filter(([k]) => k >= "2026-10-12")).toEqual([
+      ["2026-10-12:c1", 1000],
+      ["2026-10-13:c1", 1000],
+      ["2026-10-14:c1", 700],
+      ["2026-10-15:c1", 1000],
+    ]);
+    const run = await prisma.syncRun.findFirstOrThrow({ where: { accountId, kind: "manual" } });
+    expect(run.error).toBe("The platform returned no data for 2 past days with recorded spend (2026-10-13 to 2026-10-15); kept the existing figures.");
+  });
+
   it("starts new campaigns out removed when the account says so, and leaves existing choices alone", async () => {
     await prisma.campaign.create({ data: { accountId, externalId: "c1", name: "Search", excludedAt: new Date("2026-10-01") } });
     await prisma.adAccount.update({ where: { id: accountId }, data: { includeNewCampaigns: false } });
