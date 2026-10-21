@@ -9,6 +9,7 @@ import { resolveBudgetHierarchy, spendForUnit, type PacingUnit, type SpendRow } 
 import { DEFAULT_THRESHOLDS, needsAttention, type PacingThresholds } from "@/lib/pacing/status";
 import { recommendAction, type Action } from "@/lib/action-center";
 import type { PlatformKey } from "@/lib/platforms";
+import { formatDate } from "@/lib/time";
 
 /** An account whose last successful sync is older than this is shown as stale. */
 export const STALE_AFTER_MS = 26 * 60 * 60 * 1000;
@@ -62,6 +63,8 @@ export interface PacingRow {
   warnings: string[];
   action: Action;
   attention: boolean;
+  /** No ad account behind this line has ever synced: nothing to pace yet. */
+  notConnected: boolean;
 }
 
 export interface ClientPacing {
@@ -145,7 +148,7 @@ function paceUnit(unit: PacingUnit, budget: BudgetWithRevisions, ctx: UnitContex
       asOf = addDays(periodStart, -1);
     } else {
       if (a.dataCompleteThrough < ctx.yesterday && a.dataCompleteThrough >= periodStart) {
-        warnings.push(`${a.name}: data complete only through ${a.dataCompleteThrough}`);
+        warnings.push(`${a.name}: data complete only through ${formatDate(a.dataCompleteThrough)}`);
       }
       asOf = minDate(asOf, a.dataCompleteThrough);
     }
@@ -193,7 +196,8 @@ function makeRow(
   hasEstimatedSpend: boolean,
   unbudgetedSpendMinor = 0,
 ): PacingRow {
-  const stale = accts.some((a) => a.stale);
+  const notConnected = !accts.some((a) => a.isDemo || a.lastSuccessfulSyncAt);
+  const stale = !notConnected && accts.some((a) => a.stale);
   const disconnected = accts.some((a) => a.status === "DISCONNECTED" || a.status === "NEEDS_REAUTH");
   const syncs = accts.map((a) => a.lastSuccessfulSyncAt).filter((s): s is string => !!s);
   const action = result
@@ -222,7 +226,9 @@ function makeRow(
     hasEstimatedSpend,
     warnings: [...new Set(warnings)],
     action,
-    attention: disconnected || (result ? needsAttention(result.status) || needsAttention(result.forecastStatus) : false),
+    // A line with no data yet isn't an emergency; it's a setup step (shown separately).
+    attention: !notConnected && (disconnected || (result ? needsAttention(result.status) || needsAttention(result.forecastStatus) : false)),
+    notConnected,
   };
 }
 
@@ -389,10 +395,15 @@ export interface AgencySummary {
   /** Most common data-through date across lines (stale lines are counted separately). */
   typicalAsOf: IsoDate | null;
   combinedRowCount: number;
+  /** Budget lines left out of the figures because no ad account has synced yet. */
+  notConnectedRows: number;
 }
 
-export function summarize(clients: ClientPacing[]): AgencySummary {
-  const rows = clients.flatMap((c) => c.rows);
+export function summarize(allClients: ClientPacing[]): AgencySummary {
+  // Lines with no ad account data would show as 0% spent; leave them out of the headline figures.
+  const notConnectedRows = allClients.flatMap((c) => c.rows).filter((r) => r.notConnected).length;
+  const clients = allClients.filter((c) => c.rows.some((r) => !r.notConnected));
+  const rows = clients.flatMap((c) => c.rows).filter((r) => !r.notConnected);
   const budgeted = rows.filter((r) => r.result);
   const sum = (f: (r: PacingRow) => number) => budgeted.reduce((s, r) => s + f(r), 0);
 
@@ -417,6 +428,7 @@ export function summarize(clients: ClientPacing[]): AgencySummary {
     combined: combinePacing(sameP),
     combinedRowCount: sameP.length,
     typicalAsOf: mode(budgeted.map((r) => r.result!.asOf).filter((d): d is IsoDate => !!d)),
+    notConnectedRows,
   };
 }
 

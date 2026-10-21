@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAgencyStaff, visibleClientsWhere } from "@/server/access";
 import { prisma } from "@/server/db";
 import { loadPacing, summarize } from "@/server/pacing-service";
@@ -59,9 +60,9 @@ export default async function DashboardPage() {
     <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-xl font-semibold">Advertising Budget Monitor</h1>
+          <h1 className="text-xl font-semibold">Budget pacing</h1>
           <p className="text-sm text-text-2">
-            {[period, `${clients.length} client${clients.length === 1 ? "" : "s"}`, `${rows.length} budget line${rows.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}
+            {[period, `${clients.length} client${clients.length === 1 ? "" : "s"}`, `${s.rowsTotal} budget line${s.rowsTotal === 1 ? "" : "s"} with data`].filter(Boolean).join(" · ")}
             {s.typicalAsOf && <> · data through {formatDate(s.typicalAsOf, { month: "short", day: "numeric" })}</>}
             {s.staleRows > 0 && <span className="text-warning-ink"> · {s.staleRows} line{s.staleRows === 1 ? "" : "s"} with older data</span>}
           </p>
@@ -76,6 +77,16 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {s.notConnectedRows > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm">
+          <span>
+            <strong className="font-medium">{s.notConnectedRows} budget line{s.notConnectedRows === 1 ? " has" : "s have"} no ad account data yet.</strong>{" "}
+            <span className="text-text-2">They&apos;re left out of the figures and alerts below until an ad account is linked and synced.</span>
+          </span>
+          <Link href="/clients" className="font-medium text-brand hover:underline">Link ad accounts</Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatTile label="Total monthly budget" value={formatMoney(s.totalBudgetMinor, c, { whole: true })} sub={s.unbudgetedSpendMinor > 0 ? `+ ${formatMoney(s.unbudgetedSpendMinor, c, { whole: true })} unbudgeted spend` : "across budgeted lines"} />
         <StatTile label="Month-to-date spend" value={formatMoney(s.actualToDateMinor, c, { whole: true })} sub={`${formatPct(s.totalBudgetMinor ? (s.actualToDateMinor / s.totalBudgetMinor) * 100 : null, 0)} of budget used`} />
@@ -85,7 +96,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-        <ActionCenter rows={rows} />
+        <ActionCenter rows={rows.filter((r) => !r.notConnected)} />
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-2">

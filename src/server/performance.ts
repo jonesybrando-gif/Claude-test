@@ -21,6 +21,8 @@ export interface AgencyPerformance {
   byDate: ({ date: IsoDate } & MetricTotals)[];
   byPlatform: Partial<Record<Platform, MetricTotals>>;
   byClient: ClientKpiRow[];
+  /** Daily spend per client, one value per day of the range (for sparklines). */
+  dailySpendByClient: Record<string, number[]>;
   currencies: string[];
 }
 
@@ -47,6 +49,9 @@ export async function getAgencyPerformance(where: Prisma.ClientWhereInput, range
   const byDate = new Map<IsoDate, MetricTotals>(eachDay(range.from, range.to).map((d) => [d, emptyTotals()]));
   const byPlatform: Partial<Record<Platform, MetricTotals>> = {};
   const byClientTotals = new Map<string, MetricTotals>();
+  const days = eachDay(range.from, range.to);
+  const dayIndex = new Map(days.map((d, i) => [d, i]));
+  const dailySpendByClient: Record<string, number[]> = Object.fromEntries(clients.map((c) => [c.id, days.map(() => 0)]));
   for (const s of sums) {
     const a = accountInfo.get(s.accountId)!;
     const m = {
@@ -63,6 +68,8 @@ export async function getAgencyPerformance(where: Prisma.ClientWhereInput, range
     addInto(byDate.get(dateToIso(s.date))!, m);
     addInto((byPlatform[a.platform] ??= emptyTotals()), m);
     addInto(byClientTotals.get(a.clientId) ?? (byClientTotals.set(a.clientId, emptyTotals()), byClientTotals.get(a.clientId)!), m);
+    const di = dayIndex.get(dateToIso(s.date));
+    if (di !== undefined) dailySpendByClient[a.clientId][di] += m.costMinor;
   }
   return {
     range,
@@ -77,6 +84,7 @@ export async function getAgencyPerformance(where: Prisma.ClientWhereInput, range
       totals: byClientTotals.get(c.id) ?? emptyTotals(),
       isDemo: c.accounts.some((a) => a.isDemo),
     })),
+    dailySpendByClient,
     currencies: [...new Set(clients.flatMap((c) => c.accounts.map((a) => a.currency)))],
   };
 }

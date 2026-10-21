@@ -13,9 +13,10 @@ import { KpiTable } from "@/components/kpi/kpi-table";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { RangeControls } from "@/components/range-controls";
 import { DemoBadge } from "@/components/status-badge";
-import { LabelBadge } from "@/components/label-badge";
 import Link from "next/link";
 import { ClientPicker } from "./client-picker";
+import { PortfolioTable, type PortfolioRow } from "./portfolio-table";
+import { loadPacing } from "@/server/pacing-service";
 
 export const dynamic = "force-dynamic";
 
@@ -47,27 +48,68 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
   const rangeQuery = `range=${preset}&compare=${compareMode}${preset === "custom" ? `&from=${range.from}&to=${range.to}` : ""}`;
 
   if (!chosen) {
+    // Portfolio view: one row per client, no combined totals.
+    const [cur, prev, pacing, extra] = await Promise.all([
+      getAgencyPerformance(visible, range),
+      cmpRange ? getAgencyPerformance(visible, cmpRange) : Promise.resolve(null),
+      loadPacing(visible),
+      prisma.client.findMany({ where: visible, select: { id: true, accounts: { where: { status: { not: "DISCONNECTED" } }, select: { lastSuccessfulSyncAt: true, isDemo: true, currency: true } } } }),
+    ]);
+    const prevBy = new Map(prev?.byClient.map((c) => [c.clientId, c.totals]) ?? []);
+    const pacingBy = new Map(pacing.map((p) => [p.client.id, p]));
+    const extraBy = new Map(extra.map((e) => [e.id, e]));
+    const labelsBy = new Map(pickable.map((c) => [c.id, c.labels]));
+    const rows: PortfolioRow[] = cur.byClient.map((c) => {
+      const t = c.totals;
+      const p = prevBy.get(c.clientId) ?? null;
+      const useLeads = t.conversions === 0 && (t.leads > 0 || !!t.leadsReported);
+      const pc = pacingBy.get(c.clientId);
+      const connected = pc?.rows.some((r) => !r.notConnected) ?? false;
+      const accts = extraBy.get(c.clientId)?.accounts ?? [];
+      const syncs = accts.filter((a) => !a.isDemo).map((a) => a.lastSuccessfulSyncAt?.toISOString() ?? "");
+      return {
+        id: c.clientId,
+        name: c.clientName,
+        href: `/clients/${c.clientId}?${rangeQuery}`,
+        labels: labelsBy.get(c.clientId) ?? [],
+        manager: c.managerName,
+        platforms: c.platforms,
+        currency: accts[0]?.currency ?? "USD",
+        spendMinor: t.costMinor,
+        prevSpendMinor: p ? p.costMinor : null,
+        results: useLeads ? t.leads : t.conversions,
+        prevResults: p ? (useLeads ? p.leads : p.conversions) : null,
+        resultLabel: useLeads ? "leads" : "conversions",
+        pacing: pc?.total ? (connected ? pc.total.status : "NOT_CONNECTED") : pc?.rows.some((r) => r.notConnected) ? "NOT_CONNECTED" : null,
+        spark: cur.dailySpendByClient[c.clientId] ?? [],
+        lastSync: syncs.length && !syncs.includes("") ? syncs.sort()[0] : null,
+        isDemo: c.isDemo,
+      };
+    });
+    const managers = [...new Set(rows.map((r) => r.manager).filter((m): m is string => !!m))].sort();
     return (
-      <div className="mx-auto flex max-w-[1100px] flex-col gap-5">
-        <div>
-          <h1 className="text-xl font-semibold">Performance</h1>
-          <p className="text-sm text-text-2">Choose a client to see its performance summary.</p>
+      <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold">Performance</h1>
+            <p className="text-sm text-text-2">
+              Every client · {PRESET_LABEL[preset]}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
+              {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <RangeControls preset={preset} compare={compareMode} from={range.from} to={range.to} />
+            {pickable.length > 1 && <Link href={`/performance?client=all&${rangeQuery}`} className="text-sm text-brand hover:underline">All clients combined</Link>}
+          </div>
         </div>
-        <ClientPicker clients={pickerClients} labels={labels} current={null} />
         <Card>
-          <ul className="grid gap-px sm:grid-cols-2 lg:grid-cols-3">
-            {pickable.map((c) => (
-              <li key={c.id}>
-                <Link href={`/performance?client=${c.id}&${rangeQuery}`} className="flex h-full flex-col gap-1.5 rounded-lg px-5 py-3 hover:bg-surface-2">
-                  <span className="font-medium">{c.name}</span>
-                  {c.labels.length > 0 && <span className="flex flex-wrap gap-1">{c.labels.map((l) => <LabelBadge key={l.id} label={l} />)}</span>}
-                </Link>
-              </li>
-            ))}
-          </ul>
-          {pickable.length === 0 && <CardContent className="py-6 text-sm text-text-3">No clients yet.</CardContent>}
+          <CardHeader>
+            <CardTitle>Clients</CardTitle>
+            <CardDescription>Click a column to sort, or a client to open its report. Results are conversions, or leads for clients that report leads only; pacing is this month&apos;s budget.</CardDescription>
+          </CardHeader>
+          <PortfolioTable rows={rows} labels={labels} managers={managers} />
+          <div className="h-3" />
         </Card>
-        {pickable.length > 1 && <p className="text-sm text-text-3">Or <Link href={`/performance?client=all&${rangeQuery}`} className="text-brand hover:underline">view all clients combined</Link>.</p>}
       </div>
     );
   }

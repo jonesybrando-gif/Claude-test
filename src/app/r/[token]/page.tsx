@@ -12,7 +12,11 @@ import { ClientReportView } from "@/components/reports/client-report-view";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Advertising report", robots: { index: false, follow: false } };
+/** The browser tab names the client, e.g. "Board and Brew · Advertising report". */
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const link = await resolveShareToken((await params).token);
+  return { title: link ? `${link.client.name} · Advertising report` : "Advertising report", robots: { index: false, follow: false } };
+}
 
 /** A client-facing report opened from a shared link, without signing in. */
 export default async function SharedReportPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<Record<string, string | undefined>> }) {

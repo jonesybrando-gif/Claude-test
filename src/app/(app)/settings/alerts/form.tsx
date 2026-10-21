@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { saveAlertSettings } from "./actions";
+import { saveAlertSettings, saveSlackWebhook } from "./actions";
 import { useFormSubmit } from "@/components/use-form-submit";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -33,6 +33,26 @@ export function AlertSettingsForm({ s }: { s: AlertSettings }) {
         <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save alert settings"}</Button>
         {state?.ok && <p className="text-sm text-good-ink" role="status">{state.ok}</p>}
         {state?.errors?.map((e) => <p key={e} className="text-sm text-critical-ink" role="alert">{e}</p>)}
+      </div>
+    </form>
+  );
+}
+
+export function SlackForm({ current }: { current: string | null }) {
+  const [state, action, pending] = useActionState(saveSlackWebhook, undefined);
+  const form = useFormSubmit(action);
+  return (
+    <form {...form} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="slackWebhookUrl">Slack incoming webhook URL</Label>
+        <Input id="slackWebhookUrl" name="slackWebhookUrl" type="url" defaultValue={current ?? ""} placeholder="https://hooks.slack.com/services/…" />
+        <p className="text-xs text-text-3">In Slack: Apps → Incoming Webhooks → Add to a channel, then paste the URL here. Leave empty to turn Slack alerts off.</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save"}</Button>
+        <Button type="submit" name="test" value="1" variant="outline" disabled={pending}>Save and send a test</Button>
+        {state?.ok && <p className="text-sm text-good-ink" role="status">{state.ok}</p>}
+        {state?.error && <p className="text-sm text-critical-ink" role="alert">{state.error}</p>}
       </div>
     </form>
   );

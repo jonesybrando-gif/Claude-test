@@ -37,7 +37,7 @@ export async function createShareLink(opts: { clientId: string; createdById: str
 /** The live link for a token, or null if it's unknown, revoked, expired, or the client is archived. */
 export async function resolveShareToken(token: string, now: Date = new Date()) {
   if (!TOKEN_RE.test(token)) return null;
-  const link = await prisma.reportShareLink.findUnique({ where: { tokenHash: hash(token) }, include: { client: { select: { id: true, agencyId: true, archivedAt: true } } } });
+  const link = await prisma.reportShareLink.findUnique({ where: { tokenHash: hash(token) }, include: { client: { select: { id: true, agencyId: true, archivedAt: true, name: true } } } });
   if (!link || link.revokedAt || link.client.archivedAt) return null;
   if (link.expiresAt && link.expiresAt <= now) return null;
   return link;

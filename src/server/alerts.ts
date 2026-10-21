@@ -4,6 +4,7 @@ import { prisma } from "./db";
 import { INCLUDED_ROWS } from "./campaign-selection";
 import { loadPacing, type PacingRow } from "./pacing-service";
 import { appUrl, sendEmail } from "./email";
+import { postToSlack, slackAlertText } from "./slack";
 import { evaluateAlerts, resolveAlertSettings, type AccountInput, type AlertCandidate, type CampaignInput, type PacingRowInput } from "@/lib/alerts";
 import { alertEmail, dailySummaryEmail, type AlertLine } from "@/lib/email-templates";
 import { dateToIso, dayOfWeek, todayInTimeZone } from "@/lib/pacing/dates";
@@ -15,7 +16,7 @@ function toRowInput(r: PacingRow): PacingRowInput {
     key: r.key,
     clientId: r.clientId,
     clientName: r.clientName,
-    label: r.level === "CLIENT" ? "Combined budget" : r.label,
+    label: r.level === "CLIENT" ? "Total budget" : r.label,
     currency: r.currency,
     isDemo: r.isDemo,
     disconnected: r.disconnected,
@@ -60,7 +61,8 @@ export async function evaluateAgencyAlerts(agencyId: string, now: Date = new Dat
   const agency = await prisma.agency.findUniqueOrThrow({ where: { id: agencyId }, select: { alertSettings: true } });
   const settings = resolveAlertSettings(agency.alertSettings);
   const pacing = await loadPacing({ agencyId, archivedAt: null }, now);
-  const rows = pacing.flatMap((c) => c.rows).map(toRowInput);
+  // Lines with no synced ad account are a setup task, not a pacing alert.
+  const rows = pacing.flatMap((c) => c.rows).filter((r) => !r.notConnected).map(toRowInput);
 
   const since = new Date(now.getTime() - LOOKBACK_DAYS * 86_400_000);
   const [accounts, perf] = await Promise.all([
@@ -139,6 +141,10 @@ async function reconcile(agencyId: string, candidates: AlertCandidate[], now: Da
 
 /** In-app notification for every staff member who can see the client; one email per person per run. */
 async function notify(agencyId: string, created: { id: string; c: AlertCandidate }[]): Promise<number> {
+  const agency = await prisma.agency.findUnique({ where: { id: agencyId }, select: { slackWebhookUrl: true } });
+  if (agency?.slackWebhookUrl) {
+    await postToSlack(agency.slackWebhookUrl, slackAlertText(created.map((x) => ({ severity: x.c.severity, client: x.c.clientName, title: x.c.title })), appUrl("/alerts")));
+  }
   const staff = await staffOf(agencyId);
   const { brand: b } = await brand(agencyId);
   let emails = 0;
@@ -170,7 +176,7 @@ export async function sendDailySummaries(agencyId: string, now: Date = new Date(
 
   const staff = (await staffOf(agencyId)).filter((u) => u.dailySummary && (!u.lastDailySummaryAt || todayInTimeZone(timezone, u.lastDailySummaryAt) < today));
   if (!staff.length) return 0;
-  const rows = (await loadPacing({ agencyId, archivedAt: null }, now)).flatMap((c) => c.rows);
+  const rows = (await loadPacing({ agencyId, archivedAt: null }, now)).flatMap((c) => c.rows).filter((r) => !r.notConnected);
   const label = new Date(`${today}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
   let sent = 0;
   for (const u of staff) {
