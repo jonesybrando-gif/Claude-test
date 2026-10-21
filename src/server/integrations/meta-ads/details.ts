@@ -2,7 +2,7 @@
 
 import type { DetailRow } from "../types";
 import { decimalToMinor } from "../common";
-import { LEAD_ACTION_TYPES, PURCHASE_ACTION_TYPES, pickAction, type InsightRow } from "./adapter";
+import { CALL_ACTION_TYPES, LEAD_ACTION_TYPES, PURCHASE_ACTION_TYPES, pickAction, type InsightRow } from "./adapter";
 
 export interface AdInsightRow extends InsightRow {
   ad_id?: string;
@@ -39,7 +39,7 @@ export function parseAdInsights(rows: AdInsightRow[], creatives: Record<string, 
       costMinor: decimalToMinor(r.spend),
       impressions: Number(r.impressions ?? 0),
       clicks: Number(r.clicks ?? 0),
-      conversions: leads + purchases,
+      conversions: leads + purchases + pickAction(r.actions, CALL_ACTION_TYPES),
       conversionValueMinor: Math.round(pickAction(r.action_values, PURCHASE_ACTION_TYPES) * 100),
       leads,
     };

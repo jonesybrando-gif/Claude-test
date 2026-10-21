@@ -191,3 +191,13 @@ describe("Meta ad detail for the AI assistant", () => {
     expect(urls.filter((u) => u.searchParams.get("fields")?.startsWith("creative")).map((u) => u.pathname.split("/").pop()).sort()).toEqual(["1", "2"]);
   });
 });
+
+describe("Meta calls as conversions", () => {
+  it("counts calls placed from call ads, preferring the native count, alongside leads and purchases", () => {
+    const { rows } = parseInsights([
+      { campaign_id: "c", campaign_name: "Brand Call only", date_start: "2026-09-10", spend: "40.00", actions: [{ action_type: "click_to_call_native_call_placed", value: "3" }, { action_type: "click_to_call_call_confirm", value: "5" }, { action_type: "lead", value: "1" }] },
+      { campaign_id: "c", campaign_name: "Brand Call only", date_start: "2026-09-11", spend: "40.00", actions: [{ action_type: "click_to_call_call_confirm", value: "2" }, { action_type: "landing_page_view", value: "50" }] },
+    ]);
+    expect(rows.map((r) => [r.date, r.conversions, r.leads])).toEqual([["2026-09-10", 4, 1], ["2026-09-11", 2, 0]]);
+  });
+});
