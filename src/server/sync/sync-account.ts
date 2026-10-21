@@ -9,6 +9,14 @@ import type { PlatformAdapter, RemoteCampaign } from "../integrations/types";
 
 /** A RUNNING sync younger than this blocks another sync of the same account. */
 const LOCK_MS = 30 * 60 * 1000;
+/** Days older than this with stored spend are never cleared by an empty response. */
+const KEEP_AFTER_DAYS = 2;
+
+function keptNote(days: IsoDate[]): string {
+  const sorted = [...days].sort();
+  const span = sorted.length === 1 ? sorted[0] : `${sorted[0]} to ${sorted[sorted.length - 1]}`;
+  return `The platform returned no data for ${sorted.length} past day${sorted.length === 1 ? "" : "s"} with recorded spend (${span}); kept the existing figures.`;
+}
 /** Max days per API request when importing history. */
 const CHUNK_DAYS = 92;
 /** Scheduled syncs skip accounts attempted more recently than this. */
@@ -89,6 +97,7 @@ export async function syncAccount(accountId: string, kind: SyncKind, deps: SyncD
   const ref = { externalId: account.externalId, loginCustomerId: account.loginCustomerId, timezone: tz };
   let rowsUpserted = 0;
   let spendVerified: boolean | undefined;
+  const keptDays: IsoDate[] = [];
   try {
     const campaignIds = await upsertCampaigns(accountId, await call((t) => adapter.listCampaigns(t, ref)), account.includeNewCampaigns);
 
@@ -120,22 +129,40 @@ export async function syncAccount(accountId: string, kind: SyncKind, deps: SyncD
         isDemo: false,
         syncedAt: now,
       }));
-      // Replace the whole window atomically: restated days are updated, and days
-      // that dropped to zero (absent from the API response) are cleared.
+      // Spend on a finished day doesn't disappear. If the platform sends nothing
+      // for a past day we hold spend for, it's a gap in the response, not a
+      // restatement: keep what we have for that day rather than wiping it.
+      const returned = new Set(inWindow.map((r) => r.date));
+      const stored = await prisma.dailyPerformance.groupBy({
+        by: ["date"],
+        where: { accountId, date: { gte: isoToDate(chunk.from), lte: isoToDate(chunk.to) } },
+        _sum: { costMinor: true },
+      });
+      const settled = addDays(today, -KEEP_AFTER_DAYS);
+      const keep = stored
+        .map((d) => ({ date: dateToIso(d.date), cost: Number(d._sum.costMinor ?? 0) }))
+        .filter((d) => d.cost > 0 && d.date <= settled && !returned.has(d.date))
+        .map((d) => d.date);
+      keptDays.push(...keep);
+      // Replace the rest of the window atomically: restated days are updated, and
+      // recent days that dropped to zero (absent from the response) are cleared.
       await prisma.$transaction([
-        prisma.dailyPerformance.deleteMany({ where: { accountId, date: { gte: isoToDate(chunk.from), lte: isoToDate(chunk.to) } } }),
+        prisma.dailyPerformance.deleteMany({
+          where: { accountId, date: { gte: isoToDate(chunk.from), lte: isoToDate(chunk.to), ...(keep.length ? { notIn: keep.map(isoToDate) } : {}) } },
+        }),
         prisma.dailyPerformance.createMany({ data }),
       ]);
       rowsUpserted += data.length;
     }
 
+    if (keptDays.length) console.warn(`Sync ${accountId}: ${keptNote(keptDays)}`);
     const completeThrough = adapter.dataCompleteThrough(tz, now);
     await prisma.$transaction([
       prisma.adAccount.update({
         where: { id: accountId },
         data: { lastSuccessfulSyncAt: now, dataCompleteThrough: isoToDate(completeThrough), status: "ACTIVE", spendIsVerified: spendVerified ?? adapter.spendIsVerified },
       }),
-      prisma.syncRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", rowsUpserted, finishedAt: new Date() } }),
+      prisma.syncRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", rowsUpserted, finishedAt: new Date(), error: keptDays.length ? keptNote(keptDays) : null } }),
       prisma.platformConnection.update({ where: { id: connectionId }, data: { status: "ACTIVE", lastError: null } }),
     ]);
     return { accountId, status: "SUCCEEDED", rowsUpserted, range };
