@@ -22,6 +22,9 @@ const MAX_PAGES = 200;
 // Action types, in order of preference. Only the first one present is used,
 // because Meta reports overlapping action types (e.g. "lead" already includes
 // pixel and on-Facebook leads).
+/** Ads whose creative text is looked up for the AI assistant, highest spend first. */
+const CREATIVE_LOOKUPS = 60;
+
 export const LEAD_ACTION_TYPES = ["lead", "onsite_conversion.lead_grouped", "offsite_conversion.fb_pixel_lead"];
 export const PURCHASE_ACTION_TYPES = ["omni_purchase", "purchase", "offsite_conversion.fb_pixel_purchase"];
 
@@ -345,12 +348,23 @@ export function createMetaAdsAdapter(opts: { config?: MetaAdsConfig | null; fetc
       )
         .sort((a, b) => Number(b.spend ?? 0) - Number(a.spend ?? 0))
         .slice(0, 200);
-      // Creative text (headline, primary text) for those ads, 50 ids per request.
+      // Creative text (headline, primary text) for the top ads by spend, one
+      // request per ad (Graph API v26 removed the multi-id "ids" lookup).
+      // Best effort: an ad whose creative can't be read just has no text.
       const creatives: Record<string, AdCreative> = {};
-      const ids = rows.map((r) => r.ad_id).filter((x): x is string => !!x);
-      for (let i = 0; i < ids.length; i += 50) {
-        Object.assign(creatives, await get<Record<string, AdCreative>>("", token, { ids: ids.slice(i, i + 50).join(","), fields: "creative{title,body,object_story_spec}" }));
-      }
+      const ids = rows.map((r) => r.ad_id).filter((x): x is string => !!x).slice(0, CREATIVE_LOOKUPS);
+      let next = 0;
+      const worker = async () => {
+        while (next < ids.length) {
+          const id = ids[next++];
+          try {
+            creatives[id] = await get<AdCreative>(id, token, { fields: "creative{title,body,object_story_spec}" });
+          } catch (e) {
+            if (e instanceof IntegrationError && e.kind === "AUTH_REVOKED") throw e;
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(5, ids.length) }, worker));
       const ads = parseAdInsights(rows, creatives);
       return kind === "ads" ? ads : headlinesFromAds(ads);
     },
