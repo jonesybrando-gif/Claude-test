@@ -33,6 +33,8 @@ model Agency {
   brandColor    String  @default("#4f46e5")
   reportHeader  String?
   reportFooter  String?
+  // Slack incoming webhook (https://hooks.slack.com/...) that new alerts are posted to.
+  slackWebhookUrl String?
   // Default pacing thresholds (percent of expected spend). Overridable per client.
   thresholdUnder         Decimal @default(85) @db.Decimal(6, 2)
   thresholdSlightlyUnder Decimal @default(95) @db.Decimal(6, 2)
@@ -503,6 +505,8 @@ model Alert {
   firstSeenAt DateTime @default(now())
   lastSeenAt  DateTime @default(now())
   resolvedAt  DateTime?
+  // Hidden from the open list until this time (the alert still updates and resolves).
+  snoozedUntil DateTime?
 
   notifications Notification[]
 

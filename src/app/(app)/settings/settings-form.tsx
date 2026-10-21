@@ -46,7 +46,7 @@ export function SettingsForm({ values }: { values: SettingsValues }) {
       <Card>
         <CardHeader>
           <CardTitle>White-label branding</CardTitle>
-          <CardDescription>Shown in the app, the client portal and (in a later phase) PDF and email reports.</CardDescription>
+          <CardDescription>Shown in the app, client report links, PDFs and report emails.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
           {field("name", "Agency name", { required: true })}

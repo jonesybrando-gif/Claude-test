@@ -9,6 +9,7 @@ import { contextForReport } from "./context";
 import { AI_MODEL, AiError, answerQuestion, draftClientEmail, draftReportSummary, EMAIL_PURPOSES, generateSuggestions, type EmailDraft, type EmailPurpose, type QaTurn } from "./assistant";
 import { questionTools } from "./questions";
 import { PRESET_LABEL } from "@/lib/date-ranges";
+import { formatDate } from "@/lib/time";
 
 const fail = (e: unknown) => {
   if (e instanceof AiError) return { error: e.message };
@@ -105,7 +106,7 @@ export async function askQuestionAction(clientId: string, query: Record<string, 
     .map((t) => ({ question: t.question.slice(0, 500), answer: t.answer.slice(0, 4000) }));
   try {
     const rep = await loadClientReport(clientId, { range: query.range, compare: query.compare, from: query.from, to: query.to });
-    const periodLabel = `${PRESET_LABEL[rep.preset].toLowerCase()} (${rep.range.from} to ${rep.range.to})`;
+    const periodLabel = `${PRESET_LABEL[rep.preset].toLowerCase()} (${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })})`;
     return { answer: await answerQuestion(contextForReport(rep), q, turns, questionTools(rep), { periodLabel }) };
   } catch (e) {
     return fail(e);

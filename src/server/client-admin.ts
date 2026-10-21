@@ -3,7 +3,7 @@ import { prisma } from "./db";
 
 // Removing clients and managing client labels. Callers check permissions.
 
-export const LABEL_COLORS = ["neutral", "info", "good", "warning", "serious", "critical"] as const;
+export const LABEL_COLORS = ["neutral", "info", "good", "purple", "teal", "pink"] as const;
 export type LabelColor = (typeof LABEL_COLORS)[number];
 
 export class ClientAdminError extends Error {}

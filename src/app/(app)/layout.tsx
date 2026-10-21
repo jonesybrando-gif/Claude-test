@@ -4,7 +4,7 @@ import { requireUser } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { visibleClientsWhere } from "@/server/access";
 import { logout } from "@/app/login/actions";
-import { ClientJump } from "@/components/client-jump";
+import { CommandPalette } from "@/components/command-palette";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -49,9 +49,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             );
           })}
         </nav>
-        {staff && clients.length > 0 && (
-          <div className="hidden px-4 pt-4 md:block">
-            <ClientJump clients={clients} />
+        {staff && (
+          <div className="px-2 pb-2 md:px-4 md:pt-4">
+            <CommandPalette
+              items={[
+                ...clients.map((c) => ({ label: c.name, href: `/clients/${c.id}`, kind: "Client" })),
+                ...nav.map((n) => ({ label: n.label, href: n.href, kind: "Page" })),
+              ]}
+            />
           </div>
         )}
         <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2 md:absolute md:bottom-0 md:block md:w-60 md:py-3">
