@@ -9,7 +9,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { PlatformLabel } from "@/components/platform-badge";
-import { LabelBadge, type LabelInfo } from "@/components/label-badge";
+import { LABEL_COLOR_NAMES, LabelBadge, type LabelInfo } from "@/components/label-badge";
 import { ActionButton } from "@/components/action-button";
 import { NewClientForm } from "./new-client-form";
 import { BulkLabelBar, ClientFilters, LabelPicker, SelectAllBox, SelectClientBox } from "./client-list-controls";
@@ -17,7 +17,6 @@ import { bulkLabelAction, createLabelAction, deleteClientAction, deleteLabelActi
 
 export const dynamic = "force-dynamic";
 
-const COLOR_NAME: Record<string, string> = { neutral: "Grey", info: "Blue", good: "Green", warning: "Amber", serious: "Orange", critical: "Red" };
 
 type Sp = { q?: string; label?: string; sort?: string; group?: string; view?: string; notice?: string; error?: string };
 
@@ -133,7 +132,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
               <form action={createLabelAction} className="flex flex-wrap items-center gap-2">
                 <Input name="name" placeholder="New label, e.g. Restaurants" maxLength={40} required className="w-full sm:w-56" aria-label="Label name" />
                 <Select name="color" defaultValue="info" className="w-full sm:w-28" aria-label="Label colour">
-                  {LABEL_COLORS.map((c) => <option key={c} value={c}>{COLOR_NAME[c]}</option>)}
+                  {LABEL_COLORS.map((c) => <option key={c} value={c}>{LABEL_COLOR_NAMES[c]}</option>)}
                 </Select>
                 <Button type="submit" size="sm">Add label</Button>
               </form>

@@ -33,7 +33,8 @@ Rules:
 - "not reported" means the platforms didn't report it, not that it was zero.
 - If the data is marked as demo data, say so plainly wherever results are described.
 - Nobody has changed anything in the ad platforms. Never claim that a change was made; recommend changes for a person to make.
-- Write plain text without Markdown headings, tables or bold.`;
+- Write plain text without Markdown headings, tables or bold.
+- Write dates the way people read them ("Oct 19", "Sep 1 – Sep 30", "September 2026"), never as 2026-10-19.`;
 
 /** Maps SDK errors to messages that are safe to show in the UI. */
 function toAiError(e: unknown): unknown {

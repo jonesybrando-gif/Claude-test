@@ -8,7 +8,7 @@ const STYLE: Record<PacingStatus, { variant: "good" | "warning" | "serious" | "c
   SLIGHTLY_OVER: { variant: "serious", Icon: ArrowUpCircle },
   ON_TARGET: { variant: "good", Icon: CheckCircle2 },
   SLIGHTLY_UNDER: { variant: "warning", Icon: ArrowDownCircle },
-  UNDERSPENDING: { variant: "critical", Icon: ArrowDownCircle },
+  UNDERSPENDING: { variant: "warning", Icon: ArrowDownCircle },
   NOT_STARTED: { variant: "neutral", Icon: CircleDashed },
   NO_BUDGET: { variant: "neutral", Icon: MinusCircle },
 };
@@ -37,6 +37,16 @@ export function StaleBadge({ label = "Stale data" }: { label?: string }) {
     <Badge variant="warning">
       <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
       {label}
+    </Badge>
+  );
+}
+
+/** A budget line whose ad accounts have never synced: a setup step, not a pacing problem. */
+export function NotConnectedBadge() {
+  return (
+    <Badge variant="neutral">
+      <CircleDashed className="h-3.5 w-3.5" aria-hidden />
+      Not connected
     </Badge>
   );
 }

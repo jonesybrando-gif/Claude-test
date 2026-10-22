@@ -8,7 +8,7 @@ import { STATUS_LABEL, STATUS_SEVERITY, type PacingStatus } from "@/lib/pacing/s
 import { PLATFORMS, PLATFORM_LABEL, type PlatformKey } from "@/lib/platforms";
 import { formatMoney, formatPct } from "@/lib/money";
 import { relativeTime } from "@/lib/time";
-import { NoBudgetBadge, StaleBadge, StatusBadge } from "../status-badge";
+import { NoBudgetBadge, NotConnectedBadge, StaleBadge, StatusBadge } from "../status-badge";
 import { PlatformLabel } from "../platform-badge";
 import { Input, Select } from "../ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "../ui/table";
@@ -17,7 +17,8 @@ import { PaceBar } from "./pace-bar";
 
 type SortKey = "status" | "client" | "budget" | "spend" | "pacing" | "projectedVariance" | "consumed" | "sync";
 
-const statusKey = (r: PacingRow) => (r.result ? STATUS_SEVERITY[r.result.status] : 1) + (r.disconnected ? 10 : 0);
+// Not-connected lines sort last: there's nothing to act on until data arrives.
+const statusKey = (r: PacingRow) => (r.notConnected ? -1 : (r.result ? STATUS_SEVERITY[r.result.status] : 1) + (r.disconnected ? 10 : 0));
 
 const sorters: Record<SortKey, (a: PacingRow, b: PacingRow) => number> = {
   status: (a, b) => statusKey(b) - statusKey(a) || Math.abs(b.result?.projectedVarianceMinor ?? 0) - Math.abs(a.result?.projectedVarianceMinor ?? 0),
@@ -30,7 +31,7 @@ const sorters: Record<SortKey, (a: PacingRow, b: PacingRow) => number> = {
   sync: (a, b) => (a.lastSuccessfulSyncAt ?? "").localeCompare(b.lastSuccessfulSyncAt ?? ""),
 };
 
-const FILTER_STATUSES: (PacingStatus | "ATTENTION" | "NO_BUDGET_ROWS")[] = ["ATTENTION", "OVERSPENDING", "SLIGHTLY_OVER", "ON_TARGET", "SLIGHTLY_UNDER", "UNDERSPENDING", "NOT_STARTED", "NO_BUDGET_ROWS"];
+const FILTER_STATUSES: (PacingStatus | "ATTENTION" | "NO_BUDGET_ROWS" | "NOT_CONNECTED")[] = ["ATTENTION", "OVERSPENDING", "SLIGHTLY_OVER", "ON_TARGET", "SLIGHTLY_UNDER", "UNDERSPENDING", "NOT_STARTED", "NO_BUDGET_ROWS", "NOT_CONNECTED"];
 
 export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: PacingRow[]; labels?: LabelInfo[]; labelsByClient?: Record<string, string[]> }) {
   const [q, setQ] = useState("");
@@ -55,7 +56,8 @@ export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: 
       if (manager && r.managerName !== manager) return false;
       if (status === "ATTENTION" && !r.attention) return false;
       if (status === "NO_BUDGET_ROWS" && r.result) return false;
-      if (status && status !== "ATTENTION" && status !== "NO_BUDGET_ROWS" && r.result?.status !== status) return false;
+      if (status === "NOT_CONNECTED" && !r.notConnected) return false;
+      if (status && !["ATTENTION", "NO_BUDGET_ROWS", "NOT_CONNECTED"].includes(status) && (r.notConnected || r.result?.status !== status)) return false;
       return true;
     });
     return out.sort((a, b) => sorters[sort.key](a, b) * sort.dir);
@@ -96,12 +98,45 @@ export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: 
         <Select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full sm:w-48" aria-label="Pacing status">
           <option value="">All statuses</option>
           {FILTER_STATUSES.map((s) => (
-            <option key={s} value={s}>{s === "ATTENTION" ? "Needs attention" : s === "NO_BUDGET_ROWS" ? "No budget set" : STATUS_LABEL[s]}</option>
+            <option key={s} value={s}>{s === "ATTENTION" ? "Needs attention" : s === "NO_BUDGET_ROWS" ? "No budget set" : s === "NOT_CONNECTED" ? "Not connected" : STATUS_LABEL[s]}</option>
           ))}
         </Select>
         <span className="ml-auto self-center text-xs text-text-3">{visible.length} of {rows.length} budget lines</span>
       </div>
+      {/* Phones: one card per line instead of a wide table. */}
+      <ul className="flex flex-col divide-y divide-border border-y border-border md:hidden">
+        {visible.map((r) => {
+          const res = r.notConnected ? null : r.result;
+          return (
+            <li key={r.key} className="flex flex-col gap-2 px-4 py-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <Link href={`/clients/${r.clientId}`} className="block truncate font-medium hover:underline">{r.clientName}</Link>
+                  {r.level !== "CLIENT" && <div className="truncate text-xs text-text-3">{r.label}</div>}
+                </div>
+                {r.notConnected ? <NotConnectedBadge /> : res ? <StatusBadge status={res.status} /> : <NoBudgetBadge />}
+              </div>
+              {res ? (
+                <>
+                  <div className="flex items-baseline justify-between text-sm">
+                    <span><span className="font-medium">{formatMoney(res.actualToDateMinor, r.currency, { whole: true })}</span> <span className="text-text-2">of {formatMoney(res.budgetMinor, r.currency, { whole: true })}</span></span>
+                    <span className="text-text-2">pacing {formatPct(res.pacingPct)}</span>
+                  </div>
+                  {res.pctBudgetConsumed !== null && <PaceBar consumed={res.pctBudgetConsumed} elapsed={res.pctPeriodElapsed} expected={res.budgetMinor ? (res.expectedToDateMinor / res.budgetMinor) * 100 : 0} status={res.status} />}
+                  <div className={`text-xs ${res.projectedVarianceMinor > 0 ? "text-critical-ink" : "text-text-2"}`}>
+                    Projected {formatMoney(res.projectedMinor, r.currency, { whole: true })} ({res.projectedVarianceMinor > 0 ? "+" : res.projectedVarianceMinor < 0 ? "−" : ""}{formatMoney(Math.abs(res.projectedVarianceMinor), r.currency, { whole: true })} vs budget)
+                  </div>
+                </>
+              ) : (
+                <div className="text-xs text-text-3">{r.notConnected ? "No ad account data yet" : `${formatMoney(r.unbudgetedSpendMinor, r.currency, { whole: true })} spent, no budget`}</div>
+              )}
+            </li>
+          );
+        })}
+        {visible.length === 0 && <li className="px-4 py-8 text-center text-sm text-text-3">No budget lines match these filters.</li>}
+      </ul>
       {/* Seven columns that fit a laptop screen: related figures share a cell. */}
+      <div className="hidden md:block">
       <Table className="min-w-[860px] table-fixed">
         <colgroup>
           <col className="w-[23%]" />
@@ -125,14 +160,15 @@ export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: 
         </THead>
         <TBody>
           {visible.map((r) => {
-            const res = r.result;
+            // A line with no data has nothing to pace: show its budget only.
+            const res = r.notConnected ? null : r.result;
             const c = r.currency;
             const tags = (labelsByClient[r.clientId] ?? []).map((id) => labelById.get(id)).filter((l): l is LabelInfo => !!l);
             return (
               <TR key={r.key}>
                 <TD className="pl-5">
                   <Link href={`/clients/${r.clientId}`} className="block truncate font-medium text-text hover:underline" title={r.clientName}>{r.clientName}</Link>
-                  <div className="truncate text-xs text-text-3" title={r.level === "CLIENT" ? "Combined budget" : r.label}>{r.level === "CLIENT" ? "Combined budget" : r.label}</div>
+                  {r.level !== "CLIENT" && <div className="truncate text-xs text-text-3" title={r.label}>{r.label}</div>}
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
                     {r.platforms.map((p) => <PlatformLabel key={p} platform={p} />)}
                     {tags.map((l) => <LabelBadge key={l.id} label={l} />)}
@@ -140,7 +176,7 @@ export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: 
                 </TD>
                 <TD>
                   <div className="flex flex-col items-start gap-1">
-                    {res ? <StatusBadge status={res.status} /> : <NoBudgetBadge />}
+                    {r.notConnected ? <NotConnectedBadge /> : res ? <StatusBadge status={res.status} /> : <NoBudgetBadge />}
                     {res && res.forecastStatus !== res.status && res.forecastStatus !== "ON_TARGET" && (
                       <span className="text-[11px] text-text-2">Forecast: {STATUS_LABEL[res.forecastStatus].toLowerCase()}</span>
                     )}
@@ -149,8 +185,10 @@ export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: 
                   </div>
                 </TD>
                 <TD className="text-right">
-                  <div className="font-medium">{formatMoney(res?.actualToDateMinor ?? r.unbudgetedSpendMinor, c, { whole: true })}</div>
-                  {res ? (
+                  <div className="font-medium">{r.notConnected ? "—" : formatMoney(res?.actualToDateMinor ?? r.unbudgetedSpendMinor, c, { whole: true })}</div>
+                  {r.notConnected && r.result ? (
+                    <div className="text-xs text-text-3">budget {formatMoney(r.result.budgetMinor, c, { whole: true })} · no data yet</div>
+                  ) : res ? (
                     <div className="text-xs text-text-2">of {formatMoney(res.budgetMinor, c, { whole: true })} · {formatMoney(res.remainingBudgetMinor, c, { whole: true })} left</div>
                   ) : (
                     <div className="text-xs text-text-3">no budget</div>
@@ -199,6 +237,7 @@ export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: 
           )}
         </TBody>
       </Table>
+      </div>
       <p className="px-5 pt-3 pb-4 text-xs text-text-3">
         <strong className="font-medium text-text-2">Pacing</strong> = actual spend ÷ expected spend to date × 100. It is not the share of the monthly budget used — that is shown in the bar, with the tick marking where spend should be today.
       </p>

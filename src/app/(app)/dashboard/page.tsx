@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAgencyStaff, visibleClientsWhere } from "@/server/access";
 import { prisma } from "@/server/db";
 import { loadPacing, summarize } from "@/server/pacing-service";
@@ -10,6 +11,26 @@ import { PacingChart } from "@/components/charts/pacing-chart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DemoBadge, StatusBadge } from "@/components/status-badge";
 import { ExportButtons } from "@/components/export-buttons";
+import { SetupChecklist, type ChecklistStep } from "@/components/dashboard/setup-checklist";
+
+async function setupSteps(agencyId: string): Promise<ChecklistStep[]> {
+  const [connections, accounts, budgets, agency, users, schedules] = await Promise.all([
+    prisma.platformConnection.count({ where: { agencyId, status: { not: "DISCONNECTED" } } }),
+    prisma.adAccount.count({ where: { isDemo: false, status: { not: "DISCONNECTED" }, client: { agencyId } } }),
+    prisma.budget.count({ where: { client: { agencyId, accounts: { some: { isDemo: false } } } } }),
+    prisma.agency.findUniqueOrThrow({ where: { id: agencyId }, select: { logoUrl: true, logoData: true, brandColor: true } }),
+    prisma.user.count({ where: { agencyId, deactivatedAt: null } }),
+    prisma.clientReportSchedule.count({ where: { client: { agencyId } } }),
+  ]);
+  return [
+    { title: "Connect an ad platform", body: "Sign in to Google Ads, Meta or Microsoft.", href: "/integrations", done: connections > 0 },
+    { title: "Link ad accounts to clients", body: "Open a client → Setup → Ad accounts.", href: "/clients", done: accounts > 0 },
+    { title: "Set a monthly budget", body: "Open a client → Setup → Budgets.", href: "/clients", done: budgets > 0 },
+    { title: "Add your branding", body: "Logo and colour for reports and links.", href: "/settings", done: !!(agency.logoUrl || agency.logoData) || agency.brandColor.toLowerCase() !== "#4f46e5" },
+    { title: "Schedule a monthly report", body: "Open a client → Share report → Scheduled email.", href: "/clients", done: schedules > 0 },
+    { title: "Invite your team", body: "Settings → Team.", href: "/settings/team", done: users > 1 },
+  ];
+}
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +42,8 @@ export default async function DashboardPage() {
     prisma.client.findMany({ where: visibleClientsWhere(user), select: { id: true, labels: { select: { id: true } } } }),
   ]);
   const labelsByClient = Object.fromEntries(clientLabels.map((c) => [c.id, c.labels.map((l) => l.id)]));
+  // First-run checklist for admins until every step is done.
+  const steps = user.role === "AGENCY_ADMIN" ? await setupSteps(user.agencyId) : [];
   const rows = clients.flatMap((c) => c.rows);
   const s = summarize(clients);
   const isDemo = rows.some((r) => r.isDemo);
@@ -59,9 +82,9 @@ export default async function DashboardPage() {
     <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-xl font-semibold">Advertising Budget Monitor</h1>
+          <h1 className="text-xl font-semibold">Budget pacing</h1>
           <p className="text-sm text-text-2">
-            {[period, `${clients.length} client${clients.length === 1 ? "" : "s"}`, `${rows.length} budget line${rows.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}
+            {[period, `${clients.length} client${clients.length === 1 ? "" : "s"}`, `${s.rowsTotal} budget line${s.rowsTotal === 1 ? "" : "s"} with data`].filter(Boolean).join(" · ")}
             {s.typicalAsOf && <> · data through {formatDate(s.typicalAsOf, { month: "short", day: "numeric" })}</>}
             {s.staleRows > 0 && <span className="text-warning-ink"> · {s.staleRows} line{s.staleRows === 1 ? "" : "s"} with older data</span>}
           </p>
@@ -76,6 +99,18 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {steps.length > 0 && <SetupChecklist steps={steps} />}
+
+      {s.notConnectedRows > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm">
+          <span>
+            <strong className="font-medium">{s.notConnectedRows} budget line{s.notConnectedRows === 1 ? " has" : "s have"} no ad account data yet.</strong>{" "}
+            <span className="text-text-2">They&apos;re left out of the figures and alerts below until an ad account is linked and synced.</span>
+          </span>
+          <Link href="/clients" className="font-medium text-brand hover:underline">Link ad accounts</Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatTile label="Total monthly budget" value={formatMoney(s.totalBudgetMinor, c, { whole: true })} sub={s.unbudgetedSpendMinor > 0 ? `+ ${formatMoney(s.unbudgetedSpendMinor, c, { whole: true })} unbudgeted spend` : "across budgeted lines"} />
         <StatTile label="Month-to-date spend" value={formatMoney(s.actualToDateMinor, c, { whole: true })} sub={`${formatPct(s.totalBudgetMinor ? (s.actualToDateMinor / s.totalBudgetMinor) * 100 : null, 0)} of budget used`} />
@@ -85,7 +120,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-        <ActionCenter rows={rows} />
+        <ActionCenter rows={rows.filter((r) => !r.notConnected)} />
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-2">

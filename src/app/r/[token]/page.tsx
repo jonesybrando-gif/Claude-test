@@ -4,6 +4,10 @@ import { Download } from "lucide-react";
 import { prisma } from "@/server/db";
 import { loadClientReport } from "@/server/client-report";
 import { recordShareView, resolveShareToken } from "@/server/share-links";
+import { hasShareAccess, shareCookieName } from "@/server/share-access";
+import { cookies } from "next/headers";
+import { UnlockForm } from "./unlock-form";
+import { agencyLogo } from "@/lib/logo";
 import { PRESET_LABEL } from "@/lib/date-ranges";
 import { formatDate } from "@/lib/time";
 import { buttonVariants } from "@/components/ui/button";
@@ -12,7 +16,11 @@ import { ClientReportView } from "@/components/reports/client-report-view";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Advertising report", robots: { index: false, follow: false } };
+/** The browser tab names the client, e.g. "Board and Brew · Advertising report". */
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const link = await resolveShareToken((await params).token);
+  return { title: link ? `${link.client.name} · Advertising report` : "Advertising report", robots: { index: false, follow: false } };
+}
 
 /** A client-facing report opened from a shared link, without signing in. */
 export default async function SharedReportPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
@@ -20,9 +28,18 @@ export default async function SharedReportPage({ params, searchParams }: { param
   const sp = await searchParams;
   const link = await resolveShareToken(token);
   if (!link) notFound();
+  if (!hasShareAccess(link, (await cookies()).get(shareCookieName(link.id))?.value)) {
+    const a = await prisma.agency.findUniqueOrThrow({ where: { id: link.client.agencyId }, select: { name: true, brandColor: true } });
+    return (
+      <div className="flex min-h-screen flex-col bg-background" style={{ ["--brand" as string]: a.brandColor }}>
+        <div className="h-1.5 bg-brand" />
+        <main className="flex flex-1 items-center px-4 py-16"><UnlockForm token={token} agencyName={a.name} /></main>
+      </div>
+    );
+  }
   const [rep, agency] = await Promise.all([
     loadClientReport(link.clientId, { range: link.range ?? undefined, compare: link.compare ?? undefined }),
-    prisma.agency.findUniqueOrThrow({ where: { id: link.client.agencyId }, select: { name: true, brandColor: true, logoUrl: true, reportHeader: true, reportFooter: true } }),
+    prisma.agency.findUniqueOrThrow({ where: { id: link.client.agencyId }, select: { name: true, brandColor: true, logoUrl: true, logoData: true, reportHeader: true, reportFooter: true } }),
   ]);
   await recordShareView(link.id);
   const { client, preset, range, cmpRange, template } = rep;
@@ -34,9 +51,9 @@ export default async function SharedReportPage({ params, searchParams }: { param
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6">
           <div className="flex items-center gap-2">
-            {agency.logoUrl ? (
+            {agencyLogo(agency) ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={agency.logoUrl} alt="" className="h-8 w-8 rounded" />
+              <img src={agencyLogo(agency)!} alt="" className="h-8 w-8 rounded object-contain" />
             ) : (
               <div className="flex h-8 w-8 items-center justify-center rounded bg-brand text-sm font-bold text-brand-ink">{agency.name.slice(0, 1)}</div>
             )}

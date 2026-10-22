@@ -8,7 +8,8 @@ export interface OutgoingEmail {
   subject: string;
   text: string;
   html?: string;
-  kind: "invite" | "password_reset" | "alert" | "daily_summary" | "client_email";
+  kind: "invite" | "password_reset" | "alert" | "daily_summary" | "client_email" | "scheduled_report";
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
   /** Replies go here instead of EMAIL_FROM (e.g. the account manager). */
   replyTo?: string;
   /**
@@ -49,7 +50,7 @@ export async function sendEmail(msg: OutgoingEmail): Promise<SendResult> {
     result = { status: "NOT_CONFIGURED" };
   } else {
     try {
-      await t.sendMail({ from: process.env.EMAIL_FROM, to: msg.to, replyTo: msg.replyTo, subject: msg.subject, text: msg.text, html: msg.html });
+      await t.sendMail({ from: process.env.EMAIL_FROM, to: msg.to, replyTo: msg.replyTo, subject: msg.subject, text: msg.text, html: msg.html, attachments: msg.attachments });
       result = { status: "SENT" };
     } catch (e) {
       result = { status: "FAILED", error: (e as Error).message.slice(0, 500) };

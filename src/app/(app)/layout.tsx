@@ -4,12 +4,13 @@ import { requireUser } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { visibleClientsWhere } from "@/server/access";
 import { logout } from "@/app/login/actions";
-import { ClientJump } from "@/components/client-jump";
+import { CommandPalette } from "@/components/command-palette";
+import { agencyLogo } from "@/lib/logo";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const [agency, clients, unread] = await Promise.all([
-    prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId }, select: { name: true, brandColor: true, logoUrl: true } }),
+    prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId }, select: { name: true, brandColor: true, logoUrl: true, logoData: true } }),
     prisma.client.findMany({ where: visibleClientsWhere(user), select: { id: true, name: true }, orderBy: { name: "asc" } }),
     user.role === "CLIENT_USER" ? Promise.resolve(0) : prisma.notification.count({ where: { userId: user.id, readAt: null } }),
   ]);
@@ -27,9 +28,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen md:flex" style={{ ["--brand" as string]: agency.brandColor }}>
       <aside className="border-b border-border bg-surface md:sticky md:top-0 md:h-screen md:w-60 md:shrink-0 md:border-r md:border-b-0">
         <div className="flex items-center gap-2 px-4 py-4">
-          {agency.logoUrl ? (
+          {agencyLogo(agency) ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={agency.logoUrl} alt="" className="h-7 w-7 rounded" />
+            <img src={agencyLogo(agency)!} alt="" className="h-7 w-7 rounded object-contain" />
           ) : (
             <div className="flex h-7 w-7 items-center justify-center rounded bg-brand text-xs font-bold text-brand-ink">
               {agency.name.slice(0, 1)}
@@ -49,9 +50,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             );
           })}
         </nav>
-        {staff && clients.length > 0 && (
-          <div className="hidden px-4 pt-4 md:block">
-            <ClientJump clients={clients} />
+        {staff && (
+          <div className="px-2 pb-2 md:px-4 md:pt-4">
+            <CommandPalette
+              items={[
+                ...clients.map((c) => ({ label: c.name, href: `/clients/${c.id}`, kind: "Client" })),
+                ...nav.map((n) => ({ label: n.label, href: n.href, kind: "Page" })),
+              ]}
+            />
           </div>
         )}
         <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2 md:absolute md:bottom-0 md:block md:w-60 md:py-3">

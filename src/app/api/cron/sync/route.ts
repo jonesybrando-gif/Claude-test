@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { cronAuthorized } from "@/server/cron-auth";
 import { syncDueAccounts } from "@/server/sync/sync-account";
 import { runAllAlerts } from "@/server/alerts";
+import { runDueSchedules } from "@/server/report-schedules";
 
 // Scheduled entry point. Call hourly with  Authorization: Bearer $CRON_SECRET
 // (Vercel Cron sends this header automatically when CRON_SECRET is set).
@@ -18,7 +19,14 @@ async function run(req: NextRequest) {
   } catch (e) {
     alerts = { error: (e as Error).message };
   }
+  let scheduledReports: unknown;
+  try {
+    scheduledReports = await runDueSchedules();
+  } catch (e) {
+    scheduledReports = { error: (e as Error).message };
+  }
   return NextResponse.json({
+    scheduledReports,
     synced: results.length,
     succeeded: count("SUCCEEDED"),
     partial: count("PARTIAL"),

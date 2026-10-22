@@ -1,4 +1,5 @@
 import "server-only";
+import bcrypt from "bcryptjs";
 import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "./db";
 import { decryptSecret, encryptSecret } from "./crypto";
@@ -15,9 +16,10 @@ export type ShareRange = (typeof SHARE_RANGES)[number];
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 const TOKEN_RE = /^[A-Za-z0-9_-]{32}$/;
 
-export const shareUrl = (token: string) => appUrl(`/r/${token}`);
+/** Report links use REPORT_URL (a custom report domain) when it's set, else APP_URL. */
+export const shareUrl = (token: string) => (process.env.REPORT_URL ? new URL(`/r/${token}`, process.env.REPORT_URL).toString() : appUrl(`/r/${token}`));
 
-export async function createShareLink(opts: { clientId: string; createdById: string; label: string | null; range: ShareRange; expiresInDays: number | null; now?: Date }) {
+export async function createShareLink(opts: { clientId: string; createdById: string; label: string | null; range: ShareRange; expiresInDays: number | null; password?: string | null; now?: Date }) {
   const token = randomBytes(24).toString("base64url");
   const now = opts.now ?? new Date();
   const link = await prisma.reportShareLink.create({
@@ -26,6 +28,7 @@ export async function createShareLink(opts: { clientId: string; createdById: str
       tokenHash: hash(token),
       tokenEnc: encryptSecret(token),
       label: opts.label,
+      passwordHash: opts.password ? await bcrypt.hash(opts.password, 12) : null,
       range: opts.range === "template" ? null : opts.range,
       expiresAt: opts.expiresInDays ? new Date(now.getTime() + opts.expiresInDays * 86_400_000) : null,
       createdById: opts.createdById,
@@ -37,7 +40,7 @@ export async function createShareLink(opts: { clientId: string; createdById: str
 /** The live link for a token, or null if it's unknown, revoked, expired, or the client is archived. */
 export async function resolveShareToken(token: string, now: Date = new Date()) {
   if (!TOKEN_RE.test(token)) return null;
-  const link = await prisma.reportShareLink.findUnique({ where: { tokenHash: hash(token) }, include: { client: { select: { id: true, agencyId: true, archivedAt: true } } } });
+  const link = await prisma.reportShareLink.findUnique({ where: { tokenHash: hash(token) }, include: { client: { select: { id: true, agencyId: true, archivedAt: true, name: true } } } });
   if (!link || link.revokedAt || link.client.archivedAt) return null;
   if (link.expiresAt && link.expiresAt <= now) return null;
   return link;

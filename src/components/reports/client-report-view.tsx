@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { AlertTriangle, EyeOff } from "lucide-react";
 import type { PacingRow } from "@/server/pacing-service";
 import type { ClientReport } from "@/server/client-report";
@@ -9,6 +9,7 @@ import { dailyKpiValue, KPI_BY_KEY, kpiValues, type KpiKey } from "@/lib/kpis";
 import type { SectionKey } from "@/lib/report-template";
 import { formatMoney, formatNumber, formatPct } from "@/lib/money";
 import { formatDate, relativeTime } from "@/lib/time";
+import { addDays } from "@/lib/pacing/dates";
 import { PLATFORM_LABEL } from "@/lib/platforms";
 import { formatCustomerId } from "@/server/integrations/google-ads/gaql";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,9 @@ import { PacingChart } from "@/components/charts/pacing-chart";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { RefreshAccountButton } from "@/components/refresh-account-button";
 import { ExecutiveSummary } from "./executive-summary";
+import { CampaignTable } from "./campaign-table";
+
+export type ReportTab = "overview" | "campaigns" | "trends" | "insights";
 
 const TREND_EXTRAS: KpiKey[] = ["spend", "conversions", "leads", "costPerLead", "clicks", "impressions", "conversionRate"];
 
@@ -39,13 +43,19 @@ export function ClientReportView({
   basePath,
   query,
   afterKpis,
+  tab,
+  tabHref,
 }: {
   rep: ClientReport;
   staff: boolean;
   /** Where the pacing-line links point (the page showing this report). */
   basePath: string;
   query: Record<string, string | undefined>;
+  /** Staff-only AI assistant, shown on the Insights tab. */
   afterKpis?: ReactNode;
+  /** Staff client page: show one tab's sections. Omitted: the full client-facing report. */
+  tab?: ReportTab;
+  tabHref?: (tab: ReportTab) => string;
 }) {
   const { client, preset, range, cmpRange, pacing, history, perf, cmpPerf, template } = rep;
   // Client users see only the sections the report template includes; staff
@@ -55,6 +65,10 @@ export function ClientReportView({
   const trendMetrics = [...new Set([...template.trendKpis, ...TREND_EXTRAS])];
 
   const total = pacing.total;
+  // Months without a budget would only show rows of dashes.
+  const pastBudgets = history.filter((h) => h.total);
+  const pacingIsCurrent = pacing.period.start <= rep.today && rep.today <= pacing.period.end;
+  const rangeCoversPacing = range.from <= pacing.period.start && range.to >= addDays(rep.today, -1);
   const allLines: PacingRow[] = [...pacing.rows, ...pacing.subRows];
   const selectedKey = query.line && pacing.seriesByKey[query.line] ? query.line : null;
   const selectedRow = selectedKey ? allLines.find((r) => r.key === selectedKey) ?? null : null;
@@ -69,19 +83,8 @@ export function ClientReportView({
     return `${basePath}?${q.toString()}`;
   };
 
-  return (
-    <>
-      {show("executive") && <ExecutiveSummary rep={rep} marker={hiddenMark("executive")} copyable={staff} />}
-
-      {show("summary") && template.summary.trim() && (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-center gap-2"><CardTitle>Note</CardTitle>{hiddenMark("summary")}</div>
-          </CardHeader>
-          <CardContent><p className="max-w-[80ch] whitespace-pre-line text-sm text-text-2">{template.summary.trim()}</p></CardContent>
-        </Card>
-      )}
-
+  const blocks = {
+    kpis: <>
       {/* KPI scorecards */}
       {show("kpis") && (
         <section aria-label="Key metrics" className="flex flex-col gap-2">
@@ -93,20 +96,32 @@ export function ClientReportView({
         </section>
       )}
 
-      {afterKpis}
+    </>,
+    note: <>
+      {show("summary") && template.summary.trim() && (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-center gap-2"><CardTitle>Note</CardTitle>{hiddenMark("summary")}</div>
+          </CardHeader>
+          <CardContent><p className="max-w-[80ch] whitespace-pre-line text-sm text-text-2">{template.summary.trim()}</p></CardContent>
+        </Card>
+      )}
 
+    </>,
+    pacing: <>
       {/* Budget pacing */}
       {show("pacing") && <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <CardTitle>Budget pacing · {formatDate(pacing.period.start, { month: "long", year: "numeric" })}</CardTitle>
+              <CardTitle>Budget pacing · {pacingIsCurrent ? "This month, " : ""}{formatDate(pacing.period.start, { month: "long", year: "numeric" })}</CardTitle>
               {hiddenMark("pacing")}
             </div>
             {shown && <StatusBadge status={shown.status} />}
           </div>
           <CardDescription>
             {shown?.asOf ? <>Complete data through {formatDate(shown.asOf)}. Today&apos;s partial spend is excluded.</> : "No complete days of data in this period yet."}
+            {!rangeCoversPacing && <> Pacing always follows the current budget month; the rest of this page shows {PRESET_LABEL[preset].toLowerCase()} ({formatDate(range.from)} – {formatDate(range.to)}).</>}
           </CardDescription>
           {allLines.length > 1 && (
             <div className="mt-2 flex flex-wrap gap-1 text-xs" aria-label="Pacing level">
@@ -169,8 +184,8 @@ export function ClientReportView({
       {show("pacing") && allLines.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Budget lines</CardTitle>
-            <CardDescription>Lines marked “sub-allocation” are paced individually but already included in a parent budget, so they are not added to the client total.</CardDescription>
+            <CardTitle>{staff ? "Budget lines" : "Budget"}</CardTitle>
+            {staff && pacing.subRows.length > 0 && <CardDescription>Lines marked “sub-allocation” are paced individually but already included in a parent budget, so they are not added to the client total.</CardDescription>}
           </CardHeader>
           <Table>
             <THead>
@@ -184,8 +199,8 @@ export function ClientReportView({
                 return (
                   <TR key={r.key + (sub ? ":sub" : "")}>
                     <TD className="pl-5">
-                      <div className="font-medium">{r.level === "CLIENT" ? "Combined client budget" : r.label}</div>
-                      <div className="text-xs text-text-3">{r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ")}{sub && " · sub-allocation"}{r.level === "UNBUDGETED" && " · not budgeted"}</div>
+                      <div className="font-medium">{r.level === "CLIENT" ? (staff ? "Combined client budget" : "Total budget") : r.label}</div>
+                      <div className="text-xs text-text-3">{r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ")}{sub && staff && " · sub-allocation"}{r.level === "UNBUDGETED" && " · not budgeted"}</div>
                     </TD>
                     <TD>{r.result ? <StatusBadge status={r.result.status} /> : <NoBudgetBadge />}</TD>
                     <TD className="text-right">{r.result ? formatMoney(r.result.budgetMinor, c, { whole: true }) : "—"}</TD>
@@ -203,6 +218,8 @@ export function ClientReportView({
         </Card>
       )}
 
+    </>,
+    platforms: <>
       {/* Platform breakdown */}
       {show("platforms") && <Card>
         <CardHeader>
@@ -232,7 +249,7 @@ export function ClientReportView({
                   <TD className="text-right">{lsa ? "n/a" : m ? formatNumber(m.clicks) : "—"}</TD>
                   <TD className="text-right">{lsa ? "n/a" : formatPct(x?.ctr ?? null, 2)}</TD>
                   <TD className="text-right">{lsa || x?.cpcMinor == null ? (lsa ? "n/a" : "—") : formatMoney(x.cpcMinor, c)}</TD>
-                  <TD className="text-right">{m ? formatNumber(m.conversions, 1) : "—"}</TD>
+                  <TD className="text-right">{m ? formatNumber(m.conversions, m.conversions < 100 ? 1 : 0) : "—"}</TD>
                   <TD className="text-right">{x?.costPerConversionMinor == null ? "—" : formatMoney(x.costPerConversionMinor, c)}</TD>
                   <TD className="text-right">{m && (m.leads || m.leadsReported) ? formatNumber(m.leads) : "—"}</TD>
                   <TD className="text-right">{x?.roas == null || lsa ? "—" : `${x.roas.toFixed(2)}×`}</TD>
@@ -258,6 +275,8 @@ export function ClientReportView({
         <div className="h-4" />
       </Card>}
 
+    </>,
+    trends: <>
       {/* Trends */}
       {show("trends") && <Card>
         <CardHeader>
@@ -269,45 +288,31 @@ export function ClientReportView({
         </CardContent>
       </Card>}
 
-      {/* Campaigns */}
-      {show("campaigns") && <Card>
+    </>,
+    campaigns: show("campaigns") ? (
+      <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2"><CardTitle>Campaigns</CardTitle>{hiddenMark("campaigns")}</div>
             {staff && <Link href={`${basePath}/campaigns?range=${preset}&from=${range.from}&to=${range.to}`} className="text-sm font-medium text-brand hover:underline">Add or remove campaigns</Link>}
           </div>
-          <CardDescription>{PRESET_LABEL[preset]}</CardDescription>
+          <CardDescription>{PRESET_LABEL[preset]} · sorted by spend</CardDescription>
         </CardHeader>
-        <Table>
-          <THead>
-            <tr><TH className="pl-5">Campaign</TH><TH>Platform</TH><TH>Status</TH><TH className="text-right">Spend</TH><TH className="text-right">Clicks</TH><TH className="text-right">Conv.</TH><TH className="text-right">Cost / conv.</TH><TH className="pr-5 text-right">ROAS</TH></tr>
-          </THead>
-          <TBody>
-            {client.accounts.flatMap((a) =>
-              a.campaigns.map((cmp) => {
-                const m = perf.byCampaign[cmp.id];
-                const x = m ? derive(m) : null;
-                return (
-                  <TR key={cmp.id}>
-                    <TD className="pl-5 font-medium">{cmp.name}</TD>
-                    <TD className="text-xs"><PlatformLabel platform={a.platform} /></TD>
-                    <TD className="text-xs text-text-2">{cmp.status.toLowerCase()}</TD>
-                    <TD className="text-right">{m ? formatMoney(m.costMinor, c, { whole: true }) : formatMoney(0, c, { whole: true })}</TD>
-                    <TD className="text-right">{m ? formatNumber(m.clicks) : 0}</TD>
-                    <TD className="text-right">{m ? formatNumber(m.conversions, 1) : 0}</TD>
-                    <TD className="text-right">{x?.costPerConversionMinor == null ? "—" : formatMoney(x.costPerConversionMinor, c)}</TD>
-                    <TD className="pr-5 text-right">{x?.roas == null ? "—" : `${x.roas.toFixed(2)}×`}</TD>
-                  </TR>
-                );
-              }),
-            )}
-          </TBody>
-        </Table>
+        <CampaignTable
+          currency={c}
+          rows={client.accounts.flatMap((a) =>
+            a.campaigns.map((cmp) => {
+              const m = perf.byCampaign[cmp.id];
+              return { id: cmp.id, name: cmp.name, platform: a.platform, status: cmp.status, costMinor: m?.costMinor ?? 0, clicks: m?.clicks ?? 0, conversions: m?.conversions ?? 0, conversionValueMinor: m?.conversionValueMinor ?? 0 };
+            }),
+          )}
+        />
         <div className="h-4" />
-      </Card>}
-
+      </Card>
+    ) : null,
+    history: <>
       {/* Budget history */}
-      {show("history") && <Card>
+      {show("history") && pastBudgets.length > 0 && <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center gap-2"><CardTitle>Historical budget performance</CardTitle>{hiddenMark("history")}</div>
           <CardDescription>Final spend against budget for previous periods.</CardDescription>
@@ -317,7 +322,7 @@ export function ClientReportView({
             <tr><TH className="pl-5">Period</TH><TH className="text-right">Budget</TH><TH className="text-right">Spent</TH><TH className="text-right">Variance</TH><TH className="text-right">Budget used</TH><TH className="pr-5">Result</TH></tr>
           </THead>
           <TBody>
-            {history.map((h) => {
+            {pastBudgets.map((h) => {
               const r = h.total;
               return (
                 <TR key={h.period.start}>
@@ -334,6 +339,22 @@ export function ClientReportView({
         </Table>
         <div className="h-4" />
       </Card>}
+    </>,
+    summary: show("executive") ? <ExecutiveSummary rep={rep} marker={<>{hiddenMark("executive")}{staff && tab === "insights" && <Link href={`${basePath}/report`} className="text-xs font-normal text-brand hover:underline">{template.sections.executive ? "Shown to the client" : "Not shown to the client"} · change</Link>}</>} copyable={staff} compact={tab !== "insights"} fullHref={tab === "overview" ? tabHref?.("insights") : undefined} /> : null,
+  };
+
+  // Staff see one tab at a time; the client-facing report shows everything,
+  // numbers first: KPI tiles, one chart, then the written summary.
+  const order: Record<ReportTab | "all", (keyof typeof blocks | "ai")[]> = {
+    all: ["kpis", "trends", "summary", "note", "pacing", "campaigns", "platforms", "history"],
+    overview: ["kpis", "summary", "note", "pacing", "history"],
+    campaigns: ["campaigns"],
+    trends: ["trends", "platforms"],
+    insights: ["summary", "ai"],
+  };
+  return (
+    <>
+      {order[tab ?? "all"].map((k) => (k === "ai" ? <Fragment key={k}>{afterKpis}</Fragment> : <Fragment key={k}>{blocks[k]}</Fragment>))}
     </>
   );
 }
