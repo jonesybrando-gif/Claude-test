@@ -33,6 +33,8 @@ model Agency {
   brandColor    String  @default("#4f46e5")
   reportHeader  String?
   reportFooter  String?
+  // Uploaded logo (PNG/JPEG, ≤ 300 KB) as a data: URL; takes precedence over logoUrl.
+  logoData      String?
   // Slack incoming webhook (https://hooks.slack.com/...) that new alerts are posted to.
   slackWebhookUrl String?
   // Default pacing thresholds (percent of expected spend). Overridable per client.
@@ -176,8 +178,33 @@ model Client {
   alerts      Alert[]
   reports     Report[]
   labels      ClientLabel[]
+  schedule    ClientReportSchedule?
 
   @@index([agencyId])
+}
+
+// Emails the client's report (link and/or PDF, with the executive summary)
+// on a set day each month, for the previous month by default.
+model ClientReportSchedule {
+  id          String   @id @default(cuid())
+  clientId    String   @unique
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  // 1–28, so every month has the day. Sent at 8:00 in the client's time zone.
+  dayOfMonth  Int
+  // Comma-separated email addresses.
+  recipients  String
+  range       String   @default("last_month")
+  attachPdf   Boolean  @default(true)
+  includeLink Boolean  @default(true)
+  active      Boolean  @default(true)
+  nextRunAt   DateTime
+  lastSentAt  DateTime?
+  lastStatus  String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active, nextRunAt])
 }
 
 // Agency-defined tags for grouping, sorting and filtering clients.
@@ -598,6 +625,8 @@ model ReportShareLink {
   tokenHash    String    @unique
   tokenEnc     String
   label        String?
+  // Optional password (bcrypt) the viewer must enter before the report shows.
+  passwordHash String?
   // Fixed date range preset and comparison; null follows the report template.
   range        String?
   compare      String?

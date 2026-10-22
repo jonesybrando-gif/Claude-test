@@ -1,6 +1,7 @@
 import { prisma } from "@/server/db";
 import { requireAdmin } from "@/server/access";
 import { SettingsForm } from "./settings-form";
+import { agencyLogo } from "@/lib/logo";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export default async function SettingsPage() {
           name: a.name,
           brandColor: a.brandColor,
           logoUrl: a.logoUrl ?? "",
+          currentLogo: agencyLogo(a),
           reportHeader: a.reportHeader ?? "",
           reportFooter: a.reportFooter ?? "",
           under: Number(a.thresholdUnder),

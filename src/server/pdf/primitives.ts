@@ -204,7 +204,11 @@ export function paragraph(doc: Doc, text: string, opts: { color?: string; size?:
 
 /** Fetch an https logo for white-label headers (PNG/JPEG, ≤ 2 MB, 3 s timeout). Never throws. */
 export async function fetchLogo(url: string | null | undefined): Promise<Buffer | null> {
-  if (!url || !url.startsWith("https://")) return null;
+  if (!url) return null;
+  // Uploaded logos are stored as data: URLs.
+  const data = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/=]+)$/.exec(url);
+  if (data) return Buffer.from(data[2], "base64");
+  if (!url.startsWith("https://")) return null;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
     const type = res.headers.get("content-type") ?? "";

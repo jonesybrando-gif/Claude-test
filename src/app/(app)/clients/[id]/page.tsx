@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Download, FileSliders, FileText, Link2, ListChecks, Mail, Plug, Settings2, Share2, Wrench } from "lucide-react";
+import { CalendarClock, Download, FileSliders, FileText, Link2, ListChecks, Mail, Plug, Settings2, Share2, Wrench } from "lucide-react";
 import { AiSuggestionsCard } from "@/components/ai/suggestions-card";
 import { requireClientView } from "@/server/access";
 import { loadClientReport } from "@/server/client-report";
@@ -82,6 +82,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                   items={[
                     { label: "Share link", href: `/clients/${id}/share`, description: "A private web link the client can open", icon: <Link2 className="h-4 w-4" /> },
                     { label: "Email client", href: `/clients/${id}/email`, description: "Draft an email with the AI, then send", icon: <Mail className="h-4 w-4" /> },
+                    { label: "Scheduled email", href: `/clients/${id}/schedule`, description: "Send the report every month automatically", icon: <CalendarClock className="h-4 w-4" /> },
                     { label: "PDF", href: exportHref("pdf"), download: true, description: "The client-facing report", icon: <FileText className="h-4 w-4" /> },
                     { label: "PDF + notes", href: exportHref("pdf", "internal=1"), download: true, description: "Includes internal recommendations", icon: <FileText className="h-4 w-4" /> },
                     { label: "CSV", href: exportHref("csv"), download: true, description: "Daily rows by campaign", icon: <Download className="h-4 w-4" /> },

@@ -5,11 +5,12 @@ import { prisma } from "@/server/db";
 import { visibleClientsWhere } from "@/server/access";
 import { logout } from "@/app/login/actions";
 import { CommandPalette } from "@/components/command-palette";
+import { agencyLogo } from "@/lib/logo";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const [agency, clients, unread] = await Promise.all([
-    prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId }, select: { name: true, brandColor: true, logoUrl: true } }),
+    prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId }, select: { name: true, brandColor: true, logoUrl: true, logoData: true } }),
     prisma.client.findMany({ where: visibleClientsWhere(user), select: { id: true, name: true }, orderBy: { name: "asc" } }),
     user.role === "CLIENT_USER" ? Promise.resolve(0) : prisma.notification.count({ where: { userId: user.id, readAt: null } }),
   ]);
@@ -27,9 +28,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen md:flex" style={{ ["--brand" as string]: agency.brandColor }}>
       <aside className="border-b border-border bg-surface md:sticky md:top-0 md:h-screen md:w-60 md:shrink-0 md:border-r md:border-b-0">
         <div className="flex items-center gap-2 px-4 py-4">
-          {agency.logoUrl ? (
+          {agencyLogo(agency) ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={agency.logoUrl} alt="" className="h-7 w-7 rounded" />
+            <img src={agencyLogo(agency)!} alt="" className="h-7 w-7 rounded object-contain" />
           ) : (
             <div className="flex h-7 w-7 items-center justify-center rounded bg-brand text-xs font-bold text-brand-ink">
               {agency.name.slice(0, 1)}

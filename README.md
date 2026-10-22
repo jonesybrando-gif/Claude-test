@@ -30,6 +30,7 @@ npm run dev                   # http://localhost:3000
 | `TOKEN_ENCRYPTION_KEY` | 32-byte key for encrypting OAuth tokens at rest: `openssl rand -base64 32` |
 | `SHOW_DEMO_LOGINS` | Optional. `1` shows the demo login hints on the sign-in page in production |
 | `APP_URL` | Public base URL; must match the OAuth redirect URI registered with Google |
+| `REPORT_URL` | Optional. A custom domain for client report links, e.g. `https://reports.youragency.com`. Point it (CNAME) at the same app and add it as a custom domain on the host; links then use it, and anything other than a report on that domain redirects to `APP_URL`. |
 | `CRON_SECRET` | Bearer secret for `/api/cron/sync` |
 | `APP_NAME`, `PUBLIC_COMPANY_NAME`, `PUBLIC_CONTACT_EMAIL` | Shown on the public homepage (`/`), privacy policy (`/privacy`) and terms (`/terms`). Google and Meta require those pages, with a working contact email, before approving the app. |
 | `SETUP_TOKEN` | Temporary. While set (24+ characters) and no user exists, `/setup` lets you create the first administrator in the browser. Remove it once you've signed in. |

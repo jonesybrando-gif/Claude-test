@@ -1,6 +1,7 @@
 import "server-only";
 import { syncDueAccounts } from "./sync/sync-account";
 import { runAllAlerts } from "./alerts";
+import { runDueSchedules } from "./report-schedules";
 
 // Built-in hourly job for hosts that keep the app running (Railway, Render,
 // a VPS). Does the same work as GET /api/cron/sync, so no external scheduler
@@ -18,7 +19,8 @@ async function tick() {
     const results = await syncDueAccounts();
     const failed = results.filter((r) => r.status === "FAILED").length;
     await runAllAlerts();
-    console.log(`[scheduler] synced ${results.length} account(s), ${failed} failed, alerts checked (${Math.round((Date.now() - started) / 1000)}s)`);
+    const reports = await runDueSchedules();
+    console.log(`[scheduler] synced ${results.length} account(s), ${failed} failed, alerts checked, ${reports} scheduled report(s) sent (${Math.round((Date.now() - started) / 1000)}s)`);
   } catch (e) {
     console.error("[scheduler] run failed", e);
   } finally {

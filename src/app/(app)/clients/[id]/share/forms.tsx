@@ -34,7 +34,7 @@ export function CreateShareLinkForm({ clientId, ranges }: { clientId: string; ra
   const form = useFormSubmit(action, state?.n);
   return (
     <div className="flex flex-col gap-4">
-      <form {...form} className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px_160px_auto] sm:items-end">
+      <form {...form} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_200px_150px_180px_auto] lg:items-end">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="label">Note for yourself (optional)</Label>
           <Input id="label" name="label" maxLength={80} placeholder="e.g. Sent to Dana, October" />
@@ -54,6 +54,10 @@ export function CreateShareLinkForm({ clientId, ranges }: { clientId: string; ra
             <option value="365">In 1 year</option>
             <option value="never">Never</option>
           </Select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="password">Password (optional)</Label>
+          <Input id="password" name="password" type="text" autoComplete="off" minLength={6} maxLength={64} placeholder="None" />
         </div>
         <Button type="submit" disabled={pending}><Link2 className="h-4 w-4" aria-hidden /> {pending ? "Creating…" : "Create link"}</Button>
       </form>

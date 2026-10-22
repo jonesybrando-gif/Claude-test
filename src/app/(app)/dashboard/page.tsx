@@ -11,6 +11,26 @@ import { PacingChart } from "@/components/charts/pacing-chart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DemoBadge, StatusBadge } from "@/components/status-badge";
 import { ExportButtons } from "@/components/export-buttons";
+import { SetupChecklist, type ChecklistStep } from "@/components/dashboard/setup-checklist";
+
+async function setupSteps(agencyId: string): Promise<ChecklistStep[]> {
+  const [connections, accounts, budgets, agency, users, schedules] = await Promise.all([
+    prisma.platformConnection.count({ where: { agencyId, status: { not: "DISCONNECTED" } } }),
+    prisma.adAccount.count({ where: { isDemo: false, status: { not: "DISCONNECTED" }, client: { agencyId } } }),
+    prisma.budget.count({ where: { client: { agencyId, accounts: { some: { isDemo: false } } } } }),
+    prisma.agency.findUniqueOrThrow({ where: { id: agencyId }, select: { logoUrl: true, logoData: true, brandColor: true } }),
+    prisma.user.count({ where: { agencyId, deactivatedAt: null } }),
+    prisma.clientReportSchedule.count({ where: { client: { agencyId } } }),
+  ]);
+  return [
+    { title: "Connect an ad platform", body: "Sign in to Google Ads, Meta or Microsoft.", href: "/integrations", done: connections > 0 },
+    { title: "Link ad accounts to clients", body: "Open a client → Setup → Ad accounts.", href: "/clients", done: accounts > 0 },
+    { title: "Set a monthly budget", body: "Open a client → Setup → Budgets.", href: "/clients", done: budgets > 0 },
+    { title: "Add your branding", body: "Logo and colour for reports and links.", href: "/settings", done: !!(agency.logoUrl || agency.logoData) || agency.brandColor.toLowerCase() !== "#4f46e5" },
+    { title: "Schedule a monthly report", body: "Open a client → Share report → Scheduled email.", href: "/clients", done: schedules > 0 },
+    { title: "Invite your team", body: "Settings → Team.", href: "/settings/team", done: users > 1 },
+  ];
+}
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +42,8 @@ export default async function DashboardPage() {
     prisma.client.findMany({ where: visibleClientsWhere(user), select: { id: true, labels: { select: { id: true } } } }),
   ]);
   const labelsByClient = Object.fromEntries(clientLabels.map((c) => [c.id, c.labels.map((l) => l.id)]));
+  // First-run checklist for admins until every step is done.
+  const steps = user.role === "AGENCY_ADMIN" ? await setupSteps(user.agencyId) : [];
   const rows = clients.flatMap((c) => c.rows);
   const s = summarize(clients);
   const isDemo = rows.some((r) => r.isDemo);
@@ -76,6 +98,8 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
+
+      {steps.length > 0 && <SetupChecklist steps={steps} />}
 
       {s.notConnectedRows > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm">

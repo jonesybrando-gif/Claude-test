@@ -69,6 +69,7 @@ export default async function ShareLinksPage({ params }: { params: Promise<{ id:
                     <TD className="text-sm">{l.range ? PRESET_LABEL[l.range as keyof typeof PRESET_LABEL] ?? l.range : "Report default"}</TD>
                     <TD>
                       {l.revokedAt ? <Badge variant="neutral">Turned off</Badge> : expired ? <Badge variant="warning">Expired</Badge> : <Badge variant="good">Active</Badge>}
+                      {l.passwordHash && <Badge variant="neutral" className="ml-1">Password</Badge>}
                       <div className="mt-0.5 text-xs text-text-3">{active ? (l.expiresAt ? `Expires ${formatDate(l.expiresAt.toISOString().slice(0, 10))}` : "No expiry") : ""}</div>
                     </TD>
                     <TD className="text-right">{l.viewCount}</TD>
