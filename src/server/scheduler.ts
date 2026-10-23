@@ -1,5 +1,6 @@
 import "server-only";
 import { syncDueAccounts } from "./sync/sync-account";
+import { syncDueDataAssets } from "./data-sources/sync";
 import { runAllAlerts } from "./alerts";
 import { sendDueScheduledReports } from "./scheduled-reports";
 
@@ -18,6 +19,12 @@ async function tick() {
   try {
     const results = await syncDueAccounts();
     const failed = results.filter((r) => r.status === "FAILED").length;
+    try {
+      const data = await syncDueDataAssets();
+      if (data.length) console.log(`[scheduler] synced ${data.length} data source(s), ${data.filter((r) => r.status === "FAILED").length} failed`);
+    } catch (e) {
+      console.error("[scheduler] data source sync failed", e);
+    }
     await runAllAlerts();
     const reports = await sendDueScheduledReports();
     console.log(`[scheduler] synced ${results.length} account(s), ${failed} failed, alerts checked, ${reports.filter((r) => r.sent > 0).length} scheduled report(s) sent (${Math.round((Date.now() - started) / 1000)}s)`);

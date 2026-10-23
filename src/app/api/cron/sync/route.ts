@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { cronAuthorized } from "@/server/cron-auth";
 import { syncDueAccounts } from "@/server/sync/sync-account";
+import { syncDueDataAssets } from "@/server/data-sources/sync";
 import { runAllAlerts } from "@/server/alerts";
 import { sendDueScheduledReports } from "@/server/scheduled-reports";
 
@@ -14,6 +15,13 @@ async function run(req: NextRequest) {
   if (!cronAuthorized(req.headers.get("authorization"))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const results = await syncDueAccounts();
   const count = (s: string) => results.filter((r) => r.status === s).length;
+  let dataSources: unknown;
+  try {
+    const d = await syncDueDataAssets();
+    dataSources = { synced: d.length, failed: d.filter((r) => r.status === "FAILED").map((r) => ({ assetId: r.assetId, error: r.error })) };
+  } catch (e) {
+    dataSources = { error: (e as Error).message };
+  }
   let alerts: unknown;
   try {
     alerts = await runAllAlerts();
@@ -28,6 +36,7 @@ async function run(req: NextRequest) {
   }
   return NextResponse.json({
     scheduledReports,
+    dataSources,
     synced: results.length,
     succeeded: count("SUCCEEDED"),
     partial: count("PARTIAL"),
