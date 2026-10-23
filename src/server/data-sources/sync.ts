@@ -37,7 +37,10 @@ export async function syncDataAsset(assetId: string, opts: { force?: boolean; no
   await prisma.dataAsset.update({ where: { id: assetId }, data: { lastSyncAttemptAt: now } });
   const tz = asset.timezone ?? asset.client.timezone;
   const to = todayInTimeZone(tz, now);
-  const from = asset.dataCompleteThrough ? addDays(dateToIso(asset.dataCompleteThrough), -(adapter.refetchDays ?? 3)) : addDays(to, -(adapter.backfillDays ?? 395));
+  const win = adapter.windowFor?.(asset) ?? {};
+  const refetchDays = win.refetchDays ?? adapter.refetchDays ?? 3;
+  const backfillDays = win.backfillDays ?? adapter.backfillDays ?? 395;
+  const from = asset.dataCompleteThrough ? addDays(dateToIso(asset.dataCompleteThrough), -refetchDays) : addDays(to, -backfillDays);
   try {
     const accessToken = await dataSourceAccessToken(asset.connection, adapter);
     const secret = readSecret(asset.connection);

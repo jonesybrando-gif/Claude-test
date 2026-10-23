@@ -46,6 +46,8 @@ export interface DataSourceAdapter {
   refetchDays?: number;
   /** Days of history imported on first sync. Default 395 (13 months). */
   backfillDays?: number;
+  /** Per-asset window override (e.g. one adapter serving several products with different lags). */
+  windowFor?(asset: DataAsset): { refetchDays?: number; backfillDays?: number };
   /** Override for assets with their own sync path (e.g. rank tracking writes KeywordRank). */
   syncAsset?(ctx: SyncContext): Promise<{ rows: number }>;
 }

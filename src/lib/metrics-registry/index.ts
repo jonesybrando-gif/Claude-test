@@ -2,12 +2,14 @@
 // below (keep them alphabetical to make merges trivial).
 import type { DimensionDef, MetricDef, MetricSource } from "./types";
 import * as callrail from "./callrail";
+import * as ga4 from "./ga4";
 import * as gbp from "./gbp";
 import * as gsc from "./gsc";
 
 // --- source registrations (one line each) ---
 const SOURCES: { metrics: MetricDef[]; dimensions?: DimensionDef[] }[] = [
   callrail,
+  ga4,
   gbp,
   gsc,
 ];
