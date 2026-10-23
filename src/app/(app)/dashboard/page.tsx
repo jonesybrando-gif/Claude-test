@@ -13,6 +13,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { DemoBadge, StatusBadge } from "@/components/status-badge";
 import { ExportButtons } from "@/components/export-buttons";
 import { buttonVariants } from "@/components/ui/button";
+import { SetupChecklist } from "@/components/setup-checklist";
+import { setupChecklist } from "@/server/first-run";
 
 export const dynamic = "force-dynamic";
 
@@ -34,29 +36,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const variance = s.projectedMinor - s.totalBudgetMinor;
   const period = s.combined ? `${formatDate(s.combined.periodStart, { month: "long", year: "numeric" })}` : "";
 
+  const checklist = user.role === "AGENCY_ADMIN" ? await setupChecklist(user.agencyId) : null;
+
   if (clients.length === 0) {
-    const steps = [
-      { href: "/clients", title: "Add your first client", body: "Create a client with its reporting time zone." },
-      { href: "/integrations", title: "Connect an ad platform", body: "Sign in to Google Ads, Meta or Microsoft and link each ad account to a client." },
-      { href: "/clients", title: "Set monthly budgets", body: "Open a client and choose Budgets. Pacing, forecasts and alerts start from there." },
-    ];
     return (
-      <div className="mx-auto flex max-w-[900px] flex-col gap-5">
+      <div className="mx-auto flex max-w-[1000px] flex-col gap-5">
         <div>
-          <h1 className="text-xl font-semibold">Welcome — let&apos;s set up your budget monitor</h1>
-          <p className="text-sm text-text-2">You don&apos;t have any clients yet. Three steps and the dashboard fills in.</p>
+          <h1 className="text-xl font-semibold">Welcome. Let&apos;s set up budget pacing</h1>
+          <p className="text-sm text-text-2">You don&apos;t have any clients yet. Work through these steps and this page fills in.</p>
         </div>
-        <ol className="grid gap-3 md:grid-cols-3">
-          {steps.map((st, i) => (
-            <li key={st.title}>
-              <a href={st.href} className="flex h-full flex-col gap-1 rounded-xl border border-border bg-surface p-4 hover:bg-surface-2">
-                <span className="text-xs font-medium text-text-3">Step {i + 1}</span>
-                <span className="font-medium">{st.title}</span>
-                <span className="text-sm text-text-2">{st.body}</span>
-              </a>
-            </li>
-          ))}
-        </ol>
+        {checklist ? (
+          <SetupChecklist steps={checklist} dismissible={false} />
+        ) : (
+          <p className="text-sm text-text-2">No clients are assigned to you yet. Ask an administrator to assign you a client.</p>
+        )}
       </div>
     );
   }
@@ -81,6 +74,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           )}
         </div>
       </div>
+
+      {checklist && <SetupChecklist steps={checklist} />}
 
       {s.notConnectedRows > 0 && (
         <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-4 py-3 sm:flex-row sm:items-start sm:justify-between" role="note">
