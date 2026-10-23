@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin, requireClientEdit } from "./access";
 import { prisma } from "./db";
-import { resetClientTemplate, saveTemplate } from "./report-templates";
-import { templateFromForm } from "@/lib/report-template";
+import { getClientTemplate, resetClientTemplate, saveTemplate } from "./report-templates";
+import { SECTION_KEYS, templateFromForm, type SectionKey } from "@/lib/report-template";
 
 export type TemplateFormState = { ok?: string; errors?: string[] } | undefined;
 
@@ -36,4 +36,15 @@ export async function resetClientTemplateAction(clientId: string): Promise<void>
   revalidatePath(`/clients/${clientId}`, "layout");
   // A fresh `reset` value remounts the form so it shows the agency default.
   redirect(`/clients/${clientId}/report?reset=${Date.now()}`);
+}
+
+/** Shows or hides one section of a client's client-facing report (e.g. the executive summary). */
+export async function setSectionVisibilityAction(clientId: string, section: SectionKey, visible: boolean): Promise<void> {
+  const user = await requireClientEdit(clientId);
+  if (!SECTION_KEYS.includes(section)) return;
+  const client = await prisma.client.findUniqueOrThrow({ where: { id: clientId }, select: { agencyId: true } });
+  if (client.agencyId !== user.agencyId) return;
+  const { template } = await getClientTemplate(client.agencyId, clientId);
+  await saveTemplate(client.agencyId, clientId, { ...template, sections: { ...template.sections, [section]: visible } });
+  revalidatePath(`/clients/${clientId}`, "layout");
 }

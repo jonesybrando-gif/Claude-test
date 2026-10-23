@@ -81,9 +81,17 @@ async function AiSummary({ rep, heading, copyable, compact }: { rep: ClientRepor
  * recommendations, as one section. The automatic version shows at once; an
  * AI-written one streams in when the layout asks for it.
  */
-export function ExecutiveSummary({ rep, marker, copyable = false, compact = false, title = "Executive summary", actions }: { rep: ClientReport; marker?: ReactNode; copyable?: boolean; compact?: boolean; title?: string; actions?: ReactNode }) {
+export function ExecutiveSummary({ rep, marker, copyable = false, compact = false, title = "Executive summary", actions, bare = false }: { rep: ClientReport; marker?: ReactNode; copyable?: boolean; compact?: boolean; title?: string; actions?: ReactNode; bare?: boolean }) {
   const auto = automaticSummary(rep);
   const heading = `${rep.client.name}: performance summary, ${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })}`;
+  const body = wantsAiSummary(rep) ? (
+    <Suspense fallback={<SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} pending />}>
+      <AiSummary rep={rep} heading={heading} copyable={copyable} compact={compact} />
+    </Suspense>
+  ) : (
+    <SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} />
+  );
+  if (bare) return body;
   return (
     <Card>
       <CardHeader>
@@ -92,15 +100,7 @@ export function ExecutiveSummary({ rep, marker, copyable = false, compact = fals
           {actions}
         </div>
       </CardHeader>
-      <CardContent>
-        {wantsAiSummary(rep) ? (
-          <Suspense fallback={<SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} pending />}>
-            <AiSummary rep={rep} heading={heading} copyable={copyable} compact={compact} />
-          </Suspense>
-        ) : (
-          <SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} />
-        )}
-      </CardContent>
+      <CardContent>{body}</CardContent>
     </Card>
   );
 }

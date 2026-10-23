@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { CalendarClock, Download, FileSliders, FileText, Link2, ListChecks, Mail, Plug, Settings2, Share2, Wallet } from "lucide-react";
+import { CalendarClock, Sparkles, Download, FileSliders, FileText, Link2, ListChecks, Mail, Plug, Settings2, Share2, Wallet } from "lucide-react";
 import { AiSuggestionsCard } from "@/components/ai/suggestions-card";
 import { requireClientView } from "@/server/access";
 import { prisma } from "@/server/db";
@@ -12,6 +12,8 @@ import { RangeControls } from "@/components/range-controls";
 import { ExportButtons, exportHref } from "@/components/export-buttons";
 import { Menu } from "@/components/ui/menu";
 import { ClientReportView } from "@/components/reports/client-report-view";
+import { ClientVisibilityToggle } from "@/components/reports/visibility-toggle";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExecutiveSummary } from "@/components/reports/executive-summary";
 import { CampaignsSection, hiddenMarker, HistorySection, KpiSection, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
 
@@ -168,10 +170,25 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       )}
 
       {tab === "insights" && (
-        <>
-          <ExecutiveSummary rep={rep} marker={mark("executive")} copyable />
-          <AiSuggestionsCard clientId={id} query={sp} />
-        </>
+        // One place for every AI-written insight, with a clear switch for what the client sees.
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-brand" aria-hidden /> Insights</CardTitle>
+            <CardDescription>The summary can go in the client&apos;s report; suggestions and answers stay with your team.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-6">
+            <section className="flex flex-col gap-3" aria-label="Executive summary">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">Executive summary</h3>
+                <ClientVisibilityToggle clientId={id} section="executive" visible={rep.template.sections.executive} label="Executive summary" />
+              </div>
+              <ExecutiveSummary rep={rep} copyable bare />
+            </section>
+            <div className="border-t border-border pt-5">
+              <AiSuggestionsCard clientId={id} query={sp} bare />
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {tab === "setup" && (
