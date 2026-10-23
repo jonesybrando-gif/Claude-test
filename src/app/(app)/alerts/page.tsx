@@ -71,14 +71,15 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
         ) : (
           <ul className="divide-y divide-border">
             {alerts.map((a) => {
-              const sev = SEV[(a.severity as keyof typeof SEV) ?? "warning"] ?? SEV.warning;
+              // Underspending is amber, never red: red is kept for overspending and broken connections.
+              const sev = a.type === "UNDERSPENDING" ? SEV.warning : SEV[(a.severity as keyof typeof SEV) ?? "warning"] ?? SEV.warning;
               const d = (a.details ?? {}) as { detail?: string; clientName?: string; isDemo?: boolean };
               return (
                 <li key={a.id} className="flex flex-wrap items-start gap-3 px-5 py-4">
                   <sev.Icon className={`mt-0.5 h-5 w-5 shrink-0 ${sev.cls}`} aria-label={sev.label} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <Badge variant={a.severity === "critical" ? "critical" : "warning"}>{KIND_LABEL[a.type] ?? a.type}</Badge>
+                      <Badge variant={a.severity === "critical" && a.type !== "UNDERSPENDING" ? "critical" : "warning"}>{KIND_LABEL[a.type] ?? a.type}</Badge>
                       {a.clientId && <Link href={`/clients/${a.clientId}`} className="font-medium text-text hover:underline">{d.clientName}</Link>}
                       {d.isDemo && <DemoBadge />}
                       {a.status === "ACKNOWLEDGED" && <Badge variant="neutral">Acknowledged by {ackers.get(a.acknowledgedById ?? "") ?? "someone"}</Badge>}

@@ -28,7 +28,10 @@ export function ActionCenter({ rows, limit = 8 }: { rows: PacingRow[]; limit?: n
       </CardHeader>
       <CardContent className="flex flex-col gap-1 p-0 pb-2">
         {actionable.slice(0, limit).map((r) => {
-          const { Icon, cls, label } = ICON[r.action.severity];
+          const { Icon, cls: base, label } = ICON[r.action.severity];
+          // Underspending is amber, never red: red is kept for overspending and broken connections.
+          const under = r.action.headline.startsWith("Projected to underspend");
+          const cls = under && r.action.severity === "critical" ? "text-warning-ink" : base;
           return (
             <Link key={r.key} href={`/clients/${r.clientId}`} className="flex gap-3 px-5 py-2.5 hover:bg-surface-2">
               <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${cls}`} aria-label={label} />

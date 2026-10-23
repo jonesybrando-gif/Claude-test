@@ -17,7 +17,7 @@ import { bulkLabelAction, createLabelAction, deleteClientAction, deleteLabelActi
 
 export const dynamic = "force-dynamic";
 
-const COLOR_NAME: Record<string, string> = { neutral: "Grey", info: "Blue", good: "Green", warning: "Amber", serious: "Orange", critical: "Red" };
+const COLOR_NAME: Record<string, string> = { neutral: "Grey", info: "Blue", good: "Green", warning: "Amber", serious: "Orange", critical: "Rose" };
 
 type Sp = { q?: string; label?: string; sort?: string; group?: string; view?: string; notice?: string; error?: string };
 

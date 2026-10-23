@@ -19,6 +19,7 @@ export const C = {
   planned: "#7a7974",
   good: "#0a6b0a",
   warning: "#7a5300",
+  serious: "#9a4220",
   critical: "#a52a2a",
 };
 

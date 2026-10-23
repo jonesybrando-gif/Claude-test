@@ -15,8 +15,8 @@ import { C, contentWidth, decoratePages, ensureSpace, newDoc, paragraph, pdfText
 
 const STATUS_COLOR: Record<PacingStatus, string> = {
   OVERSPENDING: C.critical,
-  UNDERSPENDING: C.critical,
-  SLIGHTLY_OVER: C.warning,
+  UNDERSPENDING: C.warning,
+  SLIGHTLY_OVER: C.serious,
   SLIGHTLY_UNDER: C.warning,
   ON_TARGET: C.good,
   NOT_STARTED: C.text3,

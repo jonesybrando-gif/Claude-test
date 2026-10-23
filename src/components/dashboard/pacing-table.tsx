@@ -185,7 +185,7 @@ export function PacingTable({ rows, labels = [], labelsByClient = {}, initialSta
                   {res ? (
                     <>
                       <div>{formatMoney(res.projectedMinor, c, { whole: true })}</div>
-                      <div className={`text-xs ${res.projectedVarianceMinor > 0 ? "text-critical-ink" : "text-text-2"}`}>
+                      <div className={`text-xs ${res.projectedVarianceMinor > 0 ? "text-critical-ink" : res.forecastStatus === "UNDERSPENDING" || res.forecastStatus === "SLIGHTLY_UNDER" ? "text-warning-ink" : "text-text-2"}`}>
                         {res.projectedVarianceMinor > 0 ? "+" : res.projectedVarianceMinor < 0 ? "−" : ""}
                         {formatMoney(Math.abs(res.projectedVarianceMinor), c, { whole: true })} vs budget
                       </div>

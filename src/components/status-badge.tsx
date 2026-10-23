@@ -2,13 +2,15 @@ import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, CheckCircle2, CircleDash
 import { Badge } from "./ui/badge";
 import { STATUS_LABEL, type PacingStatus } from "@/lib/pacing/status";
 
-// Status always carries an icon + label, never color alone.
+// Status always carries an icon + label, never color alone. Colour follows
+// direction: overspending red/orange, underspending amber, on target green,
+// not started / no budget / not connected grey.
 const STYLE: Record<PacingStatus, { variant: "good" | "warning" | "serious" | "critical" | "neutral" | "info"; Icon: typeof CheckCircle2 }> = {
   OVERSPENDING: { variant: "critical", Icon: ArrowUpCircle },
   SLIGHTLY_OVER: { variant: "serious", Icon: ArrowUpCircle },
   ON_TARGET: { variant: "good", Icon: CheckCircle2 },
   SLIGHTLY_UNDER: { variant: "warning", Icon: ArrowDownCircle },
-  UNDERSPENDING: { variant: "critical", Icon: ArrowDownCircle },
+  UNDERSPENDING: { variant: "warning", Icon: ArrowDownCircle },
   NOT_STARTED: { variant: "neutral", Icon: CircleDashed },
   NO_BUDGET: { variant: "neutral", Icon: MinusCircle },
 };
