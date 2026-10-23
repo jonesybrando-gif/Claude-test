@@ -15,7 +15,7 @@ import { ClientReportView } from "@/components/reports/client-report-view";
 import { ClientVisibilityToggle } from "@/components/reports/visibility-toggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExecutiveSummary } from "@/components/reports/executive-summary";
-import { CampaignsSection, DataFreshness, hiddenMarker, HistorySection, KpiSection, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
+import { CampaignsSection, DataFreshness, hiddenMarker, HistorySection, KpiSection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
 
 export const dynamic = "force-dynamic";
 
@@ -122,7 +122,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
     return (
       <div className="mx-auto flex max-w-[1400px] flex-col gap-5">
         {header}
-        <ClientReportView rep={rep} basePath={base} query={sp} />
+        {client.accounts.length === 0 ? <NoAccountsState rep={rep} staff={false} /> : <ClientReportView rep={rep} basePath={base} query={sp} />}
       </div>
     );
   }
@@ -147,7 +147,14 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </nav>
       </div>
 
-      {tab === "overview" && (
+      {tab === "overview" && client.accounts.length === 0 && (
+        <>
+          <NoAccountsState rep={rep} staff />
+          <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />
+        </>
+      )}
+
+      {tab === "overview" && client.accounts.length > 0 && (
         <>
           <KpiSection rep={rep} marker={mark("kpis")} />
           <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand hover:underline">Open Insights</Link>} />

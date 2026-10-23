@@ -129,7 +129,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {s.combined ? <PacingChart series={s.combined.series} budgetMinor={s.combined.budgetMinor} asOf={s.combined.asOf} currency={c} /> : <p className="text-sm text-text-3">No budgets for this period yet.</p>}
+            {s.combined ? (
+              <PacingChart series={s.combined.series} budgetMinor={s.combined.budgetMinor} asOf={s.combined.asOf} currency={c} />
+            ) : (
+              <div className="flex flex-col items-start gap-3 py-6">
+                <p className="text-sm text-text-2">{s.notConnectedRows ? "None of this period's budgets has an ad account with data yet." : "No budgets are set for this period yet."} The chart fills in once a client has a monthly budget and a synced ad account.</p>
+                <Link href={s.notConnectedRows ? "/integrations" : "/clients"} className={buttonVariants({ size: "sm" })}>{s.notConnectedRows ? "Connect ad accounts" : "Set a budget"}</Link>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -9,7 +9,7 @@ import { formatDate } from "@/lib/time";
 import { buttonVariants } from "@/components/ui/button";
 import { DemoBadge } from "@/components/status-badge";
 import { ClientReportView } from "@/components/reports/client-report-view";
-import { DataFreshness } from "@/components/reports/report-sections";
+import { DataFreshness, NoAccountsState } from "@/components/reports/report-sections";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +68,7 @@ export default async function SharedReportPage({ params, searchParams }: { param
             <Download className="h-4 w-4" aria-hidden /> Download PDF
           </a>
         </div>
-        <ClientReportView rep={rep} basePath={`/r/${token}`} query={{ line: sp.line }} />
+        {client.accounts.length === 0 ? <NoAccountsState rep={rep} staff={false} /> : <ClientReportView rep={rep} basePath={`/r/${token}`} query={{ line: sp.line }} />}
         <footer className="border-t border-border pt-4 text-xs text-text-3">
           {agency.reportFooter && <p className="mb-1">{agency.reportFooter}</p>}
           <p>Prepared by {agency.name}. Figures are as reported by each ad platform; today&apos;s partial data is excluded.</p>

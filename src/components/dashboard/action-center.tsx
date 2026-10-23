@@ -46,6 +46,9 @@ export function ActionCenter({ rows, limit = 8 }: { rows: PacingRow[]; limit?: n
             </Link>
           );
         })}
+        {actionable.length === 0 && okCount === 0 && (
+          <p className="px-5 py-4 text-sm text-text-3">Nothing to act on yet. Recommendations appear here once budgets are set and accounts have synced.</p>
+        )}
         {actionable.length > limit && <p className="px-5 py-1 text-xs text-text-3">+{actionable.length - limit} more in the table below</p>}
         {okCount > 0 && (
           <p className="flex items-center gap-2 px-5 py-2 text-xs text-text-2">

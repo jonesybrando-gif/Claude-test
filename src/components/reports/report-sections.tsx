@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { AlertTriangle, EyeOff, RefreshCw, Unplug } from "lucide-react";
+import { AlertTriangle, EyeOff, Plug, RefreshCw, Unplug } from "lucide-react";
 import type { PacingRow } from "@/server/pacing-service";
 import type { ClientReport } from "@/server/client-report";
 import { PRESET_LABEL } from "@/lib/date-ranges";
@@ -12,6 +12,7 @@ import { formatDate, relativeTime } from "@/lib/time";
 import { PLATFORM_LABEL } from "@/lib/platforms";
 import { formatCustomerId } from "@/server/integrations/google-ads/gaql";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { KpiCard } from "@/components/kpi/kpi-card";
 import { NoBudgetBadge, NotConnectedBadge, StaleBadge, StatusBadge } from "@/components/status-badge";
@@ -50,6 +51,7 @@ export function KpiSection({ rep, marker }: { rep: ClientReport; marker?: ReactN
         {kvs.map((kv) => <KpiCard key={kv.key} kv={kv} currency={client.currency} trend={perf.byDate.map((d) => dailyKpiValue(d, kv.key))} note={kv.value === null && KPI_BY_KEY[kv.key].kind !== "count" ? "not reported" : undefined} />)}
       </div>
       {t.hasEstimatedCost && <p className="text-xs text-warning-ink">Spend includes estimated Local Services cost.</p>}
+      {noActivity(rep) && client.accounts.length > 0 && <p className="text-xs text-text-3">No advertising activity was recorded from {formatDate(rep.range.from)} to {formatDate(rep.range.to)}. Try a different date range, or check the accounts under Setup.</p>}
     </section>
   );
 }
@@ -150,9 +152,10 @@ export function PacingSection({ rep, staff, basePath, query, marker, showLines =
               </dl>
             </div>
           ) : (
-            <p className="text-sm text-text-3">
-              No budget is set for this period.{staff && <> <Link className="underline" href={`/clients/${client.id}/budgets`}>Add a budget</Link> to enable pacing.</>}
-            </p>
+            <div className="flex flex-col items-start gap-3 py-2">
+              <p className="text-sm text-text-2">No budget is set for this period{staff ? ". Add a monthly budget to get pacing, month-end forecasts, daily spend targets and alerts." : "."}</p>
+              {staff && <Link className={buttonVariants({ size: "sm" })} href={`/clients/${client.id}/budgets`}>Add a budget</Link>}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -294,7 +297,11 @@ export function TrendsSection({ rep, marker, metrics, title = "Performance trend
         <CardDescription>Daily values, {formatDate(range.from)} – {formatDate(range.to)}{cmpRange && " with the comparison period (dashed) aligned day-by-day"}.</CardDescription>
       </CardHeader>
       <CardContent>
+        {noActivity(rep) ? (
+          <p className="py-6 text-center text-sm text-text-3">No activity in this period, so there is nothing to chart yet.</p>
+        ) : (
         <TrendChart current={perf.byDate} comparison={cmpPerf?.byDate ?? null} currency={client.currency} metrics={metrics ?? [...new Set([...template.trendKpis, ...TREND_EXTRAS])]} />
+        )}
       </CardContent>
     </Card>
   );
@@ -409,4 +416,36 @@ export function DataFreshness({ rep, staff, setupHref }: { rep: ClientReport; st
   ) : (
     <span className={cls}>{body}</span>
   );
+}
+
+/** Empty state for a client with no ad accounts: says what to do next instead of showing $0 everywhere. */
+export function NoAccountsState({ rep, staff }: { rep: ClientReport; staff: boolean }) {
+  const href = `/clients/${rep.client.id}/accounts`;
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-start gap-3 py-8 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-3">
+          <Plug className="mt-0.5 h-5 w-5 shrink-0 text-text-3" aria-hidden />
+          <div>
+            <p className="font-medium">{staff ? `No ad accounts are linked to ${rep.client.name} yet` : "Your report is being set up"}</p>
+            <p className="text-sm text-text-2">
+              {staff ? "Connect Google Ads, Meta, Microsoft Advertising or Local Services Ads and link this client's account. About 13 months of history imports automatically." : "Figures appear here once your agency connects your advertising accounts."}
+            </p>
+          </div>
+        </div>
+        {staff && (
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Link href={href} className={buttonVariants()}>Connect Google Ads</Link>
+            <Link href={href} className={buttonVariants({ variant: "outline" })}>Other platforms</Link>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** True when the report's range has no spend, clicks, impressions, conversions or leads at all. */
+export function noActivity(rep: ClientReport): boolean {
+  const t = rep.perf.totals;
+  return t.costMinor === 0 && t.clicks === 0 && t.impressions === 0 && t.conversions === 0 && t.leads === 0;
 }
