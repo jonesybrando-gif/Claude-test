@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   const { token } = await params;
   const link = await resolveShareToken(token);
   if (!link) return NextResponse.json({ error: "This link has expired or been turned off." }, { status: 404 });
-  if (!shareAccessGranted(link, req.cookies.get(shareCookieName(link.id))?.value)) return NextResponse.redirect(new URL(`/r/${token}`, req.url));
+  if (!shareAccessGranted(link, req.cookies.get(shareCookieName(link.id))?.value)) return NextResponse.redirect(new URL(`/r/${token}`, process.env.APP_URL || req.url));
   const report = await loadClientReport(link.clientId, { range: link.range ?? undefined, compare: link.compare ?? undefined });
   const pdf = await renderClientReportPdf(report, await agencyBrand(link.client.agencyId), { internal: false, executiveSummary: await getExecutiveSummary(report, { generate: true }) });
   return new NextResponse(new Uint8Array(pdf), {
