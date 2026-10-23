@@ -64,7 +64,7 @@ export default async function ShareLinksPage({ params }: { params: Promise<{ id:
             </div>
             {schedule && <ActionButton action={deleteScheduleAction.bind(null, id)} label="Delete schedule" variant="ghost" confirm="Delete this schedule? No more reports are sent automatically." />}
           </div>
-          {!emailConfigured() && <p className="mt-1 text-xs text-warning-ink">Outgoing email isn&apos;t set up (SMTP_URL and EMAIL_FROM), so scheduled emails are only recorded in Settings → Email log.</p>}
+          {!emailConfigured() && <p className="mt-1 text-xs text-warning-ink">Outgoing email isn&apos;t set up (SMTP_URL and EMAIL_FROM), so scheduled emails are skipped until it is. “Send now” records a copy in Settings → Email log.</p>}
         </CardHeader>
         <CardContent>
           <ScheduleForm

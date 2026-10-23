@@ -20,7 +20,7 @@ async function tick() {
     const failed = results.filter((r) => r.status === "FAILED").length;
     await runAllAlerts();
     const reports = await sendDueScheduledReports();
-    console.log(`[scheduler] synced ${results.length} account(s), ${failed} failed, alerts checked, ${reports.length} scheduled report(s) sent (${Math.round((Date.now() - started) / 1000)}s)`);
+    console.log(`[scheduler] synced ${results.length} account(s), ${failed} failed, alerts checked, ${reports.filter((r) => r.sent > 0).length} scheduled report(s) sent (${Math.round((Date.now() - started) / 1000)}s)`);
   } catch (e) {
     console.error("[scheduler] run failed", e);
   } finally {

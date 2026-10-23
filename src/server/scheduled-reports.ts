@@ -4,7 +4,7 @@ import { loadClientReport } from "./client-report";
 import { getExecutiveSummary } from "./exec-summary";
 import { renderClientReportPdf } from "./pdf/reports";
 import { agencyBrand } from "./pdf/brand";
-import { sendEmail } from "./email";
+import { emailConfigured, sendEmail } from "./email";
 import { PRESET_LABEL } from "@/lib/date-ranges";
 import { summaryAsHtml, summaryAsText } from "@/lib/exec-summary";
 import { scheduledReportEmail } from "@/lib/email-templates";
@@ -121,15 +121,25 @@ export async function sendDueScheduledReports(now: Date = new Date()) {
     where: { enabled: true, nextRunAt: { lte: now }, report: { kind: KIND, client: { archivedAt: null } } },
     include: { report: { include: { client: { select: { id: true, timezone: true } } } } },
   });
-  const results: { clientId: string; sent: number; failed: number; error?: string }[] = [];
+  const results: { clientId: string; sent: number; failed: number; skipped?: string; error?: string }[] = [];
   for (const s of due) {
     const client = s.report.client;
     if (!client) continue;
-    // Move the schedule on first, so a failure can't resend every hour.
-    const rule = { frequency: (s.frequency === "weekly" ? "weekly" : "monthly") as ScheduleFrequency, dayOfMonth: s.dayOfMonth, dayOfWeek: s.dayOfWeek };
-    await prisma.reportSchedule.update({ where: { id: s.id }, data: { nextRunAt: nextRunAt(rule, client.timezone, now), lastSentAt: now } });
     try {
+      // Move the schedule on first, so a failure can't resend every hour. The
+      // update only matches while nextRunAt is unchanged, so if the cron route
+      // and the built-in scheduler run at once, only one of them sends.
+      const rule = { frequency: (s.frequency === "weekly" ? "weekly" : "monthly") as ScheduleFrequency, dayOfMonth: s.dayOfMonth, dayOfWeek: s.dayOfWeek };
+      const claimed = await prisma.reportSchedule.updateMany({ where: { id: s.id, nextRunAt: s.nextRunAt }, data: { nextRunAt: nextRunAt(rule, client.timezone, now) } });
+      if (claimed.count === 0) continue;
+      // Without SMTP nothing can be delivered: don't spend an AI summary and a
+      // PDF render on it, and don't record it as sent.
+      if (!emailConfigured()) {
+        results.push({ clientId: client.id, sent: 0, failed: 0, skipped: "email not configured" });
+        continue;
+      }
       const r = await sendScheduledReport(client.id, rangeOf(s.report.config), s.recipients, now);
+      if (r.sent > 0) await prisma.reportSchedule.update({ where: { id: s.id }, data: { lastSentAt: now } });
       results.push({ clientId: client.id, sent: r.sent, failed: r.failed });
     } catch (e) {
       console.error("[scheduled-reports] failed", client.id, e);
