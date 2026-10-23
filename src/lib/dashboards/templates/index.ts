@@ -1,6 +1,8 @@
 // Ready-made dashboard templates offered when creating a dashboard. Each source
 // adds ONE import and ONE entry (alphabetical). See ../types.ts for widgets.
 import type { DashboardWidget } from "../types";
+import { facebookTemplate } from "./facebook";
+import { instagramTemplate } from "./instagram";
 
 export interface DashboardTemplateDef {
   key: string;
@@ -12,4 +14,6 @@ export interface DashboardTemplateDef {
 }
 
 export const DASHBOARD_TEMPLATES: DashboardTemplateDef[] = [
+  facebookTemplate,
+  instagramTemplate,
 ];
