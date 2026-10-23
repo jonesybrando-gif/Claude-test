@@ -1,6 +1,6 @@
 import type { ClientReport } from "@/server/client-report";
 import { ExecutiveSummary } from "./executive-summary";
-import { CampaignsSection, HistorySection, KpiSection, NoteSection, PacingSection, PlatformSection, TrendsSection } from "./report-sections";
+import { BudgetLinesCard, CampaignsSection, HistorySection, KpiSection, NoteSection, PacingSection, PlatformSection, TrendsSection } from "./report-sections";
 
 /**
  * The client-facing report: shown to client logins and on shared links. It
@@ -16,10 +16,12 @@ export function ClientReportView({ rep, basePath, query }: { rep: ClientReport; 
       {on.trends && <TrendsSection rep={rep} metrics={rep.template.trendKpis.length ? rep.template.trendKpis : undefined} title="Trend" />}
       {on.executive && <ExecutiveSummary rep={rep} compact title="Summary" />}
       {on.summary && <NoteSection rep={rep} />}
-      {on.pacing && <PacingSection rep={rep} staff={false} basePath={basePath} query={query} />}
+      {on.pacing && <PacingSection rep={rep} staff={false} basePath={basePath} query={query} showLines={false} />}
+      {/* Detail tables last. */}
+      {on.campaigns && <CampaignsSection rep={rep} staff={false} basePath={basePath} />}
       {/* With a single ad account the breakdown would only repeat the KPI tiles. */}
       {on.platforms && rep.client.accounts.length > 1 && <PlatformSection rep={rep} staff={false} />}
-      {on.campaigns && <CampaignsSection rep={rep} staff={false} basePath={basePath} />}
+      {on.pacing && rep.pacing.rows.length + rep.pacing.subRows.length > 1 && <BudgetLinesCard rep={rep} staff={false} />}
       {on.history && <HistorySection rep={rep} hideEmpty />}
     </>
   );

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { AlertTriangle, EyeOff, Plug, RefreshCw, Unplug } from "lucide-react";
+import { AlertTriangle, CalendarRange, EyeOff, Plug, RefreshCw, Unplug } from "lucide-react";
 import type { PacingRow } from "@/server/pacing-service";
 import type { ClientReport } from "@/server/client-report";
 import { PRESET_LABEL } from "@/lib/date-ranges";
@@ -69,10 +69,16 @@ export function NoteSection({ rep, marker }: { rep: ClientReport; marker?: React
   );
 }
 
+/** True when the budget period is one calendar month. */
+function isCalendarMonth(rep: ClientReport): boolean {
+  const { start, end } = rep.pacing.period;
+  return start.endsWith("-01") && formatDate(start, { month: "long", year: "numeric" }) === formatDate(end, { month: "long", year: "numeric" });
+}
+
 /** "This month · October 2026" for a calendar month, else the period's dates. */
 export function pacingPeriodLabel(rep: ClientReport): string {
   const { start, end } = rep.pacing.period;
-  const monthly = start.endsWith("-01") && formatDate(start, { month: "long", year: "numeric" }) === formatDate(end, { month: "long", year: "numeric" });
+  const monthly = isCalendarMonth(rep);
   const current = start <= rep.today && rep.today <= end;
   if (monthly) return `${current ? "This month · " : ""}${formatDate(start, { month: "long", year: "numeric" })}`;
   return `${current ? "Current period · " : ""}${formatDate(start)} – ${formatDate(end, { month: "short", day: "numeric", year: "numeric" })}`;
@@ -97,6 +103,9 @@ export function PacingSection({ rep, staff, basePath, query, marker, showLines =
   // The report's range and the budget period can differ (e.g. "Last month" vs this month's budget).
   const differentPeriod = range.from > pacing.period.end || range.to < pacing.period.start || preset !== "mtd";
   const caveats = [...new Set(allLines.flatMap((r) => r.warnings))];
+  // Clients don't need the combined line as a second chip (it is the total) or lines with no budget behind them.
+  const chipLines = allLines.filter((r) => pacing.seriesByKey[r.key] && (staff || (r.level !== "CLIENT" && r.level !== "UNBUDGETED" && !r.notConnected)));
+  const unit = isCalendarMonth(rep) ? "month" : "period";
   return (
     <>
       <Card>
@@ -110,12 +119,17 @@ export function PacingSection({ rep, staff, basePath, query, marker, showLines =
           </div>
           <CardDescription>
             {shown?.asOf ? <>Complete data through {formatDate(shown.asOf)}. Today&apos;s partial spend is excluded.</> : "No complete days of data in this period yet."}
-            {differentPeriod && <> Pacing always covers the current budget period, not the {PRESET_LABEL[preset].toLowerCase()} range shown elsewhere.</>}
           </CardDescription>
-          {allLines.length > 1 && (
+          {differentPeriod && (
+            <p className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-md bg-surface-2 px-2 py-0.5 text-xs text-text-2">
+              <CalendarRange className="h-3.5 w-3.5 shrink-0 text-text-3" aria-hidden />
+              Pacing covers the current budget period, not the {PRESET_LABEL[preset].toLowerCase()} range used elsewhere on this page.
+            </p>
+          )}
+          {(staff ? allLines.length > 1 : chipLines.length > 0) && (
             <div className="mt-2 flex flex-wrap gap-1 text-xs" aria-label="Pacing level">
-              <Link href={lineHref(null)} className={`rounded-md px-2.5 py-1 ${!selectedKey ? "bg-surface-2 font-medium ring-1 ring-border" : "text-text-2 hover:text-text"}`}>Client total</Link>
-              {allLines.filter((r) => pacing.seriesByKey[r.key]).map((r) => (
+              <Link href={lineHref(null)} className={`rounded-md px-2.5 py-1 ${!selectedKey ? "bg-surface-2 font-medium ring-1 ring-border" : "text-text-2 hover:text-text"}`}>{staff ? "Client total" : "Total"}</Link>
+              {chipLines.map((r) => (
                 <Link key={r.key} href={lineHref(r.key)} className={`rounded-md px-2.5 py-1 ${selectedKey === r.key ? "bg-surface-2 font-medium ring-1 ring-border" : "text-text-2 hover:text-text"}`}>
                   {r.level === "CLIENT" ? (staff ? "Combined budget" : "Total budget") : r.label}
                 </Link>
@@ -132,9 +146,9 @@ export function PacingSection({ rep, staff, basePath, query, marker, showLines =
                   ["Spent to date", formatMoney(shown.actualToDateMinor, c, { whole: true })],
                   ["Expected to date", formatMoney(shown.expectedToDateMinor, c, { whole: true })],
                   ["Pacing (actual ÷ expected)", formatPct(shown.pacingPct)],
-                  ["Budget used / month elapsed", `${formatPct(shown.pctBudgetConsumed, 0)} / ${formatPct(shown.pctPeriodElapsed, 0)}`],
+                  [`Budget used / ${unit} elapsed`, `${formatPct(shown.pctBudgetConsumed, 0)} / ${formatPct(shown.pctPeriodElapsed, 0)}`],
                   ["Remaining budget", formatMoney(shown.remainingBudgetMinor, c, { whole: true })],
-                  ["Projected month-end", `${formatMoney(shown.projectedMinor, c, { whole: true })} (${shown.projectedVarianceMinor >= 0 ? "+" : "−"}${formatMoney(Math.abs(shown.projectedVarianceMinor), c, { whole: true })})`],
+                  [`Projected ${unit}-end`, `${formatMoney(shown.projectedMinor, c, { whole: true })} (${shown.projectedVarianceMinor >= 0 ? "+" : "−"}${formatMoney(Math.abs(shown.projectedVarianceMinor), c, { whole: true })})`],
                   ["Required daily spend", shown.requiredDailyMinor === null ? "—" : `${formatMoney(shown.requiredDailyMinor, c, { whole: true })} × ${shown.remainingActiveDays} days`],
                   ["Current daily rate (7-day)", formatMoney(shown.currentDailyRateMinor, c, { whole: true })],
                 ].map(([k, v]) => (
@@ -257,6 +271,27 @@ export function PlatformSection({ rep, staff, marker, status = false, title = "P
         <div className="flex flex-wrap items-center gap-2"><CardTitle>{title}</CardTitle>{marker}</div>
         <CardDescription>{PRESET_LABEL[preset]} · conversions are platform-reported and defined differently by each platform.</CardDescription>
       </CardHeader>
+      {/* Phones (report view): one card per account with the headline numbers. The setup view keeps the scrolling table for its sync controls. */}
+      {!status && (
+        <ul className="flex flex-col gap-2 px-3 md:hidden" aria-label="Ad accounts">
+          {client.accounts.map((a) => {
+            const m: MetricTotals | undefined = perf.byAccount[a.id];
+            const x = m ? derive(m) : null;
+            return (
+              <li key={a.id} className="rounded-lg border border-border p-3">
+                <PlatformLabel platform={a.platform} />
+                <p className="truncate text-xs text-text-3">{a.name}</p>
+                <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                  <div><dt className="text-text-3">Spend</dt><dd className="font-medium tabular">{m ? formatMoney(m.costMinor, c, { whole: true }) : "—"}{!a.spendIsVerified && <span className="block font-normal text-warning-ink">estimated</span>}</dd></div>
+                  <div><dt className="text-text-3">Conv.</dt><dd className="font-medium tabular">{m ? formatNumber(m.conversions, 0) : "—"}</dd></div>
+                  <div><dt className="text-text-3">Cost / conv.</dt><dd className="font-medium tabular">{x?.costPerConversionMinor == null ? "—" : formatMoney(x.costPerConversionMinor, c)}</dd></div>
+                </dl>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className={status ? undefined : "hidden md:block"}>
       <Table>
         <THead>
           <tr>
@@ -300,6 +335,7 @@ export function PlatformSection({ rep, staff, marker, status = false, title = "P
           })}
         </TBody>
       </Table>
+      </div>
       {client.accounts.some((a) => a.platform === "GOOGLE_LSA") && (
         <p className="px-5 pt-3 text-xs text-text-3">
           Google Local Services Ads: spend shown is <strong className="font-medium text-text-2">estimated</strong> from charged leads × lead cost, because the LSA reporting API does not provide verified daily ad spend. Treat it as an estimate, not billed spend.
@@ -377,6 +413,28 @@ export function HistorySection({ rep, marker, hideEmpty = false }: { rep: Client
         <div className="flex flex-wrap items-center gap-2"><CardTitle>Historical budget performance</CardTitle>{marker}</div>
         <CardDescription>Final spend against budget for previous months.</CardDescription>
       </CardHeader>
+      {/* Phones: one card per month. */}
+      <ul className="flex flex-col gap-2 px-3 md:hidden" aria-label="Previous months">
+        {rows.map((h) => {
+          const r = h.total;
+          return (
+            <li key={h.period.start} className="rounded-lg border border-border p-3">
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-medium">{formatDate(h.period.start, { month: "long", year: "numeric" })}</p>
+                {r ? <StatusBadge status={r.status} /> : <NoBudgetBadge />}
+              </div>
+              {r && (
+                <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                  <div><dt className="text-text-3">Spent</dt><dd className="font-medium tabular">{formatMoney(r.actualToDateMinor, c, { whole: true })}</dd></div>
+                  <div><dt className="text-text-3">of</dt><dd className="font-medium tabular">{formatMoney(r.budgetMinor, c, { whole: true })}</dd></div>
+                  <div><dt className="text-text-3">Used</dt><dd className="font-medium tabular">{formatPct(r.pctBudgetConsumed)}</dd></div>
+                </dl>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <div className="hidden md:block">
       <Table>
         <THead>
           <tr><TH className="pl-5">Period</TH><TH className="text-right">Budget</TH><TH className="text-right">Spent</TH><TH className="text-right">Variance</TH><TH className="text-right">Budget used</TH><TH className="pr-5">Result</TH></tr>
@@ -397,6 +455,7 @@ export function HistorySection({ rep, marker, hideEmpty = false }: { rep: Client
           })}
         </TBody>
       </Table>
+      </div>
       <div className="h-4" />
     </Card>
   );
