@@ -1,6 +1,7 @@
 // Ready-made dashboard templates offered when creating a dashboard. Each source
 // adds ONE import and ONE entry (alphabetical). See ../types.ts for widgets.
 import type { DashboardWidget } from "../types";
+import { gbpTemplate } from "./gbp";
 import { seoTemplate } from "./seo";
 
 export interface DashboardTemplateDef {
@@ -13,5 +14,6 @@ export interface DashboardTemplateDef {
 }
 
 export const DASHBOARD_TEMPLATES: DashboardTemplateDef[] = [
+  gbpTemplate,
   seoTemplate,
 ];
