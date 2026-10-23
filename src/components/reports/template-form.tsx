@@ -1,13 +1,13 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Plus, Sparkles, X } from "lucide-react";
 import { useFormSubmit } from "@/components/use-form-submit";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { KPI_BY_KEY, KPIS, type KpiKey } from "@/lib/kpis";
 import { PRESET_LABEL } from "@/lib/date-ranges";
-import { MAX_KPIS, MAX_TRENDS, SECTION_KEYS, SECTION_LABEL, type ReportTemplate } from "@/lib/report-template";
+import { MAX_KPIS, MAX_TRENDS, SECTION_KEYS, SECTION_LABEL, templateFromForm, type ReportTemplate } from "@/lib/report-template";
 import type { TemplateFormState } from "@/server/report-template-actions";
 
 const RANGES = ["mtd", "last_month", "last_7", "last_30", "last_90"] as const;
@@ -101,22 +101,80 @@ function Checks({ name, keys, picked, setPicked, max }: { name: string; keys: Kp
   );
 }
 
+export interface PreviewSample {
+  clientName: string;
+  currency: string;
+  /** Formatted KPI values for the client's default range. */
+  values: Partial<Record<KpiKey, string>>;
+}
+
+const Bar = ({ w = "w-full" }: { w?: string }) => <div className={`h-1.5 rounded bg-border ${w}`} aria-hidden />;
+
+/** A miniature of the client-facing report that follows the form as it changes. */
+function LayoutPreview({ t, sample }: { t: ReportTemplate; sample?: PreviewSample }) {
+  const on = t.sections;
+  const block = (title: string, body: React.ReactNode) => (
+    <div className="rounded-md border border-border bg-surface p-2">
+      <p className="mb-1.5 text-[10px] font-semibold text-text">{title}</p>
+      {body}
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3 text-text" aria-label="Live preview of the client report">
+      <div>
+        <p className="text-xs font-semibold">{sample?.clientName ?? "Client name"}</p>
+        <p className="text-[10px] text-text-3">{t.title} · {PRESET_LABEL[t.defaultRange]}{t.compare !== "none" ? ` vs ${COMPARE_LABEL[t.compare].toLowerCase()}` : ""}</p>
+      </div>
+      {on.kpis && (
+        <div className="grid grid-cols-3 gap-1">
+          {t.kpis.map((k) => (
+            <div key={k} className="rounded border border-border bg-surface px-1.5 py-1">
+              <p className="truncate text-[8px] text-text-3">{KPI_BY_KEY[k].label}</p>
+              <p className="truncate text-[11px] font-semibold tabular">{sample?.values[k] ?? "—"}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {on.trends && t.trendKpis.length > 0 && block(`Trend · ${t.trendKpis.map((k) => KPI_BY_KEY[k].short).join(", ")}`, (
+        <svg viewBox="0 0 100 24" className="h-6 w-full" aria-hidden><polyline points="0,18 15,14 30,16 45,9 60,11 75,6 100,8" fill="none" stroke="var(--series-actual)" strokeWidth="1.5" /></svg>
+      ))}
+      {on.executive && block(t.executiveAi ? "Summary (AI-written)" : "Summary (automatic)", <div className="flex flex-col gap-1"><Bar /><Bar w="w-5/6" /><Bar w="w-2/3" /></div>)}
+      {on.summary && t.summary.trim() && block("Note", <p className="line-clamp-3 text-[9px] text-text-2">{t.summary.trim()}</p>)}
+      {on.pacing && block("Budget pacing", <div className="flex flex-col gap-1"><Bar /><Bar w="w-3/4" /></div>)}
+      {on.platforms && block("Platform breakdown", <div className="flex flex-col gap-1"><Bar /><Bar /></div>)}
+      {on.campaigns && block("Campaigns", <div className="flex flex-col gap-1"><Bar /><Bar /><Bar w="w-4/5" /></div>)}
+      {on.history && block("Budget history", <Bar w="w-2/3" />)}
+      {on.notes && <p className="text-[9px] text-text-3">Notes and definitions (PDF)</p>}
+      {!SECTION_KEYS.some((k) => on[k]) && <p className="text-xs text-text-3">Every section is turned off.</p>}
+    </div>
+  );
+}
+
 export function TemplateForm({
   template,
   action,
   submitLabel = "Save report layout",
   draftSummary,
+  sample,
 }: {
   template: ReportTemplate;
   action: (prev: TemplateFormState, form: FormData) => Promise<TemplateFormState>;
   submitLabel?: string;
   /** When set, offers an AI-drafted summary from the client's data. */
   draftSummary?: () => Promise<{ summary?: string; error?: string }>;
+  /** Real figures for the live preview (client layouts). */
+  sample?: PreviewSample;
 }) {
   const [state, dispatch, pending] = useActionState(action, undefined);
   const form = useFormSubmit(dispatch);
   const [kpis, setKpis] = useState<KpiKey[]>(template.kpis);
   const [trends, setTrends] = useState<KpiKey[]>(template.trendKpis);
+  // The preview re-reads the whole form whenever anything in it changes.
+  const [preview, setPreview] = useState<ReportTemplate>(template);
+  const [edits, setEdits] = useState(0);
+  useEffect(() => {
+    if (form.ref.current) setPreview(templateFromForm(new FormData(form.ref.current)).template);
+  }, [kpis, trends, edits, form.ref]);
   const all = KPIS.map((k) => k.key);
   const summaryRef = useRef<HTMLTextAreaElement>(null);
   const [drafting, startDraft] = useTransition();
@@ -131,7 +189,8 @@ export function TemplateForm({
       } else setDraftNote({ text: r.error ?? "No draft was returned." });
     });
   return (
-    <form {...form} className="flex flex-col gap-6">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <form {...form} onInput={() => setEdits((n) => n + 1)} onChange={() => setEdits((n) => n + 1)} className="flex flex-col gap-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5 sm:col-span-2">
           <Label htmlFor="title">Report title</Label>
@@ -219,5 +278,13 @@ export function TemplateForm({
         {state?.errors?.map((e) => <p key={e} className="text-sm text-critical-ink" role="alert">{e}</p>)}
       </div>
     </form>
+    <aside className="order-first lg:order-none">
+      <div className="flex flex-col gap-2 lg:sticky lg:top-4">
+        <p className="text-xs font-medium text-text-3">Live preview{sample ? " · this client's figures" : ""}</p>
+        <LayoutPreview t={preview} sample={sample} />
+        <p className="text-[11px] text-text-3">Updates as you edit; save to apply it to the report, shared links and PDF.</p>
+      </div>
+    </aside>
+    </div>
   );
 }

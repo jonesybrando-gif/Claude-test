@@ -7,7 +7,9 @@ import { resetClientTemplateAction, saveClientTemplateAction } from "@/server/re
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ExportButtons } from "@/components/export-buttons";
-import { TemplateForm } from "@/components/reports/template-form";
+import { TemplateForm, type PreviewSample } from "@/components/reports/template-form";
+import { loadClientReport } from "@/server/client-report";
+import { ALL_KPI_KEYS, formatKpi, kpiValues } from "@/lib/kpis";
 import { aiConfigured } from "@/server/ai/assistant";
 import { draftSummaryAction } from "@/server/ai/actions";
 
@@ -18,11 +20,17 @@ export default async function ClientReportBuilderPage({ params, searchParams }: 
   const { reset } = await searchParams;
   const user = await requireClientEdit(id);
   const client = await prisma.client.findUniqueOrThrow({ where: { id }, select: { name: true } });
-  const { template, custom } = await getClientTemplate(user.agencyId, id);
+  const [{ template, custom }, rep] = await Promise.all([getClientTemplate(user.agencyId, id), loadClientReport(id, {})]);
+  // Real figures for the live preview, for the report's default range.
+  const sample: PreviewSample = {
+    clientName: client.name,
+    currency: rep.client.currency,
+    values: Object.fromEntries(kpiValues(ALL_KPI_KEYS, rep.perf.totals, null).map((kv) => [kv.key, formatKpi(kv.key, kv.value, rep.client.currency)])),
+  };
   const isAdmin = user.role === "AGENCY_ADMIN";
 
   return (
-    <div className="mx-auto flex max-w-[1000px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link href={`/clients/${id}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
@@ -53,7 +61,7 @@ export default async function ClientReportBuilderPage({ params, searchParams }: 
           )}
         </CardHeader>
         <CardContent>
-          <TemplateForm key={reset ?? "form"} template={template} action={saveClientTemplateAction.bind(null, id)} draftSummary={aiConfigured() ? draftSummaryAction.bind(null, id) : undefined} />
+          <TemplateForm key={reset ?? "form"} template={template} action={saveClientTemplateAction.bind(null, id)} draftSummary={aiConfigured() ? draftSummaryAction.bind(null, id) : undefined} sample={sample} />
         </CardContent>
       </Card>
     </div>
