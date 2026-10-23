@@ -15,7 +15,7 @@ import { ClientReportView } from "@/components/reports/client-report-view";
 import { ClientVisibilityToggle } from "@/components/reports/visibility-toggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExecutiveSummary } from "@/components/reports/executive-summary";
-import { CampaignsSection, hiddenMarker, HistorySection, KpiSection, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
+import { CampaignsSection, DataFreshness, hiddenMarker, HistorySection, KpiSection, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +67,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
           {pacing.client.managerName && staff && <> · Manager: {pacing.client.managerName}</>}
         </p>
+        <div className="mt-1.5"><DataFreshness rep={rep} staff={staff} setupHref={staff ? tabHref("setup") : undefined} /></div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <RangeControls preset={preset} compare={compareMode} from={range.from} to={range.to} />

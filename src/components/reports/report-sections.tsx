@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { AlertTriangle, EyeOff } from "lucide-react";
+import { AlertTriangle, EyeOff, RefreshCw, Unplug } from "lucide-react";
 import type { PacingRow } from "@/server/pacing-service";
 import type { ClientReport } from "@/server/client-report";
 import { PRESET_LABEL } from "@/lib/date-ranges";
@@ -367,5 +367,46 @@ export function HistorySection({ rep, marker, hideEmpty = false }: { rep: Client
       </Table>
       <div className="h-4" />
     </Card>
+  );
+}
+
+/**
+ * "Synced 59 min ago · complete through Oct 20" for the report header. Turns
+ * amber (for staff) when any account is stale, disconnected or failing.
+ */
+export function DataFreshness({ rep, staff, setupHref }: { rep: ClientReport; staff: boolean; setupHref?: string }) {
+  const { client, pacing } = rep;
+  const metas = pacing.accounts;
+  if (metas.length === 0) {
+    return staff ? (
+      <Link href={setupHref ?? `/clients/${client.id}/accounts`} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-xs text-text-2 hover:text-text">
+        <Unplug className="h-3.5 w-3.5" aria-hidden /> No ad accounts linked
+      </Link>
+    ) : null;
+  }
+  const syncs = metas.map((a) => a.lastSuccessfulSyncAt).filter((s): s is string => !!s).sort();
+  const through = metas.map((a) => a.dataCompleteThrough).filter((d): d is string => !!d).sort();
+  const problems = client.accounts.filter((a) => {
+    const m = metas.find((x) => x.id === a.id);
+    return a.status === "NEEDS_REAUTH" || a.status === "DISCONNECTED" || a.syncRuns[0]?.status === "FAILED" || (m && !m.isDemo && (m.stale || !m.lastSuccessfulSyncAt));
+  });
+  const warn = staff && problems.length > 0;
+  const parts = [
+    syncs.length ? `Synced ${relativeTime(syncs[0]).toLowerCase()}` : "Not synced yet",
+    through.length ? `complete through ${formatDate(through[0])}` : null,
+    warn ? `${problems.length} account${problems.length === 1 ? "" : "s"} need${problems.length === 1 ? "s" : ""} attention` : null,
+  ].filter(Boolean);
+  const cls = `inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs ${warn ? "bg-warning-bg text-warning-ink" : "border border-border bg-surface-2 text-text-2"}`;
+  const Icon = warn ? AlertTriangle : RefreshCw;
+  const body = (
+    <>
+      <Icon className="h-3.5 w-3.5" aria-hidden />
+      {parts.join(" · ")}
+    </>
+  );
+  return staff && setupHref ? (
+    <Link href={setupHref} className={`${cls} hover:underline`} title={syncs.length > 1 ? "Oldest sync across this client's accounts" : undefined}>{body}</Link>
+  ) : (
+    <span className={cls}>{body}</span>
   );
 }

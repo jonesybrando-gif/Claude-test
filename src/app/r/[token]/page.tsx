@@ -9,6 +9,7 @@ import { formatDate } from "@/lib/time";
 import { buttonVariants } from "@/components/ui/button";
 import { DemoBadge } from "@/components/status-badge";
 import { ClientReportView } from "@/components/reports/client-report-view";
+import { DataFreshness } from "@/components/reports/report-sections";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,7 @@ export default async function SharedReportPage({ params, searchParams }: { param
               {template.title} · {PRESET_LABEL[preset]}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
               {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
             </p>
+            <div className="mt-1.5"><DataFreshness rep={rep} staff={false} /></div>
           </div>
           <a href={`/r/${token}/pdf`} download className={buttonVariants({ variant: "outline" })}>
             <Download className="h-4 w-4" aria-hidden /> Download PDF
