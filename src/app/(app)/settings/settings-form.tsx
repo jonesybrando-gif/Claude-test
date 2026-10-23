@@ -6,6 +6,7 @@ import { useFormSubmit } from "@/components/use-form-submit";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BrandingFields } from "./branding-fields";
 
 export interface SettingsValues {
   name: string;
@@ -46,21 +47,10 @@ export function SettingsForm({ values }: { values: SettingsValues }) {
       <Card>
         <CardHeader>
           <CardTitle>White-label branding</CardTitle>
-          <CardDescription>Shown in the app, the client portal and (in a later phase) PDF and email reports.</CardDescription>
+          <CardDescription>Shown in the app, the client portal, shared report links and PDF reports.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
-          {field("name", "Agency name", { required: true })}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="brandColor">Brand color</Label>
-            <div className="flex gap-2">
-              <Input id="brandColor" name="brandColor" defaultValue={values.brandColor} pattern="^#[0-9a-fA-F]{6}$" />
-              <input type="color" aria-label="Pick brand color" defaultValue={values.brandColor} onChange={(e) => ((document.getElementById("brandColor") as HTMLInputElement).value = e.target.value)} className="h-9 w-12 cursor-pointer rounded border border-border" />
-            </div>
-          </div>
-          {field("logoUrl", "Logo URL (https)", { type: "url", placeholder: "https://…" })}
-          <div />
-          {field("reportHeader", "Report header text")}
-          {field("reportFooter", "Report footer text")}
+        <CardContent>
+          <BrandingFields values={{ name: values.name, brandColor: values.brandColor, logoUrl: values.logoUrl, reportHeader: values.reportHeader, reportFooter: values.reportFooter }} />
         </CardContent>
       </Card>
       <div className="flex items-center gap-3">

@@ -15,8 +15,8 @@ import { C, contentWidth, decoratePages, ensureSpace, newDoc, paragraph, pdfText
 
 const STATUS_COLOR: Record<PacingStatus, string> = {
   OVERSPENDING: C.critical,
-  UNDERSPENDING: C.critical,
-  SLIGHTLY_OVER: C.warning,
+  UNDERSPENDING: C.warning,
+  SLIGHTLY_OVER: C.serious,
   SLIGHTLY_UNDER: C.warning,
   ON_TARGET: C.good,
   NOT_STARTED: C.text3,
@@ -254,12 +254,14 @@ export async function renderClientReportPdf(
     sectionTitle(doc, `Budget pacing · ${formatDate(pacing.period.start, { month: "long", year: "numeric" })}`, total.asOf ? `Complete data through ${formatDate(total.asOf)}. Status: ${STATUS_LABEL[total.status]}.` : "No complete days of data in this period yet.");
     drawPacingChart(doc, total.series, total.budgetMinor, c);
     table(doc, [{ header: "", width: 0.25 }, { header: "", width: 0.25, align: "right" }, { header: "", width: 0.27 }, { header: "", width: 0.23, align: "right" }], pacingFacts(total, c), { noHeader: true });
-    const lines = [...pacing.rows, ...pacing.subRows];
+    // The client-facing version drops internal terms, unbudgeted accounts and lines with no data.
+    const lines = opts.internal ? [...pacing.rows, ...pacing.subRows] : [...pacing.rows, ...pacing.subRows].filter((r) => r.level !== "UNBUDGETED" && !r.notConnected);
     if (lines.length > 1 || opts.internal) {
-      sectionTitle(doc, "Budget lines", "Sub-allocations are paced individually but already included in a parent budget.");
+      if (opts.internal) sectionTitle(doc, "Budget lines", "Sub-allocations are paced individually but already included in a parent budget.");
+      else sectionTitle(doc, "Budget", "Each budget and how it is tracking this period.");
       const sub = new Set(pacing.subRows);
       const lineCols: Column[] = [
-          { header: "Line", width: opts.internal ? 0.24 : 0.34 },
+          { header: opts.internal ? "Line" : "Budget", width: opts.internal ? 0.24 : 0.34 },
           { header: "Status", width: 0.12 },
           { header: "Budget", width: 0.1, align: "right" },
           { header: "Spent", width: 0.1, align: "right" },
@@ -274,8 +276,8 @@ export async function renderClientReportPdf(
         doc,
         lineCols,
         lines.map((r) => [
-          `${r.level === "CLIENT" ? "Combined client budget" : r.label}${sub.has(r) ? " (sub-allocation)" : ""}\n${r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ")}`,
-          r.result ? STATUS_LABEL[r.result.status] : "No budget",
+          `${r.level === "CLIENT" ? (opts.internal ? "Combined client budget" : "Total budget") : r.label}${opts.internal && sub.has(r) ? " (sub-allocation)" : ""}\n${r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ")}`,
+          r.notConnected ? "Not connected" : r.result ? STATUS_LABEL[r.result.status] : "No budget",
           money(r.result?.budgetMinor, c),
           money(r.result?.actualToDateMinor ?? r.unbudgetedSpendMinor, c),
           r.result ? formatPct(r.result.pacingPct) : "—",
@@ -353,8 +355,9 @@ export async function renderClientReportPdf(
     );
   }
 
-  // History
-  if (on.history) {
+  // History (the client-facing PDF leaves out months that had no budget)
+  const historyRows = opts.internal ? history : history.filter((h) => h.total);
+  if (on.history && historyRows.length) {
     sectionTitle(doc, "Historical budget performance");
     table(
       doc,
@@ -366,7 +369,7 @@ export async function renderClientReportPdf(
         { header: "Used", width: 0.1, align: "right" },
         { header: "Result", width: 0.16 },
       ],
-      history.map((h) => {
+      historyRows.map((h) => {
         const r = h.total;
         return [
           formatDate(h.period.start, { month: "long", year: "numeric" }),
@@ -377,7 +380,7 @@ export async function renderClientReportPdf(
           r ? STATUS_LABEL[r.status] : "No budget",
         ];
       }),
-      { colors: history.map((h) => [undefined, undefined, undefined, undefined, undefined, h.total ? STATUS_COLOR[h.total.status] : C.text3]) },
+      { colors: historyRows.map((h) => [undefined, undefined, undefined, undefined, undefined, h.total ? STATUS_COLOR[h.total.status] : C.text3]) },
     );
   }
 

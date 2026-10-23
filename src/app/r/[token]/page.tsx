@@ -3,16 +3,26 @@ import { notFound } from "next/navigation";
 import { Download } from "lucide-react";
 import { prisma } from "@/server/db";
 import { loadClientReport } from "@/server/client-report";
-import { recordShareView, resolveShareToken } from "@/server/share-links";
+import { cookies } from "next/headers";
+import { recordShareView, resolveShareToken, shareAccessGranted, shareCookieName } from "@/server/share-links";
+import { SharePasswordForm } from "./password-form";
 import { PRESET_LABEL } from "@/lib/date-ranges";
 import { formatDate } from "@/lib/time";
 import { buttonVariants } from "@/components/ui/button";
 import { DemoBadge } from "@/components/status-badge";
 import { ClientReportView } from "@/components/reports/client-report-view";
+import { DataFreshness, NoAccountsState } from "@/components/reports/report-sections";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Advertising report", robots: { index: false, follow: false } };
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const link = await resolveShareToken(token);
+  // Don't reveal the client's name in the tab before a password is entered.
+  const open = link && shareAccessGranted(link, (await cookies()).get(shareCookieName(link.id))?.value);
+  const name = link && open ? (await prisma.client.findUnique({ where: { id: link.clientId }, select: { name: true } }))?.name : null;
+  return { title: name ? `${name} · Advertising report` : "Advertising report", robots: { index: false, follow: false } };
+}
 
 /** A client-facing report opened from a shared link, without signing in. */
 export default async function SharedReportPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
@@ -20,6 +30,18 @@ export default async function SharedReportPage({ params, searchParams }: { param
   const sp = await searchParams;
   const link = await resolveShareToken(token);
   if (!link) notFound();
+  if (!shareAccessGranted(link, (await cookies()).get(shareCookieName(link.id))?.value)) {
+    const agency = await prisma.agency.findUniqueOrThrow({ where: { id: link.client.agencyId }, select: { name: true, brandColor: true } });
+    return (
+      <div className="min-h-screen" style={{ ["--brand" as string]: agency.brandColor }}>
+        <div className="h-1.5 bg-brand" />
+        <main className="mx-auto flex max-w-sm flex-col gap-4 px-4 py-16">
+          <p className="text-sm font-semibold">{agency.name}</p>
+          <div className="rounded-xl border border-border bg-surface p-5"><SharePasswordForm token={token} /></div>
+        </main>
+      </div>
+    );
+  }
   const [rep, agency] = await Promise.all([
     loadClientReport(link.clientId, { range: link.range ?? undefined, compare: link.compare ?? undefined }),
     prisma.agency.findUniqueOrThrow({ where: { id: link.client.agencyId }, select: { name: true, brandColor: true, logoUrl: true, reportHeader: true, reportFooter: true } }),
@@ -56,12 +78,13 @@ export default async function SharedReportPage({ params, searchParams }: { param
               {template.title} · {PRESET_LABEL[preset]}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
               {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
             </p>
+            <div className="mt-1.5"><DataFreshness rep={rep} staff={false} /></div>
           </div>
           <a href={`/r/${token}/pdf`} download className={buttonVariants({ variant: "outline" })}>
             <Download className="h-4 w-4" aria-hidden /> Download PDF
           </a>
         </div>
-        <ClientReportView rep={rep} staff={false} basePath={`/r/${token}`} query={{ line: sp.line }} />
+        {client.accounts.length === 0 ? <NoAccountsState rep={rep} staff={false} /> : <ClientReportView rep={rep} basePath={`/r/${token}`} query={{ line: sp.line }} />}
         <footer className="border-t border-border pt-4 text-xs text-text-3">
           {agency.reportFooter && <p className="mb-1">{agency.reportFooter}</p>}
           <p>Prepared by {agency.name}. Figures are as reported by each ad platform; today&apos;s partial data is excluded.</p>

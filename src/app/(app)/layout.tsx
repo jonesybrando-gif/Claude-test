@@ -4,7 +4,7 @@ import { requireUser } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { visibleClientsWhere } from "@/server/access";
 import { logout } from "@/app/login/actions";
-import { ClientJump } from "@/components/client-jump";
+import { CommandPalette, type PaletteItem } from "@/components/command-palette";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -23,6 +23,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...(user.role === "AGENCY_ADMIN" ? [{ href: "/settings", label: "Settings", Icon: Settings }] : []),
   ];
 
+  // Search / Cmd-K: every visible client plus the main pages.
+  const paletteItems: PaletteItem[] = staff
+    ? [
+        ...nav.map((n) => ({ href: n.href, label: n.label, kind: "Page" as const })),
+        ...(user.role === "AGENCY_ADMIN"
+          ? [
+              { href: "/settings/team", label: "Team", kind: "Page" as const, hint: "Settings" },
+              { href: "/settings/reports", label: "Reports and schedules", kind: "Page" as const, hint: "Settings" },
+              { href: "/settings/alerts", label: "Alert settings and Slack", kind: "Page" as const, hint: "Settings" },
+            ]
+          : []),
+        { href: "/account", label: "Your account", kind: "Page" as const },
+        ...clients.map((c) => ({ href: `/clients/${c.id}`, label: c.name, kind: "Client" as const })),
+      ]
+    : [];
+
   return (
     <div className="min-h-screen md:flex" style={{ ["--brand" as string]: agency.brandColor }}>
       <aside className="border-b border-border bg-surface md:sticky md:top-0 md:h-screen md:w-60 md:shrink-0 md:border-r md:border-b-0">
@@ -37,6 +53,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           )}
           <span className="truncate text-sm font-semibold">{agency.name}</span>
         </div>
+        {staff && (
+          <div className="px-3 pb-2 md:pb-3">
+            <CommandPalette items={paletteItems} />
+          </div>
+        )}
         <nav className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:pb-0">
           {nav.map(({ href, label, Icon, ...rest }) => {
             const count = "count" in rest ? (rest.count as number) : 0;
@@ -49,11 +70,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             );
           })}
         </nav>
-        {staff && clients.length > 0 && (
-          <div className="hidden px-4 pt-4 md:block">
-            <ClientJump clients={clients} />
-          </div>
-        )}
         <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2 md:absolute md:bottom-0 md:block md:w-60 md:py-3">
           <Link href="/account" className="block truncate text-sm font-medium hover:underline">{user.name}</Link>
           <p className="truncate text-xs text-text-3">{user.role.replace("_", " ").toLowerCase()}</p>

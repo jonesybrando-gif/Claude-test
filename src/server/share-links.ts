@@ -1,5 +1,6 @@
 import "server-only";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import bcrypt from "bcryptjs";
 import { prisma } from "./db";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { appUrl } from "./email";
@@ -17,7 +18,7 @@ const TOKEN_RE = /^[A-Za-z0-9_-]{32}$/;
 
 export const shareUrl = (token: string) => appUrl(`/r/${token}`);
 
-export async function createShareLink(opts: { clientId: string; createdById: string; label: string | null; range: ShareRange; expiresInDays: number | null; now?: Date }) {
+export async function createShareLink(opts: { clientId: string; createdById: string; label: string | null; range: ShareRange; expiresInDays: number | null; password?: string | null; now?: Date }) {
   const token = randomBytes(24).toString("base64url");
   const now = opts.now ?? new Date();
   const link = await prisma.reportShareLink.create({
@@ -29,6 +30,7 @@ export async function createShareLink(opts: { clientId: string; createdById: str
       range: opts.range === "template" ? null : opts.range,
       expiresAt: opts.expiresInDays ? new Date(now.getTime() + opts.expiresInDays * 86_400_000) : null,
       createdById: opts.createdById,
+      passwordHash: opts.password ? await bcrypt.hash(opts.password, 10) : null,
     },
   });
   return { link, token, url: shareUrl(token) };
@@ -57,7 +59,33 @@ export async function listShareLinks(clientId: string) {
     } catch {
       url = null; // encryption key changed; the link still works but can't be shown again
     }
-    const { tokenEnc: _enc, tokenHash: _hash, ...rest } = l; // eslint-disable-line @typescript-eslint/no-unused-vars
-    return { ...rest, url };
+    const { tokenEnc: _enc, tokenHash: _hash, passwordHash, ...rest } = l; // eslint-disable-line @typescript-eslint/no-unused-vars
+    return { ...rest, url, hasPassword: !!passwordHash };
   });
+}
+
+// Password-protected links: after the right password, the viewer gets a
+// cookie scoped to that link's path. Its value is an HMAC over the link and
+// its password hash, so changing or removing the password logs viewers out.
+
+export const shareCookieName = (linkId: string) => `share_${linkId}`;
+
+function accessValue(link: { id: string; passwordHash: string | null }): string {
+  const secret = process.env.AUTH_SECRET ?? "";
+  return createHmac("sha256", secret).update(`${link.id}:${link.passwordHash ?? ""}`).digest("base64url");
+}
+
+/** True when the link has no password, or the cookie proves the password was entered. */
+export function shareAccessGranted(link: { id: string; passwordHash: string | null }, cookieValue: string | undefined): boolean {
+  if (!link.passwordHash) return true;
+  if (!cookieValue) return false;
+  const a = Buffer.from(cookieValue);
+  const b = Buffer.from(accessValue(link));
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Checks a password; on success returns the cookie value to set. */
+export async function unlockShareLink(link: { id: string; passwordHash: string | null }, password: string): Promise<string | null> {
+  if (!link.passwordHash) return accessValue(link);
+  return (await bcrypt.compare(password.slice(0, 200), link.passwordHash)) ? accessValue(link) : null;
 }

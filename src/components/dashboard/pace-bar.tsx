@@ -6,7 +6,7 @@ const FILL: Record<PacingStatus, string> = {
   SLIGHTLY_OVER: "var(--serious)",
   ON_TARGET: "var(--good)",
   SLIGHTLY_UNDER: "var(--warning)",
-  UNDERSPENDING: "var(--critical)",
+  UNDERSPENDING: "var(--warning)",
   NOT_STARTED: "var(--text-3)",
   NO_BUDGET: "var(--text-3)",
 };

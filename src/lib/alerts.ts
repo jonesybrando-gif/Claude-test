@@ -7,6 +7,16 @@
 import { addDays, eachDay, type IsoDate } from "./pacing/dates";
 import type { PacingStatus } from "./pacing/status";
 import { formatMoney } from "./money";
+import { formatDate } from "./time";
+
+/**
+ * Every alert title has one shape: "<What happened> · <budget line, account or
+ * campaign>". The client is shown separately, so it is never repeated here.
+ */
+export function alertTitle(issue: string, scope: string): string {
+  const what = issue.charAt(0).toUpperCase() + issue.slice(1);
+  return scope ? `${what} · ${scope}` : what;
+}
 
 export type AlertKind =
   | "OVERSPENDING"
@@ -89,6 +99,8 @@ export interface PacingRowInput {
   isDemo: boolean;
   /** Line depends on a disconnected account: its pacing reflects missing data, covered by ACCOUNT_DISCONNECTED. */
   disconnected?: boolean;
+  /** No ad account linked (or never synced): nothing to pace, so no pacing alerts. */
+  notConnected?: boolean;
   result: {
     phase: "NOT_STARTED" | "ACTIVE" | "ENDED";
     periodStart: IsoDate;
@@ -140,13 +152,13 @@ export function evaluateAlerts(input: {
   // 1. Pacing and month-end forecast (budget lines)
   for (const r of input.rows) {
     const res = r.result;
-    if (!res || res.phase !== "ACTIVE" || r.disconnected) continue;
+    if (!res || res.phase !== "ACTIVE" || r.disconnected || r.notConnected) continue;
     const base = { clientId: r.clientId, clientName: r.clientName, isDemo: r.isDemo, detail: r.action.detail };
     if (res.status === "OVERSPENDING" || res.status === "UNDERSPENDING") {
-      out.push({ ...base, kind: res.status, severity: "critical", dedupeKey: `${res.status}:${r.key}:${res.periodStart}`, title: `${r.label}: ${r.action.headline}` });
+      out.push({ ...base, kind: res.status, severity: "critical", dedupeKey: `${res.status}:${r.key}:${res.periodStart}`, title: alertTitle(r.action.headline, r.label) });
     } else if (res.forecastStatus === "UNDERSPENDING") {
       // On plan so far but the month will finish well short (e.g. after a budget increase)
-      out.push({ ...base, kind: "UNDERSPENDING", severity: "warning", dedupeKey: `UNDERSPENDING:${r.key}:${res.periodStart}`, title: `${r.label}: ${r.action.headline}` });
+      out.push({ ...base, kind: "UNDERSPENDING", severity: "warning", dedupeKey: `UNDERSPENDING:${r.key}:${res.periodStart}`, title: alertTitle(r.action.headline, r.label) });
     }
     const overrun = res.budgetMinor > 0 && res.projectedVarianceMinor > (res.budgetMinor * s.overrunPct) / 100;
     if (overrun && res.status !== "OVERSPENDING") {
@@ -155,7 +167,7 @@ export function evaluateAlerts(input: {
         kind: "PROJECTED_OVERRUN",
         severity: "warning",
         dedupeKey: `PROJECTED_OVERRUN:${r.key}:${res.periodStart}`,
-        title: `${r.label}: projected to exceed budget by ${formatMoney(res.projectedVarianceMinor, r.currency, { whole: true })}`,
+        title: alertTitle(`projected to exceed budget by ${formatMoney(res.projectedVarianceMinor, r.currency, { whole: true })}`, r.label),
       });
     }
   }
@@ -170,7 +182,7 @@ export function evaluateAlerts(input: {
         kind: "ACCOUNT_DISCONNECTED",
         severity: "critical",
         dedupeKey: `ACCOUNT_DISCONNECTED:${a.id}`,
-        title: `${a.name}: ${a.status === "PENDING_APPROVAL" ? "waiting on platform approval" : "disconnected"}`,
+        title: alertTitle(a.status === "PENDING_APPROVAL" ? "waiting on platform approval" : "account disconnected", a.name),
         detail: a.status === "PENDING_APPROVAL" ? "The platform hasn't approved API access yet; no new data is arriving." : "Reconnect the platform login under Integrations. No new data is arriving.",
       });
       continue; // sync and spend alerts would only repeat this
@@ -182,7 +194,7 @@ export function evaluateAlerts(input: {
         kind: "SYNC_FAILED",
         severity: "warning",
         dedupeKey: `SYNC_FAILED:${a.id}`,
-        title: `${a.name}: ${a.lastSyncFailed ? "latest sync failed" : "data not updated"}`,
+        title: alertTitle(a.lastSyncFailed ? "latest sync failed" : "data not updated", a.name),
         detail: a.lastSyncFailed
           ? `${a.lastSyncFailed.error.slice(0, 200)}`
           : hoursSince === Infinity
@@ -202,7 +214,7 @@ export function evaluateAlerts(input: {
         kind: "SPEND_SPIKE",
         severity: "warning",
         dedupeKey: `SPEND_SPIKE:${a.id}:${d}`,
-        title: `${a.name}: spend jumped to ${formatMoney(last, a.currency, { whole: true })} on ${d}`,
+        title: alertTitle(`spend jumped to ${formatMoney(last, a.currency, { whole: true })} on ${formatDate(d)}`, a.name),
         detail: `That is ${(last / prior).toFixed(1)}× the previous 7-day average of ${formatMoney(Math.round(prior), a.currency, { whole: true })}/day.`,
       });
     }
@@ -217,8 +229,8 @@ export function evaluateAlerts(input: {
         kind: "SPEND_STOPPED",
         severity: "critical",
         dedupeKey: `SPEND_STOPPED:${a.id}`,
-        title: `${a.name}: spending stopped`,
-        detail: `No spend for the last ${n} complete day${n === 1 ? "" : "s"} (through ${d}), after averaging ${formatMoney(Math.round(before), a.currency, { whole: true })}/day. Check billing, approvals and campaign status.`,
+        title: alertTitle("spending stopped", a.name),
+        detail: `No spend for the last ${n} complete day${n === 1 ? "" : "s"} (through ${formatDate(d)}), after averaging ${formatMoney(Math.round(before), a.currency, { whole: true })}/day. Check billing, approvals and campaign status.`,
       });
       continue; // per-campaign no-spend alerts would only repeat this
     }
@@ -233,8 +245,8 @@ export function evaluateAlerts(input: {
           kind: "CAMPAIGN_NO_SPEND",
           severity: "warning",
           dedupeKey: `CAMPAIGN_NO_SPEND:${c.id}`,
-          title: `${c.name}: no spend for ${m} days`,
-          detail: `The campaign is enabled in ${a.name} but hasn't spent since before ${addDays(d, -(m - 1))}. Check budget, bids, approvals and targeting.`,
+          title: alertTitle(`no spend for ${m} days`, c.name),
+          detail: `The campaign is enabled in ${a.name} but hasn't spent since before ${formatDate(addDays(d, -(m - 1)))}. Check budget, bids, approvals and targeting.`,
         });
       }
     }

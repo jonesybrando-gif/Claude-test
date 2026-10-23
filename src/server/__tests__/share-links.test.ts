@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import { createShareLink, listShareLinks, recordShareView, resolveShareToken } from "../share-links";
+import { createShareLink, listShareLinks, recordShareView, resolveShareToken, shareAccessGranted, unlockShareLink } from "../share-links";
 
 const hasDb = !!process.env.DATABASE_URL && !!process.env.TOKEN_ENCRYPTION_KEY;
 const prisma = new PrismaClient();
@@ -58,5 +58,19 @@ describe.skipIf(!hasDb)("shared report links (database)", () => {
     await prisma.client.update({ where: { id: clientId }, data: { archivedAt: new Date() } });
     expect(await resolveShareToken(token)).toBeNull();
     await prisma.client.update({ where: { id: clientId }, data: { archivedAt: null } });
+  });
+
+  it("password-protected links need the password, and never expose its hash", async () => {
+    const { link } = await createShareLink({ clientId, createdById: userId, label: "Locked", range: "template", expiresInDays: null, password: "open-sesame" });
+    expect(link.passwordHash).not.toContain("open-sesame");
+    expect(shareAccessGranted(link, undefined)).toBe(false);
+    expect(await unlockShareLink(link, "wrong")).toBeNull();
+    const cookie = await unlockShareLink(link, "open-sesame");
+    expect(cookie).toBeTruthy();
+    expect(shareAccessGranted(link, cookie!)).toBe(true);
+    expect(shareAccessGranted({ ...link, passwordHash: "changed" }, cookie!)).toBe(false);
+    const listed = (await listShareLinks(clientId)).find((l) => l.id === link.id)!;
+    expect(listed.hasPassword).toBe(true);
+    expect(listed).not.toHaveProperty("passwordHash");
   });
 });

@@ -12,10 +12,47 @@ const SECTIONS = [
   { key: "recommendations", title: "Recommendations", numbered: true },
 ] as const;
 
+/** Up to three headline points: the top win, the top issue and the top recommendation. */
+function keyPoints(s: ExecSummary): string[] {
+  const pts = [s.working[0], s.notWorking[0], s.recommendations[0]].filter((x): x is string => !!x);
+  if (pts.length) return pts;
+  const first = s.overview.split(/(?<=[.!?])\s+/)[0];
+  return first ? [first] : [];
+}
+
 /** One continuous section, laid out like a written memo so it reads (and copies) cleanly. */
-function SummaryText({ summary, heading, pending, copyable }: { summary: ExecSummary; heading: string; pending?: boolean; copyable: boolean }) {
+function SummaryText({ summary, heading, pending, copyable, compact }: { summary: ExecSummary; heading: string; pending?: boolean; copyable: boolean; compact?: boolean }) {
+  const full = <FullText summary={summary} />;
   return (
     <div className="flex flex-col gap-4" aria-busy={pending || undefined}>
+      {compact ? (
+        <>
+          <ul className="flex max-w-[80ch] list-disc flex-col gap-1.5 pl-5 text-[15px] leading-relaxed text-text">
+            {keyPoints(summary).map((x, i) => <li key={i} className="pl-1">{x}</li>)}
+          </ul>
+          <details className="group">
+            <summary className="cursor-pointer text-sm font-medium text-brand hover:underline">
+              <span className="group-open:hidden">Read full summary</span>
+              <span className="hidden group-open:inline">Hide full summary</span>
+            </summary>
+            <div className="mt-3">{full}</div>
+          </details>
+        </>
+      ) : (
+        full
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+        <p className="text-xs text-text-3" aria-live="polite">
+          {pending ? "Writing a fuller analysis…" : summary.source === "ai" ? "Written by AI from the figures in this report." : "Worked out automatically from the figures in this report."} Recommendations are suggestions; nothing has been changed in the ad accounts.
+        </p>
+        {copyable && !pending && <CopySummaryButton html={summaryAsHtml(summary, heading)} text={summaryAsText(summary, heading)} />}
+      </div>
+    </div>
+  );
+}
+
+function FullText({ summary }: { summary: ExecSummary }) {
+  return (
       <article className="max-w-[80ch] text-[15px] leading-relaxed text-text">
         {summary.overview.split(/\n{2,}/).map((para, i) => <p key={i} className="mb-3">{para}</p>)}
         {SECTIONS.map((sec) => {
@@ -32,18 +69,11 @@ function SummaryText({ summary, heading, pending, copyable }: { summary: ExecSum
           );
         })}
       </article>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
-        <p className="text-xs text-text-3" aria-live="polite">
-          {pending ? "Writing a fuller analysis…" : summary.source === "ai" ? "Written by AI from the figures in this report." : "Worked out automatically from the figures in this report."} Recommendations are suggestions; nothing has been changed in the ad accounts.
-        </p>
-        {copyable && !pending && <CopySummaryButton html={summaryAsHtml(summary, heading)} text={summaryAsText(summary, heading)} />}
-      </div>
-    </div>
   );
 }
 
-async function AiSummary({ rep, heading, copyable }: { rep: ClientReport; heading: string; copyable: boolean }) {
-  return <SummaryText summary={await getExecutiveSummary(rep, { generate: true })} heading={heading} copyable={copyable} />;
+async function AiSummary({ rep, heading, copyable, compact }: { rep: ClientReport; heading: string; copyable: boolean; compact?: boolean }) {
+  return <SummaryText summary={await getExecutiveSummary(rep, { generate: true })} heading={heading} copyable={copyable} compact={compact} />;
 }
 
 /**
@@ -51,23 +81,26 @@ async function AiSummary({ rep, heading, copyable }: { rep: ClientReport; headin
  * recommendations, as one section. The automatic version shows at once; an
  * AI-written one streams in when the layout asks for it.
  */
-export function ExecutiveSummary({ rep, marker, copyable = false }: { rep: ClientReport; marker?: ReactNode; copyable?: boolean }) {
+export function ExecutiveSummary({ rep, marker, copyable = false, compact = false, title = "Executive summary", actions, bare = false }: { rep: ClientReport; marker?: ReactNode; copyable?: boolean; compact?: boolean; title?: string; actions?: ReactNode; bare?: boolean }) {
   const auto = automaticSummary(rep);
   const heading = `${rep.client.name}: performance summary, ${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })}`;
+  const body = wantsAiSummary(rep) ? (
+    <Suspense fallback={<SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} pending />}>
+      <AiSummary rep={rep} heading={heading} copyable={copyable} compact={compact} />
+    </Suspense>
+  ) : (
+    <SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} />
+  );
+  if (bare) return body;
   return (
     <Card>
       <CardHeader>
-        <div className="flex flex-wrap items-center gap-2"><CardTitle>Executive summary</CardTitle>{marker}</div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2"><CardTitle>{title}</CardTitle>{marker}</div>
+          {actions}
+        </div>
       </CardHeader>
-      <CardContent>
-        {wantsAiSummary(rep) ? (
-          <Suspense fallback={<SummaryText summary={auto} heading={heading} copyable={copyable} pending />}>
-            <AiSummary rep={rep} heading={heading} copyable={copyable} />
-          </Suspense>
-        ) : (
-          <SummaryText summary={auto} heading={heading} copyable={copyable} />
-        )}
-      </CardContent>
+      <CardContent>{body}</CardContent>
     </Card>
   );
 }

@@ -41,6 +41,8 @@ model Agency {
   defaultTimezone String @default("America/New_York")
   // Alert thresholds; see src/lib/alerts.ts for defaults.
   alertSettings Json?
+  /// Slack incoming-webhook URL for new alerts, encrypted like OAuth tokens. Null = Slack off.
+  slackWebhookEnc String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -174,8 +176,25 @@ model Client {
   alerts      Alert[]
   reports     Report[]
   labels      ClientLabel[]
+  chartNotes  ChartNote[]
 
   @@index([agencyId])
+}
+
+/// A note pinned to a date on a client's charts (a launch, a budget change),
+/// optionally shown on the client-facing report and optionally tagging a teammate.
+model ChartNote {
+  id            String   @id @default(cuid())
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  date          DateTime @db.Date
+  text          String
+  clientVisible Boolean  @default(false)
+  authorId      String?
+  taggedUserId  String?
+  createdAt     DateTime @default(now())
+
+  @@index([clientId, date])
 }
 
 // Agency-defined tags for grouping, sorting and filtering clients.
@@ -503,6 +522,8 @@ model Alert {
   firstSeenAt DateTime @default(now())
   lastSeenAt  DateTime @default(now())
   resolvedAt  DateTime?
+  /// Hidden from the open list until this time (the alert stays open and keeps updating).
+  snoozedUntil DateTime?
 
   notifications Notification[]
 
@@ -603,6 +624,8 @@ model ReportShareLink {
   createdAt    DateTime  @default(now())
   lastViewedAt DateTime?
   viewCount    Int       @default(0)
+  /// bcrypt hash of an optional password viewers must enter. Null = no password.
+  passwordHash String?
 
   @@index([clientId, createdAt])
 }

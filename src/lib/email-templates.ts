@@ -70,3 +70,11 @@ export function dailySummaryEmail(brand: Brand, dateLabel: string, needAction: A
   );
   return { subject, text, html };
 }
+
+/** A scheduled client report: the summary in the body, the PDF attached. */
+export function scheduledReportEmail(brand: Brand, o: { clientName: string; title: string; period: string; summaryText: string; summaryHtml: string }) {
+  const subject = `${o.clientName} · ${o.title} · ${o.period}`;
+  const text = `${o.summaryText}\n\nThe full report for ${o.period} is attached as a PDF.\n\n${brand.name}`;
+  const html = layout(brand, `${o.title} · ${o.period}`, `${o.summaryHtml}<p style="color:#52514e;font-size:13px;margin-top:16px">The full report for ${esc(o.period)} is attached as a PDF.</p>`);
+  return { subject, text, html };
+}

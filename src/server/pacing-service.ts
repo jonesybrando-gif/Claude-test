@@ -8,6 +8,8 @@ import type { DistributionConfig, DateRange } from "@/lib/pacing/distribution";
 import { resolveBudgetHierarchy, spendForUnit, type PacingUnit, type SpendRow } from "@/lib/pacing/rollup";
 import { DEFAULT_THRESHOLDS, needsAttention, type PacingThresholds } from "@/lib/pacing/status";
 import { recommendAction, type Action } from "@/lib/action-center";
+import { isNotConnected } from "@/lib/pacing/connection";
+import { formatDate } from "@/lib/time";
 import type { PlatformKey } from "@/lib/platforms";
 
 /** An account whose last successful sync is older than this is shown as stale. */
@@ -57,6 +59,12 @@ export interface PacingRow {
   lastSuccessfulSyncAt: string | null;
   stale: boolean;
   disconnected: boolean;
+  /**
+   * A budget line with no ad account linked, or whose accounts have never
+   * synced. It has no data to pace, so it is shown as "Not connected" and kept
+   * out of agency totals, the Daily Action Center and alerts.
+   */
+  notConnected: boolean;
   isDemo: boolean;
   hasEstimatedSpend: boolean;
   warnings: string[];
@@ -73,6 +81,8 @@ export interface ClientPacing {
   subRows: PacingRow[];
   /** Combined client result including series, or null if no budgets. */
   total: PacingResult | null;
+  /** Combined result of the lines that have data (excludes not-connected lines); used for agency totals. */
+  connectedTotal: PacingResult | null;
   /** Full series for every row and sub-row, keyed by row key. */
   seriesByKey: Record<string, PacingResult["series"]>;
   accounts: AccountMeta[];
@@ -145,7 +155,7 @@ function paceUnit(unit: PacingUnit, budget: BudgetWithRevisions, ctx: UnitContex
       asOf = addDays(periodStart, -1);
     } else {
       if (a.dataCompleteThrough < ctx.yesterday && a.dataCompleteThrough >= periodStart) {
-        warnings.push(`${a.name}: data complete only through ${a.dataCompleteThrough}`);
+        warnings.push(`${a.name}: data complete only through ${formatDate(a.dataCompleteThrough)}`);
       }
       asOf = minDate(asOf, a.dataCompleteThrough);
     }
@@ -196,9 +206,14 @@ function makeRow(
   const stale = accts.some((a) => a.stale);
   const disconnected = accts.some((a) => a.status === "DISCONNECTED" || a.status === "NEEDS_REAUTH");
   const syncs = accts.map((a) => a.lastSuccessfulSyncAt).filter((s): s is string => !!s);
-  const action = result
-    ? recommendAction({ ...result, currency, stale, disconnected })
-    : { severity: "info" as const, headline: "No budget set", detail: "Spend is not covered by any budget. Add a budget to pace this account." };
+  const notConnected = isNotConnected(level, accts);
+  const action = notConnected
+    ? accts.length === 0
+      ? { severity: "info" as const, headline: "Not connected", detail: "No ad account is linked to this budget yet. Link one to start pacing." }
+      : { severity: "info" as const, headline: "Awaiting first sync", detail: "The linked ad account hasn't synced yet. Pacing starts once data arrives." }
+    : result
+      ? recommendAction({ ...result, currency, stale, disconnected })
+      : { severity: "info" as const, headline: "No budget set", detail: "Spend is not covered by any budget. Add a budget to pace this account." };
   let series: PacingResult["series"] | undefined;
   let lean: Omit<PacingResult, "series"> | null = null;
   if (result) ({ series, ...lean } = result);
@@ -216,15 +231,17 @@ function makeRow(
     result: lean,
     unbudgetedSpendMinor,
     lastSuccessfulSyncAt: syncs.length ? syncs.sort()[0] : null, // oldest = what the row is limited by
-    stale,
+    stale: stale && !notConnected,
     disconnected,
+    notConnected,
     isDemo: accts.some((a) => a.isDemo),
     hasEstimatedSpend,
-    warnings: [...new Set(warnings)],
+    warnings: notConnected ? [] : [...new Set(warnings)],
     action,
-    attention: disconnected || (result ? needsAttention(result.status) || needsAttention(result.forecastStatus) : false),
+    attention: !notConnected && (disconnected || (result ? needsAttention(result.status) || needsAttention(result.forecastStatus) : false)),
   };
 }
+
 
 function buildClientPacing(
   client: ClientWithAccounts,
@@ -270,14 +287,17 @@ function buildClientPacing(
   const sub = paced(resolution.subAllocationUnits);
   const outRows: PacingRow[] = [];
   const allResults: PacingResult[] = [];
+  const connectedResults: PacingResult[] = [];
   const seriesByKey: Record<string, PacingResult["series"]> = {};
 
   // CLIENT and ACCOUNT units are a row each; campaign-only units are grouped per account.
   for (const p of rollup.filter((p) => p.unit.scope !== "CAMPAIGN")) {
     const b = budgetById.get(p.unit.budgetId)!;
     const label = p.unit.scope === "CLIENT" ? "Combined client budget" : p.accts[0].name;
-    outRows.push(makeRow(ctx, b.id, p.unit.scope === "CLIENT" ? "CLIENT" : "ACCOUNT", label, p.accts, b.currency, p.result, [...periodWarnings, ...p.warnings], p.hasEstimatedSpend));
+    const row = makeRow(ctx, b.id, p.unit.scope === "CLIENT" ? "CLIENT" : "ACCOUNT", label, p.accts, b.currency, p.result, [...periodWarnings, ...p.warnings], p.hasEstimatedSpend);
+    outRows.push(row);
     allResults.push(p.result);
+    if (!row.notConnected) connectedResults.push(p.result);
     seriesByKey[b.id] = p.result.series;
   }
   const campaignGroups = new Map<string, typeof rollup>();
@@ -289,10 +309,10 @@ function buildClientPacing(
     const combined = combinePacing(group.map((g) => g.result), thresholds)!;
     const acct = accounts.find((a) => a.id === accountId)!;
     const n = group.length;
-    outRows.push(
-      makeRow(ctx, `campaigns:${accountId}`, "CAMPAIGNS", `${acct.name} (${n} campaign budget${n === 1 ? "" : "s"})`, [acct], budgetById.get(group[0].unit.budgetId)!.currency, combined, [...periodWarnings, ...group.flatMap((g) => g.warnings)], group.some((g) => g.hasEstimatedSpend)),
-    );
+    const row = makeRow(ctx, `campaigns:${accountId}`, "CAMPAIGNS", `${acct.name} (${n} campaign budget${n === 1 ? "" : "s"})`, [acct], budgetById.get(group[0].unit.budgetId)!.currency, combined, [...periodWarnings, ...group.flatMap((g) => g.warnings)], group.some((g) => g.hasEstimatedSpend));
+    outRows.push(row);
     allResults.push(combined);
+    if (!row.notConnected) connectedResults.push(combined);
     seriesByKey[`campaigns:${accountId}`] = combined.series;
   }
   for (const accountId of resolution.unbudgetedAccountIds) {
@@ -322,6 +342,7 @@ function buildClientPacing(
     rows: outRows,
     subRows,
     total: combinePacing(allResults, thresholds),
+    connectedTotal: combinePacing(connectedResults, thresholds),
     seriesByKey,
     accounts,
   };
@@ -383,6 +404,8 @@ export interface AgencySummary {
   rowsTotal: number;
   rowsNeedingAttention: number;
   staleRows: number;
+  /** Budget lines with no ad account linked (or never synced); excluded from every total above. */
+  notConnectedRows: number;
   unbudgetedSpendMinor: number;
   /** Combined agency pacing for the dominant calendar period, with series. */
   combined: PacingResult | null;
@@ -392,12 +415,14 @@ export interface AgencySummary {
 }
 
 export function summarize(clients: ClientPacing[]): AgencySummary {
-  const rows = clients.flatMap((c) => c.rows);
+  const all = clients.flatMap((c) => c.rows);
+  // Lines with no data to pace would only read as 0% "underspending"; they are counted separately.
+  const rows = all.filter((r) => !r.notConnected);
   const budgeted = rows.filter((r) => r.result);
   const sum = (f: (r: PacingRow) => number) => budgeted.reduce((s, r) => s + f(r), 0);
 
   // Chart only the units sharing the most common period, so different billing periods are not mixed.
-  const totals = clients.map((c) => c.total).filter((t): t is PacingResult => !!t);
+  const totals = clients.map((c) => c.connectedTotal).filter((t): t is PacingResult => !!t);
   const periodKey = (t: PacingResult) => `${t.periodStart}..${t.periodEnd}`;
   const counts = new Map<string, number>();
   for (const t of totals) counts.set(periodKey(t), (counts.get(periodKey(t)) ?? 0) + 1);
@@ -413,6 +438,7 @@ export function summarize(clients: ClientPacing[]): AgencySummary {
     rowsTotal: rows.length,
     rowsNeedingAttention: rows.filter((r) => r.attention).length,
     staleRows: rows.filter((r) => r.stale).length,
+    notConnectedRows: all.length - rows.length,
     unbudgetedSpendMinor: rows.reduce((s, r) => s + r.unbudgetedSpendMinor, 0),
     combined: combinePacing(sameP),
     combinedRowCount: sameP.length,

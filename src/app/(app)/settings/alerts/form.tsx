@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { saveAlertSettings } from "./actions";
+import { saveAlertSettings, saveSlackWebhook } from "./actions";
 import { useFormSubmit } from "@/components/use-form-submit";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -34,6 +34,23 @@ export function AlertSettingsForm({ s }: { s: AlertSettings }) {
         {state?.ok && <p className="text-sm text-good-ink" role="status">{state.ok}</p>}
         {state?.errors?.map((e) => <p key={e} className="text-sm text-critical-ink" role="alert">{e}</p>)}
       </div>
+    </form>
+  );
+}
+
+export function SlackForm() {
+  const [state, action, pending] = useActionState(saveSlackWebhook, undefined);
+  const form = useFormSubmit(action, state?.ok);
+  return (
+    <form {...form} className="flex flex-col gap-2">
+      <Label htmlFor="webhook">Slack incoming-webhook URL</Label>
+      <div className="flex flex-wrap gap-2">
+        <Input id="webhook" name="webhook" type="url" required placeholder="https://hooks.slack.com/services/…" className="min-w-0 flex-1" autoComplete="off" />
+        <Button type="submit" disabled={pending}>{pending ? "Testing…" : "Connect"}</Button>
+      </div>
+      <p className="text-xs text-text-3">In Slack, add the “Incoming WebHooks” app to the channel and paste its URL. A test message is posted before it&apos;s saved; the URL is stored encrypted.</p>
+      {state?.ok && <p className="text-sm text-good-ink" role="status">{state.ok}</p>}
+      {state?.error && <p className="text-sm text-critical-ink" role="alert">{state.error}</p>}
     </form>
   );
 }

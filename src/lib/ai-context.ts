@@ -3,6 +3,7 @@
 // model quotes figures rather than computing them, and anything the platforms
 // didn't report is written as "not reported" instead of 0.
 
+import { formatDate } from "./time";
 import { formatKpi, KPI_BY_KEY, kpiValues, type KpiKey } from "./kpis";
 import { formatMoney, formatPct } from "./money";
 import { derive, type MetricTotals } from "./metrics";
@@ -67,6 +68,9 @@ function kpiLine(keys: KpiKey[], cur: MetricTotals, prev: MetricTotals | null, c
     .join("; ");
 }
 
+/** "Sep 1, 2026": dates in the data are written the way the AI should write them. */
+const longDate = (d: string) => formatDate(d, { month: "short", day: "numeric", year: "numeric" });
+
 export function buildAiContext(i: AiContextInput): string {
   const c = i.currency;
   const m = (v: number | null) => (v === null ? "n/a" : formatMoney(v, c, { whole: true }));
@@ -74,8 +78,8 @@ export function buildAiContext(i: AiContextInput): string {
   lines.push(`Client: ${i.clientName}`);
   lines.push(`Currency: ${c}`);
   if (i.isDemo) lines.push("IMPORTANT: this client's accounts contain illustrative demo data, not real advertising results.");
-  lines.push(`Reporting period: ${i.rangeLabel}, ${i.range.from} to ${i.range.to} (complete days only)`);
-  lines.push(i.comparison ? `Comparison period: ${i.comparison.from} to ${i.comparison.to}` : "Comparison period: none");
+  lines.push(`Reporting period: ${i.rangeLabel}, ${longDate(i.range.from)} to ${longDate(i.range.to)} (complete days only)`);
+  lines.push(i.comparison ? `Comparison period: ${longDate(i.comparison.from)} to ${longDate(i.comparison.to)}` : "Comparison period: none");
   lines.push("");
   lines.push("## Totals, all platforms");
   for (const kv of kpiValues(i.kpis, i.totals, i.previous)) {
@@ -115,7 +119,7 @@ export function buildAiContext(i: AiContextInput): string {
   const p = i.pacing;
   if (!p) lines.push("- No budget is set for the current month.");
   else {
-    lines.push(`- Month: ${p.periodStart} to ${p.periodEnd}; data complete through ${p.asOf ?? "no complete days yet"}`);
+    lines.push(`- Month: ${longDate(p.periodStart)} to ${longDate(p.periodEnd)}; data complete through ${p.asOf ? formatDate(p.asOf) : "no complete days yet"}`);
     lines.push(`- Budget ${m(p.budgetMinor)}; spent ${m(p.actualToDateMinor)}; expected by now ${m(p.expectedToDateMinor)}; pacing ${formatPct(p.pacingPct)} of expected`);
     lines.push(`- Status to date: ${STATUS_LABEL[p.status]}; month-end forecast: ${STATUS_LABEL[p.forecastStatus]}, projected ${m(p.projectedMinor)} (${p.projectedMinor >= p.budgetMinor ? "+" : "-"}${m(Math.abs(p.projectedMinor - p.budgetMinor))} vs budget)`);
     lines.push(`- Current daily rate (7-day): ${m(p.currentDailyRateMinor)}; required daily to land on budget: ${p.requiredDailyMinor === null ? "n/a" : `${m(p.requiredDailyMinor)} over ${p.remainingActiveDays} remaining days`}`);

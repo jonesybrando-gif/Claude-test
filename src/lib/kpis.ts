@@ -63,7 +63,8 @@ export function dailyKpiValue(d: MetricTotals, key: KpiKey): number | null {
   return def.value(d) ?? (def.kind === "count" ? 0 : null);
 }
 
-export function formatKpi(key: KpiKey, v: number | null, currency = "USD", opts: { compact?: boolean } = {}): string {
+/** `whole` rounds conversions to whole numbers, as tables show them. */
+export function formatKpi(key: KpiKey, v: number | null, currency = "USD", opts: { compact?: boolean; whole?: boolean } = {}): string {
   if (v === null || !Number.isFinite(v)) return "—";
   const def = KPI_BY_KEY[key];
   switch (def.kind) {
@@ -71,7 +72,7 @@ export function formatKpi(key: KpiKey, v: number | null, currency = "USD", opts:
       // Totals in whole currency; unit costs (CPC, CPL…) keep cents.
       return formatMoney(v, currency, { whole: key === "spend" || key === "conversionValue" || (opts.compact ?? false) });
     case "count":
-      return formatNumber(v, key === "conversions" && v < 1000 ? 1 : 0);
+      return formatNumber(v, key === "conversions" && v < 100 && !opts.whole ? 1 : 0);
     case "pct":
       return formatPct(v, 2);
     case "ratio":

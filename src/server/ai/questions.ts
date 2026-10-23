@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/time";
 import "server-only";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod/v4";
@@ -56,7 +57,7 @@ export function questionTools(rep: ClientReport) {
   const { client, range } = rep;
   const getDetail = betaZodTool({
     name: "get_detail",
-    description: `Fetch live, read-only performance detail below campaign level for ${client.name} for the report period (${range.from} to ${range.to}). Kinds: "ads" (each ad with its headlines/descriptions or primary text), "headlines" (each headline and description totalled across ads; Google may add its own rating), "keywords" (Google Ads only), "search_terms" (what people searched, Google Ads only). Returns rows sorted by spend with impressions, clicks, CTR, conversions, leads and cost per result.`,
+    description: `Fetch live, read-only performance detail below campaign level for ${client.name} for the report period (${formatDate(range.from)} to ${formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}). Kinds: "ads" (each ad with its headlines/descriptions or primary text), "headlines" (each headline and description totalled across ads; Google may add its own rating), "keywords" (Google Ads only), "search_terms" (what people searched, Google Ads only). Returns rows sorted by spend with impressions, clicks, CTR, conversions, leads and cost per result.`,
     inputSchema: z.object({
       kind: z.enum(["ads", "headlines", "keywords", "search_terms"]),
       platform: z.enum(["GOOGLE_ADS", "META_ADS", "MICROSOFT_ADS"]).optional().describe("Limit to one platform; omit for all that support this kind"),

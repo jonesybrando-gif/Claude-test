@@ -8,7 +8,7 @@ import { STATUS_LABEL, STATUS_SEVERITY, type PacingStatus } from "@/lib/pacing/s
 import { PLATFORMS, PLATFORM_LABEL, type PlatformKey } from "@/lib/platforms";
 import { formatMoney, formatPct } from "@/lib/money";
 import { relativeTime } from "@/lib/time";
-import { NoBudgetBadge, StaleBadge, StatusBadge } from "../status-badge";
+import { NoBudgetBadge, NotConnectedBadge, StaleBadge, StatusBadge } from "../status-badge";
 import { PlatformLabel } from "../platform-badge";
 import { Input, Select } from "../ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "../ui/table";
@@ -17,7 +17,7 @@ import { PaceBar } from "./pace-bar";
 
 type SortKey = "status" | "client" | "budget" | "spend" | "pacing" | "projectedVariance" | "consumed" | "sync";
 
-const statusKey = (r: PacingRow) => (r.result ? STATUS_SEVERITY[r.result.status] : 1) + (r.disconnected ? 10 : 0);
+const statusKey = (r: PacingRow) => (r.notConnected ? -1 : (r.result ? STATUS_SEVERITY[r.result.status] : 1) + (r.disconnected ? 10 : 0));
 
 const sorters: Record<SortKey, (a: PacingRow, b: PacingRow) => number> = {
   status: (a, b) => statusKey(b) - statusKey(a) || Math.abs(b.result?.projectedVarianceMinor ?? 0) - Math.abs(a.result?.projectedVarianceMinor ?? 0),
@@ -30,21 +30,24 @@ const sorters: Record<SortKey, (a: PacingRow, b: PacingRow) => number> = {
   sync: (a, b) => (a.lastSuccessfulSyncAt ?? "").localeCompare(b.lastSuccessfulSyncAt ?? ""),
 };
 
-const FILTER_STATUSES: (PacingStatus | "ATTENTION" | "NO_BUDGET_ROWS")[] = ["ATTENTION", "OVERSPENDING", "SLIGHTLY_OVER", "ON_TARGET", "SLIGHTLY_UNDER", "UNDERSPENDING", "NOT_STARTED", "NO_BUDGET_ROWS"];
+type StatusFilter = PacingStatus | "ATTENTION" | "NO_BUDGET_ROWS" | "NOT_CONNECTED";
+const FILTER_STATUSES: StatusFilter[] = ["ATTENTION", "OVERSPENDING", "SLIGHTLY_OVER", "ON_TARGET", "SLIGHTLY_UNDER", "UNDERSPENDING", "NOT_STARTED", "NO_BUDGET_ROWS", "NOT_CONNECTED"];
+const FILTER_LABEL: Partial<Record<StatusFilter, string>> = { ATTENTION: "Needs attention", NO_BUDGET_ROWS: "No budget set", NOT_CONNECTED: "Not connected" };
 
-export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: PacingRow[]; labels?: LabelInfo[]; labelsByClient?: Record<string, string[]> }) {
+export function PacingTable({ rows, labels = [], labelsByClient = {}, initialStatus = "" }: { rows: PacingRow[]; labels?: LabelInfo[]; labelsByClient?: Record<string, string[]>; initialStatus?: string }) {
   const [q, setQ] = useState("");
   const [label, setLabel] = useState("");
   const [client, setClient] = useState("");
   const [platform, setPlatform] = useState<PlatformKey | "">("");
   const [manager, setManager] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(FILTER_STATUSES.includes(initialStatus as StatusFilter) ? initialStatus : "");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "status", dir: 1 });
 
   const clients = useMemo(() => [...new Map(rows.map((r) => [r.clientId, r.clientName])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [rows]);
   const labelById = useMemo(() => new Map(labels.map((l) => [l.id, l])), [labels]);
   const managers = useMemo(() => [...new Set(rows.map((r) => r.managerName).filter((m): m is string => !!m))].sort(), [rows]);
 
+  const notConnected = useMemo(() => rows.filter((r) => r.notConnected).length, [rows]);
   const visible = useMemo(() => {
     const out = rows.filter((r) => {
       if (q && !r.clientName.toLowerCase().includes(q.toLowerCase()) && !r.label.toLowerCase().includes(q.toLowerCase())) return false;
@@ -53,6 +56,9 @@ export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: 
       if (label && label !== "none" && !labelsByClient[r.clientId]?.includes(label)) return false;
       if (platform && !r.platforms.includes(platform)) return false;
       if (manager && r.managerName !== manager) return false;
+      // Not-connected lines have nothing to pace; they are listed only when asked for.
+      if (status === "NOT_CONNECTED") return r.notConnected;
+      if (r.notConnected) return false;
       if (status === "ATTENTION" && !r.attention) return false;
       if (status === "NO_BUDGET_ROWS" && r.result) return false;
       if (status && status !== "ATTENTION" && status !== "NO_BUDGET_ROWS" && r.result?.status !== status) return false;
@@ -96,12 +102,50 @@ export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: 
         <Select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full sm:w-48" aria-label="Pacing status">
           <option value="">All statuses</option>
           {FILTER_STATUSES.map((s) => (
-            <option key={s} value={s}>{s === "ATTENTION" ? "Needs attention" : s === "NO_BUDGET_ROWS" ? "No budget set" : STATUS_LABEL[s]}</option>
+            <option key={s} value={s}>{FILTER_LABEL[s] ?? STATUS_LABEL[s as PacingStatus]}</option>
           ))}
         </Select>
-        <span className="ml-auto self-center text-xs text-text-3">{visible.length} of {rows.length} budget lines</span>
+        <span className="ml-auto self-center text-xs text-text-3">
+          {visible.length} of {rows.length - notConnected} budget line{rows.length - notConnected === 1 ? "" : "s"}
+          {notConnected > 0 && status !== "NOT_CONNECTED" && (
+            <> · <button type="button" className="underline hover:text-text cursor-pointer" onClick={() => setStatus("NOT_CONNECTED")}>{notConnected} not connected</button></>
+          )}
+        </span>
       </div>
+      {/* Phones: one card per budget line instead of a wide table. */}
+      <ul className="flex flex-col gap-2 px-3 md:hidden" aria-label="Budget lines">
+        {visible.map((r) => {
+          const res = r.notConnected ? null : r.result;
+          const c = r.currency;
+          return (
+            <li key={r.key} className="rounded-lg border border-border p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <Link href={`/clients/${r.clientId}`} className="block truncate font-medium hover:underline">{r.clientName}</Link>
+                  <p className="truncate text-xs text-text-3">{r.level === "CLIENT" ? "All accounts" : r.label} · {r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ") || "no platform"}</p>
+                </div>
+                {r.notConnected ? <NotConnectedBadge label={r.accounts.length ? "Awaiting sync" : "Not connected"} /> : res ? <StatusBadge status={res.status} /> : <NoBudgetBadge />}
+              </div>
+              {res && res.pctBudgetConsumed !== null && (
+                <div className="mt-2"><PaceBar consumed={res.pctBudgetConsumed} elapsed={res.pctPeriodElapsed} expected={res.budgetMinor ? (res.expectedToDateMinor / res.budgetMinor) * 100 : 0} status={res.status} /></div>
+              )}
+              <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                <div><dt className="text-text-3">Spent</dt><dd className="font-medium tabular">{r.notConnected ? "—" : formatMoney(res?.actualToDateMinor ?? r.unbudgetedSpendMinor, c, { whole: true })}</dd></div>
+                <div><dt className="text-text-3">Budget</dt><dd className="font-medium tabular">{r.result ? formatMoney(r.result.budgetMinor, c, { whole: true }) : "—"}</dd></div>
+                <div><dt className="text-text-3">Projected</dt><dd className={`font-medium tabular ${res && res.projectedVarianceMinor > 0 ? "text-critical-ink" : ""}`}>{res ? formatMoney(res.projectedMinor, c, { whole: true }) : "—"}</dd></div>
+              </dl>
+              {r.notConnected ? (
+                <Link href={`/clients/${r.clientId}/accounts`} className="mt-2 inline-block text-xs text-brand hover:underline">{r.accounts.length ? "Check ad accounts" : "Link an ad account"}</Link>
+              ) : (
+                <p className="mt-2 text-xs text-text-2">{r.action.headline}{r.stale && " · stale data"}{r.disconnected && " · disconnected"}</p>
+              )}
+            </li>
+          );
+        })}
+        {visible.length === 0 && <li className="px-2 py-8 text-center text-sm text-text-3">No budget lines match these filters.</li>}
+      </ul>
       {/* Seven columns that fit a laptop screen: related figures share a cell. */}
+      <div className="hidden md:block">
       <Table className="min-w-[860px] table-fixed">
         <colgroup>
           <col className="w-[23%]" />
@@ -125,7 +169,8 @@ export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: 
         </THead>
         <TBody>
           {visible.map((r) => {
-            const res = r.result;
+            // Not-connected lines have no data: show the budget only, never a 0% pace.
+            const res = r.notConnected ? null : r.result;
             const c = r.currency;
             const tags = (labelsByClient[r.clientId] ?? []).map((id) => labelById.get(id)).filter((l): l is LabelInfo => !!l);
             return (
@@ -140,8 +185,9 @@ export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: 
                 </TD>
                 <TD>
                   <div className="flex flex-col items-start gap-1">
-                    {res ? <StatusBadge status={res.status} /> : <NoBudgetBadge />}
-                    {res && res.forecastStatus !== res.status && res.forecastStatus !== "ON_TARGET" && (
+                    {r.notConnected ? <NotConnectedBadge label={r.accounts.length ? "Awaiting first sync" : "Not connected"} /> : res ? <StatusBadge status={res.status} /> : <NoBudgetBadge />}
+                    {r.notConnected && <Link href={`/clients/${r.clientId}/accounts`} className="text-[11px] text-brand hover:underline">{r.accounts.length ? "Check ad accounts" : "Link an ad account"}</Link>}
+                    {!r.notConnected && res && res.forecastStatus !== res.status && res.forecastStatus !== "ON_TARGET" && (
                       <span className="text-[11px] text-text-2">Forecast: {STATUS_LABEL[res.forecastStatus].toLowerCase()}</span>
                     )}
                     {r.disconnected && <StaleBadge label="Disconnected" />}
@@ -149,9 +195,11 @@ export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: 
                   </div>
                 </TD>
                 <TD className="text-right">
-                  <div className="font-medium">{formatMoney(res?.actualToDateMinor ?? r.unbudgetedSpendMinor, c, { whole: true })}</div>
+                  <div className="font-medium">{r.notConnected ? "—" : formatMoney(res?.actualToDateMinor ?? r.unbudgetedSpendMinor, c, { whole: true })}</div>
                   {res ? (
                     <div className="text-xs text-text-2">of {formatMoney(res.budgetMinor, c, { whole: true })} · {formatMoney(res.remainingBudgetMinor, c, { whole: true })} left</div>
+                  ) : r.notConnected && r.result ? (
+                    <div className="text-xs text-text-3">budget {formatMoney(r.result.budgetMinor, c, { whole: true })} · no data yet</div>
                   ) : (
                     <div className="text-xs text-text-3">no budget</div>
                   )}
@@ -170,7 +218,7 @@ export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: 
                   {res ? (
                     <>
                       <div>{formatMoney(res.projectedMinor, c, { whole: true })}</div>
-                      <div className={`text-xs ${res.projectedVarianceMinor > 0 ? "text-critical-ink" : "text-text-2"}`}>
+                      <div className={`text-xs ${res.projectedVarianceMinor > 0 ? "text-critical-ink" : res.forecastStatus === "UNDERSPENDING" || res.forecastStatus === "SLIGHTLY_UNDER" ? "text-warning-ink" : "text-text-2"}`}>
                         {res.projectedVarianceMinor > 0 ? "+" : res.projectedVarianceMinor < 0 ? "−" : ""}
                         {formatMoney(Math.abs(res.projectedVarianceMinor), c, { whole: true })} vs budget
                       </div>
@@ -199,6 +247,7 @@ export function PacingTable({ rows, labels = [], labelsByClient = {} }: { rows: 
           )}
         </TBody>
       </Table>
+      </div>
       <p className="px-5 pt-3 pb-4 text-xs text-text-3">
         <strong className="font-medium text-text-2">Pacing</strong> = actual spend ÷ expected spend to date × 100. It is not the share of the monthly budget used — that is shown in the bar, with the tick marking where spend should be today.
       </p>

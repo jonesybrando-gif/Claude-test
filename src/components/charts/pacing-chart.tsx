@@ -11,6 +11,8 @@ interface Props {
   asOf: string | null;
   currency?: string;
   height?: number;
+  /** Dated notes drawn as markers (budget changes, launches). */
+  notes?: { date: string; text: string }[];
 }
 
 const COLORS = {
@@ -27,7 +29,7 @@ function Swatch({ color, dashed }: { color: string; dashed?: boolean }) {
   );
 }
 
-function PacingTooltip({ active, payload, currency }: TooltipProps<number, string> & { currency: string }) {
+function PacingTooltip({ active, payload, currency, notes = [] }: TooltipProps<number, string> & { currency: string; notes?: { date: string; text: string }[] }) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload as PacingSeriesPoint;
   const row = (label: string, color: string, v: number | null, dashed?: boolean) =>
@@ -50,12 +52,16 @@ function PacingTooltip({ active, payload, currency }: TooltipProps<number, strin
           Spent this day: <span className="text-text tabular">{formatMoney(p.actualDaily, currency, { whole: true })}</span>
         </div>
       )}
+      {notes.filter((n) => n.date === p.date).map((n, i) => (
+        <p key={i} className="mt-1 max-w-56 border-t border-border pt-1 text-text">Note: {n.text}</p>
+      ))}
     </div>
   );
 }
 
 /** Cumulative actual vs cumulative planned spend, with a projection to period end. */
-export function PacingChart({ series, budgetMinor, asOf, currency = "USD", height = 280 }: Props) {
+export function PacingChart({ series, budgetMinor, asOf, currency = "USD", height = 280, notes = [] }: Props) {
+  const inRange = notes.filter((n) => series.some((p) => p.date === n.date));
   const data = series.map((p) => ({ ...p, label: p.date }));
   const last = series.at(-1);
   const projectedEnd = last?.projectedCumulative ?? last?.actualCumulative ?? null;
@@ -69,6 +75,7 @@ export function PacingChart({ series, budgetMinor, asOf, currency = "USD", heigh
         <span role="listitem" className="flex items-center gap-1.5"><Swatch color={COLORS.planned} dashed /> Planned spend</span>
         <span role="listitem" className="flex items-center gap-1.5"><Swatch color={COLORS.projected} dashed /> Projected</span>
         <span role="listitem" className="flex items-center gap-1.5 text-text-3">— Budget {formatMoney(budgetMinor, currency, { whole: true })}</span>
+        {inRange.length > 0 && <span role="listitem" className="flex items-center gap-1.5 text-text-3"><span className="text-[var(--series-projected)]">◆</span> Note</span>}
       </div>
       <div style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -76,9 +83,12 @@ export function PacingChart({ series, budgetMinor, asOf, currency = "USD", heigh
             <CartesianGrid stroke="var(--grid)" vertical={false} />
             <XAxis dataKey="date" ticks={ticks} tickFormatter={(d) => formatDate(d)} tick={{ fill: "var(--text-3)", fontSize: 11 }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
             <YAxis domain={[0, maxY]} tickFormatter={(v) => formatMoneyCompact(v, currency)} tick={{ fill: "var(--text-3)", fontSize: 11 }} axisLine={false} tickLine={false} width={64} />
-            <Tooltip content={<PacingTooltip currency={currency} />} cursor={{ stroke: "var(--text-3)", strokeWidth: 1 }} />
+            <Tooltip content={<PacingTooltip currency={currency} notes={inRange} />} cursor={{ stroke: "var(--text-3)", strokeWidth: 1 }} />
             <ReferenceLine y={budgetMinor} stroke="var(--text-3)" strokeWidth={1} label={{ value: "Budget", position: "right", fill: "var(--text-2)", fontSize: 11 }} />
             {asOf && <ReferenceLine x={asOf} stroke="var(--border)" strokeWidth={1} label={{ value: "Data through", position: "insideTopLeft", fill: "var(--text-3)", fontSize: 10 }} />}
+            {[...new Set(inRange.map((n) => n.date))].map((d) => (
+              <ReferenceLine key={d} x={d} stroke="var(--series-projected)" strokeOpacity={0.6} strokeDasharray="2 3" label={{ value: "◆", position: "top", fill: "var(--series-projected)", fontSize: 10 }} />
+            ))}
             <Line type="linear" dataKey="plannedCumulative" stroke={COLORS.planned} strokeWidth={2} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
             <Line type="linear" dataKey="projectedCumulative" stroke={COLORS.projected} strokeWidth={2} strokeDasharray="4 4" dot={false} connectNulls={false} isAnimationActive={false} />
             <Line type="linear" dataKey="actualCumulative" stroke={COLORS.actual} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--surface)" }} connectNulls={false} isAnimationActive={false} />

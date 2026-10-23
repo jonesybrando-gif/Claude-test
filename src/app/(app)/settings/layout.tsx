@@ -1,6 +1,8 @@
 import { requireAdmin } from "@/server/access";
 import { SettingsTabs } from "./tabs";
 
+export const metadata = { title: "Settings" };
+
 export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin();
   return (
