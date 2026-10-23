@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { CalendarClock, Sparkles, Download, FileSliders, FileText, Link2, ListChecks, Mail, Plug, Settings2, Share2, Wallet } from "lucide-react";
+import { CalendarClock, Sparkles, StickyNote, Download, FileSliders, FileText, Link2, ListChecks, Mail, Plug, Settings2, Share2, Wallet } from "lucide-react";
 import { AiSuggestionsCard } from "@/components/ai/suggestions-card";
 import { requireClientView } from "@/server/access";
 import { prisma } from "@/server/db";
@@ -13,6 +13,9 @@ import { ExportButtons, exportHref } from "@/components/export-buttons";
 import { Menu } from "@/components/ui/menu";
 import { ClientReportView } from "@/components/reports/client-report-view";
 import { ClientVisibilityToggle } from "@/components/reports/visibility-toggle";
+import { ActionButton } from "@/components/action-button";
+import { ChartNoteForm } from "./notes-form";
+import { deleteChartNoteAction } from "./notes-actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExecutiveSummary } from "@/components/reports/executive-summary";
 import { CampaignsSection, DataFreshness, hiddenMarker, HistorySection, KpiSection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
@@ -172,7 +175,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
       {tab === "trends" && (
         <>
-          <TrendsSection rep={rep} marker={mark("trends")} />
+          <TrendsSection rep={rep} marker={mark("trends")} staff />
+          <NotesCard clientId={id} agencyId={user.agencyId} defaultDate={rep.range.to} />
           <HistorySection rep={rep} marker={mark("history")} />
         </>
       )}
@@ -220,5 +224,42 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </>
       )}
     </div>
+  );
+}
+
+/** Dated notes shown as markers on this client's charts, with an add form and teammate tagging. */
+async function NotesCard({ clientId, agencyId, defaultDate }: { clientId: string; agencyId: string; defaultDate: string }) {
+  const [notes, staff] = await Promise.all([
+    prisma.chartNote.findMany({ where: { clientId }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 50 }),
+    prisma.user.findMany({ where: { agencyId, deactivatedAt: null, role: { in: ["AGENCY_ADMIN", "ACCOUNT_MANAGER"] } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+  ]);
+  const name = new Map(staff.map((u) => [u.id, u.name]));
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-1.5"><StickyNote className="h-4 w-4 text-text-2" aria-hidden /> Notes on the data</CardTitle>
+        <CardDescription>Pin a note to a date (a budget change, a launch, a tracking fix). It appears as ◆ on the charts; tag a teammate to email them.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <ChartNoteForm clientId={clientId} defaultDate={defaultDate} teammates={staff} />
+        {notes.length > 0 && (
+          <ul className="divide-y divide-border border-t border-border">
+            {notes.map((n) => (
+              <li key={n.id} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm"><span className="font-medium tabular">{formatDate(n.date.toISOString().slice(0, 10), { month: "short", day: "numeric", year: "numeric" })}</span> · {n.text}</p>
+                  <p className="text-xs text-text-3">
+                    {n.authorId ? name.get(n.authorId) ?? "A former teammate" : "Someone"}
+                    {n.taggedUserId && <> · tagged {name.get(n.taggedUserId) ?? "a teammate"}</>}
+                    {n.clientVisible ? " · shown to the client" : " · team only"}
+                  </p>
+                </div>
+                <ActionButton action={deleteChartNoteAction.bind(null, clientId, n.id)} label="Delete" variant="ghost" confirm="Delete this note?" />
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }

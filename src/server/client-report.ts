@@ -4,10 +4,19 @@ import { loadPacing } from "./pacing-service";
 import { getClientPerformance } from "./reporting";
 import { getClientTemplate } from "./report-templates";
 import { comparisonRange, resolveRange, type CompareMode, type RangePreset } from "@/lib/date-ranges";
-import { addDays, monthBounds, todayInTimeZone } from "@/lib/pacing/dates";
+import { addDays, dateToIso, isoToDate, maxDate, minDate, monthBounds, todayInTimeZone } from "@/lib/pacing/dates";
 
 const PRESETS: RangePreset[] = ["mtd", "last_month", "last_7", "last_30", "last_90", "custom"];
 const COMPARE: CompareMode[] = ["previous_period", "previous_month", "none"];
+
+export interface ChartNoteInfo {
+  id: string;
+  date: string;
+  text: string;
+  clientVisible: boolean;
+  authorId: string | null;
+  taggedUserId: string | null;
+}
 
 export interface ReportParams {
   range?: string;
@@ -45,13 +54,20 @@ export async function loadClientReport(clientId: string, params: ReportParams, n
     for (let i = 0; i < n; i++) d = monthBounds(addDays(d, -1)).start;
     return d;
   });
-  const [[pacing], history, perf, cmpPerf] = await Promise.all([
+  const month = monthBounds(today);
+  const [[pacing], history, perf, cmpPerf, noteRows] = await Promise.all([
     loadPacing({ id: clientId }, now),
     Promise.all(historyDates.map((d) => loadPacing({ id: clientId }, now, d).then((r) => r[0]))),
     getClientPerformance(clientId, range),
     cmpRange ? getClientPerformance(clientId, cmpRange) : Promise.resolve(null),
+    // Chart notes for the report range and the current budget period.
+    prisma.chartNote.findMany({
+      where: { clientId, date: { gte: isoToDate(minDate(range.from, month.start)), lte: isoToDate(maxDate(range.to, month.end)) } },
+      orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+    }),
   ]);
-  return { client, today, preset, compareMode, range, cmpRange, pacing, history, perf, cmpPerf, template, hasCustomTemplate };
+  const notes: ChartNoteInfo[] = noteRows.map((n) => ({ id: n.id, date: dateToIso(n.date), text: n.text, clientVisible: n.clientVisible, authorId: n.authorId, taggedUserId: n.taggedUserId }));
+  return { client, today, preset, compareMode, range, cmpRange, pacing, history, perf, cmpPerf, template, hasCustomTemplate, notes };
 }
 
 export type ClientReport = Awaited<ReturnType<typeof loadClientReport>>;

@@ -176,8 +176,25 @@ model Client {
   alerts      Alert[]
   reports     Report[]
   labels      ClientLabel[]
+  chartNotes  ChartNote[]
 
   @@index([agencyId])
+}
+
+/// A note pinned to a date on a client's charts (a launch, a budget change),
+/// optionally shown on the client-facing report and optionally tagging a teammate.
+model ChartNote {
+  id            String   @id @default(cuid())
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  date          DateTime @db.Date
+  text          String
+  clientVisible Boolean  @default(false)
+  authorId      String?
+  taggedUserId  String?
+  createdAt     DateTime @default(now())
+
+  @@index([clientId, date])
 }
 
 // Agency-defined tags for grouping, sorting and filtering clients.

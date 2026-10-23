@@ -126,7 +126,7 @@ export function PacingSection({ rep, staff, basePath, query, marker, showLines =
         <CardContent>
           {shown && shownSeries ? (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-              <PacingChart series={shownSeries} budgetMinor={shown.budgetMinor} asOf={shown.asOf} currency={c} height={300} />
+              <PacingChart series={shownSeries} budgetMinor={shown.budgetMinor} asOf={shown.asOf} currency={c} height={300} notes={notesFor(rep, staff)} />
               <dl className="grid grid-cols-2 content-start gap-x-4 gap-y-3 text-sm lg:grid-cols-1">
                 {[
                   ["Spent to date", formatMoney(shown.actualToDateMinor, c, { whole: true })],
@@ -310,7 +310,10 @@ export function PlatformSection({ rep, staff, marker, status = false, title = "P
   );
 }
 
-export function TrendsSection({ rep, marker, metrics, title = "Performance trends" }: { rep: ClientReport; marker?: ReactNode; metrics?: KpiKey[]; title?: string }) {
+/** Chart notes a viewer may see: all of them for staff, only client-visible ones otherwise. */
+export const notesFor = (rep: ClientReport, staff: boolean) => rep.notes.filter((n) => staff || n.clientVisible).map((n) => ({ date: n.date, text: n.text }));
+
+export function TrendsSection({ rep, marker, metrics, title = "Performance trends", staff = false }: { rep: ClientReport; marker?: ReactNode; metrics?: KpiKey[]; title?: string; staff?: boolean }) {
   const { range, cmpRange, perf, cmpPerf, template, client } = rep;
   return (
     <Card>
@@ -322,7 +325,7 @@ export function TrendsSection({ rep, marker, metrics, title = "Performance trend
         {noActivity(rep) ? (
           <p className="py-6 text-center text-sm text-text-3">No activity in this period, so there is nothing to chart yet.</p>
         ) : (
-        <TrendChart current={perf.byDate} comparison={cmpPerf?.byDate ?? null} currency={client.currency} metrics={metrics ?? [...new Set([...template.trendKpis, ...TREND_EXTRAS])]} />
+        <TrendChart current={perf.byDate} comparison={cmpPerf?.byDate ?? null} currency={client.currency} metrics={metrics ?? [...new Set([...template.trendKpis, ...TREND_EXTRAS])]} notes={notesFor(rep, staff)} />
         )}
       </CardContent>
     </Card>
