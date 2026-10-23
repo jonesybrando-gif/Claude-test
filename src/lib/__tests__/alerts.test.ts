@@ -116,7 +116,7 @@ describe("account alerts", () => {
 
   it("reports failed and stale syncs", () => {
     expect(run([], [account({ lastSyncFailed: { at: NOW, error: "RATE_LIMITED: slow down" } })])[0]).toMatchObject({ kind: "SYNC_FAILED", detail: "RATE_LIMITED: slow down" });
-    expect(run([], [account({ lastSuccessfulSyncAt: new Date(NOW.getTime() - 30 * 3600_000) })])[0].title).toContain("data not updated");
+    expect(run([], [account({ lastSuccessfulSyncAt: new Date(NOW.getTime() - 30 * 3600_000) })])[0].title).toContain("Data not updated");
     expect(run([], [account({ lastSuccessfulSyncAt: null })])[0].detail).toContain("never synced");
   });
 
@@ -143,5 +143,17 @@ describe("disconnected lines", () => {
 describe("not-connected lines", () => {
   it("raise no pacing alerts (there is no data to pace)", () => {
     expect(run([row({ status: "UNDERSPENDING" }, { notConnected: true })])).toEqual([]);
+  });
+});
+
+describe("alert titles", () => {
+  it("all read \"<what happened> · <line, account or campaign>\"", () => {
+    const titles = [
+      ...run([row({ status: "UNDERSPENDING" })]).map((a) => a.title),
+      ...run([], [account({ status: "DISCONNECTED" })]).map((a) => a.title),
+      ...run([], [account({ lastSuccessfulSyncAt: new Date(NOW.getTime() - 30 * 3600_000) })]).map((a) => a.title),
+    ];
+    expect(titles.length).toBeGreaterThan(2);
+    for (const t of titles) expect(t).toMatch(/^[A-Z][^·]* · .+$/);
   });
 });

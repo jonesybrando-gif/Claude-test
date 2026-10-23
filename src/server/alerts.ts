@@ -6,6 +6,8 @@ import { loadPacing, type PacingRow } from "./pacing-service";
 import { appUrl, sendEmail } from "./email";
 import { evaluateAlerts, resolveAlertSettings, type AccountInput, type AlertCandidate, type CampaignInput, type PacingRowInput } from "@/lib/alerts";
 import { alertEmail, dailySummaryEmail, type AlertLine } from "@/lib/email-templates";
+import { slackAlertText } from "@/lib/slack";
+import { agencySlackWebhook, postToSlack } from "./slack";
 import { dateToIso, dayOfWeek, todayInTimeZone } from "@/lib/pacing/dates";
 
 const LOOKBACK_DAYS = 35;
@@ -154,6 +156,13 @@ async function notify(agencyId: string, created: { id: string; c: AlertCandidate
       await sendEmail({ agencyId, to: u.email, kind: "alert", ...alertEmail(b, lines, appUrl("/alerts")) });
       emails++;
     }
+  }
+  // One Slack message per run for the whole agency, when a webhook is set.
+  const slack = await agencySlackWebhook(agencyId);
+  if (slack) {
+    const lines: AlertLine[] = created.map((x) => ({ severity: x.c.severity, client: x.c.clientName, title: x.c.title, detail: x.c.detail }));
+    const r = await postToSlack(slack, slackAlertText(b.name, lines, appUrl("/alerts")));
+    if (!r.ok) console.error("[alerts] Slack delivery failed:", r.error);
   }
   return emails;
 }

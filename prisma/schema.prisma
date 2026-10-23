@@ -41,6 +41,8 @@ model Agency {
   defaultTimezone String @default("America/New_York")
   // Alert thresholds; see src/lib/alerts.ts for defaults.
   alertSettings Json?
+  /// Slack incoming-webhook URL for new alerts, encrypted like OAuth tokens. Null = Slack off.
+  slackWebhookEnc String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -503,6 +505,8 @@ model Alert {
   firstSeenAt DateTime @default(now())
   lastSeenAt  DateTime @default(now())
   resolvedAt  DateTime?
+  /// Hidden from the open list until this time (the alert stays open and keeps updating).
+  snoozedUntil DateTime?
 
   notifications Notification[]
 
