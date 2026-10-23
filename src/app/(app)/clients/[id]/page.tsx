@@ -35,6 +35,8 @@ type Tab = (typeof TABS)[number]["key"];
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
+  // Same access check as the page, so the tab title never names a client the viewer can't open.
+  await requireClientView(id);
   const c = await prisma.client.findUnique({ where: { id }, select: { name: true } });
   return { title: c?.name ?? "Client" };
 }
