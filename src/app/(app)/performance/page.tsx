@@ -6,16 +6,18 @@ import { todayInTimeZone } from "@/lib/pacing/dates";
 import { dailyKpiValue, DEFAULT_KPIS, kpiValues, type KpiKey } from "@/lib/kpis";
 import { PLATFORM_LABEL, PLATFORMS } from "@/lib/platforms";
 import { formatDate } from "@/lib/time";
-import { emptyTotals } from "@/lib/metrics";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiCard } from "@/components/kpi/kpi-card";
 import { KpiTable } from "@/components/kpi/kpi-table";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { RangeControls } from "@/components/range-controls";
 import { DemoBadge } from "@/components/status-badge";
-import { LabelBadge } from "@/components/label-badge";
 import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
+import { loadPacing } from "@/server/pacing-service";
+import { derive, emptyTotals, pctChange } from "@/lib/metrics";
 import { ClientPicker } from "./client-picker";
+import { PortfolioTable, type PortfolioRow } from "./portfolio-table";
 
 export const dynamic = "force-dynamic";
 
@@ -47,27 +49,69 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
   const rangeQuery = `range=${preset}&compare=${compareMode}${preset === "custom" ? `&from=${range.from}&to=${range.to}` : ""}`;
 
   if (!chosen) {
+    // Portfolio: every client with spend, results, pacing and a trend.
+    const [cur, prev, pacing] = await Promise.all([
+      getAgencyPerformance(visible, range),
+      cmpRange ? getAgencyPerformance(visible, cmpRange) : Promise.resolve(null),
+      loadPacing(visible),
+    ]);
+    const prevBy = new Map(prev?.byClient.map((c) => [c.clientId, c.totals]) ?? []);
+    const pacingBy = new Map(pacing.map((p) => [p.client.id, p]));
+    const labelsBy = new Map(pickable.map((c) => [c.id, c.labels]));
+    const change = (a: number, b: number | undefined) => (b === undefined ? null : pctChange(a, b));
+    const rows: PortfolioRow[] = cur.byClient.map((c) => {
+      const p = pacingBy.get(c.clientId);
+      const live = p?.accounts.filter((a) => !a.isDemo || a.lastSuccessfulSyncAt) ?? [];
+      const syncs = live.map((a) => a.lastSuccessfulSyncAt).filter((x): x is string => !!x).sort();
+      const connected = p?.rows.filter((r) => !r.notConnected) ?? [];
+      const before = prevBy.get(c.clientId);
+      return {
+        id: c.clientId,
+        name: c.clientName,
+        href: `/clients/${c.clientId}?${rangeQuery}`,
+        labels: labelsBy.get(c.clientId) ?? [],
+        owner: c.managerName,
+        platforms: c.platforms,
+        currency: p?.client.currency ?? "USD",
+        spendMinor: c.totals.costMinor,
+        spendChangePct: change(c.totals.costMinor, before?.costMinor),
+        conversions: c.totals.conversions,
+        conversionsChangePct: change(c.totals.conversions, before?.conversions),
+        costPerConversionMinor: derive(c.totals).costPerConversionMinor,
+        pacing: !p || (p.rows.length > 0 && connected.length === 0) || p.accounts.length === 0 ? "NOT_CONNECTED" : p.connectedTotal ? p.connectedTotal.status : "NO_BUDGET",
+        attention: connected.some((r) => r.attention),
+        dailySpend: c.dailySpend,
+        lastSyncAt: syncs[0] ?? null,
+        stale: live.some((a) => a.stale),
+        isDemo: c.isDemo,
+      };
+    });
     return (
-      <div className="mx-auto flex max-w-[1100px] flex-col gap-5">
-        <div>
-          <h1 className="text-xl font-semibold">Performance</h1>
-          <p className="text-sm text-text-2">Choose a client to see its performance summary.</p>
+      <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold">Performance</h1>
+            <p className="text-sm text-text-2">
+              All clients · {PRESET_LABEL[preset]}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
+              {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
+            </p>
+          </div>
+          <RangeControls preset={preset} compare={compareMode} from={range.from} to={range.to} />
         </div>
-        <ClientPicker clients={pickerClients} labels={labels} current={null} />
+        {cur.currencies.length > 1 && (
+          <p className="rounded-lg border border-border bg-warning-bg px-3 py-2 text-sm text-warning-ink">Accounts use more than one currency ({cur.currencies.join(", ")}). Each client is shown in its own currency.</p>
+        )}
         <Card>
-          <ul className="grid gap-px sm:grid-cols-2 lg:grid-cols-3">
-            {pickable.map((c) => (
-              <li key={c.id}>
-                <Link href={`/performance?client=${c.id}&${rangeQuery}`} className="flex h-full flex-col gap-1.5 rounded-lg px-5 py-3 hover:bg-surface-2">
-                  <span className="font-medium">{c.name}</span>
-                  {c.labels.length > 0 && <span className="flex flex-wrap gap-1">{c.labels.map((l) => <LabelBadge key={l.id} label={l} />)}</span>}
-                </Link>
-              </li>
-            ))}
-          </ul>
-          {pickable.length === 0 && <CardContent className="py-6 text-sm text-text-3">No clients yet.</CardContent>}
+          <CardHeader>
+            <CardTitle>Portfolio</CardTitle>
+            <CardDescription>Click a column to sort; click a row to open the client.</CardDescription>
+          </CardHeader>
+          {pickable.length === 0 ? (
+            <CardContent className="text-sm text-text-3">No clients yet. <Link href="/clients" className="text-brand hover:underline">Add your first client</Link>.</CardContent>
+          ) : (
+            <PortfolioTable rows={rows} labels={labels} rangeQuery={rangeQuery} periodLabel={PRESET_LABEL[preset]} />
+          )}
         </Card>
-        {pickable.length > 1 && <p className="text-sm text-text-3">Or <Link href={`/performance?client=all&${rangeQuery}`} className="text-brand hover:underline">view all clients combined</Link>.</p>}
       </div>
     );
   }
@@ -85,6 +129,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
     <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
+          <Link href={`/performance?${rangeQuery}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" aria-hidden /> Portfolio</Link>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold">Performance · {chosenName}</h1>
             {isDemo && <DemoBadge />}
