@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { Unplug } from "lucide-react";
 import { requireAgencyStaff, visibleClientsWhere } from "@/server/access";
@@ -15,6 +16,7 @@ import { ExportButtons } from "@/components/export-buttons";
 import { buttonVariants } from "@/components/ui/button";
 import { SetupChecklist } from "@/components/setup-checklist";
 import { setupChecklist } from "@/server/first-run";
+import { PageSkeleton } from "@/components/ui/skeleton";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Budget pacing" };
@@ -22,6 +24,16 @@ export const metadata = { title: "Budget pacing" };
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const user = await requireAgencyStaff();
   const { status: initialStatus } = await searchParams;
+  // The shell streams at once; pacing loads inside an in-page boundary (not a
+  // route loading.tsx, which made value-returning server actions hang).
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-[1500px]"><PageSkeleton tiles={5} cards={2} /></div>}>
+      <PacingDashboard user={user} initialStatus={initialStatus} />
+    </Suspense>
+  );
+}
+
+async function PacingDashboard({ user, initialStatus }: { user: Awaited<ReturnType<typeof requireAgencyStaff>>; initialStatus?: string }) {
   const [clients, labels, clientLabels] = await Promise.all([
     loadPacing(visibleClientsWhere(user)),
     prisma.clientLabel.findMany({ where: { agencyId: user.agencyId }, select: { id: true, name: true, color: true }, orderBy: { name: "asc" } }),

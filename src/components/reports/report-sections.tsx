@@ -34,7 +34,7 @@ export function HiddenFromClient() {
 }
 
 /** Marker for staff when the client-facing report leaves a section out. */
-export function hiddenMarker(rep: ClientReport, staff: boolean) {
+export function hiddenMarker(rep: Pick<ClientReport, "template">, staff: boolean) {
   return function marker(k: SectionKey) {
     return staff && !rep.template.sections[k] ? <HiddenFromClient /> : null;
   };
@@ -465,7 +465,7 @@ export function HistorySection({ rep, marker, hideEmpty = false }: { rep: Client
  * "Synced 59 min ago · complete through Oct 20" for the report header. Turns
  * amber (for staff) when any account is stale, disconnected or failing.
  */
-export function DataFreshness({ rep, staff, setupHref }: { rep: ClientReport; staff: boolean; setupHref?: string }) {
+export function DataFreshness({ rep, staff, setupHref }: { rep: Pick<ClientReport, "client" | "pacing">; staff: boolean; setupHref?: string }) {
   const { client, pacing } = rep;
   const metas = pacing.accounts;
   if (metas.length === 0) {

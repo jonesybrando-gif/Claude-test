@@ -1,10 +1,11 @@
+import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { CalendarClock, Sparkles, StickyNote, Download, FileSliders, FileText, Link2, ListChecks, Mail, Plug, Settings2, Share2, Wallet } from "lucide-react";
 import { AiSuggestionsCard } from "@/components/ai/suggestions-card";
 import { requireClientView } from "@/server/access";
 import { prisma } from "@/server/db";
-import { loadClientReport } from "@/server/client-report";
+import { completeClientReport, loadClientReportHead, type ClientReport } from "@/server/client-report";
 import { PRESET_LABEL } from "@/lib/date-ranges";
 import { formatDate } from "@/lib/time";
 import { DemoBadge } from "@/components/status-badge";
@@ -17,6 +18,7 @@ import { ActionButton } from "@/components/action-button";
 import { ChartNoteForm } from "./notes-form";
 import { deleteChartNoteAction } from "./notes-actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionSkeleton } from "@/components/ui/skeleton";
 import { ExecutiveSummary } from "@/components/reports/executive-summary";
 import { CampaignsSection, DataFreshness, hiddenMarker, HistorySection, KpiSection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
 
@@ -43,7 +45,13 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const user = await requireClientView(id);
   const staff = user.role !== "CLIENT_USER";
 
-  const rep = await loadClientReport(id, sp);
+  // The header needs only the quick part of the report. The heavy figures load
+  // in the background and stream into the in-page <Suspense> boundaries below
+  // (not a route loading.tsx: those made value-returning server actions hang).
+  const now = new Date();
+  const rep = await loadClientReportHead(id, sp, now);
+  const full = completeClientReport(rep, now);
+  full.catch(() => {}); // Each <WithReport> awaits it and surfaces any error; this only avoids an unhandled rejection.
   const { client, preset, compareMode, range, cmpRange, pacing } = rep;
   const isDemo = client.accounts.some((a) => a.isDemo);
   const tab: Tab = staff && TABS.some((t) => t.key === sp.tab) ? (sp.tab as Tab) : "overview";
@@ -125,7 +133,11 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
     return (
       <div className="mx-auto flex max-w-[1400px] flex-col gap-5">
         {header}
-        {client.accounts.length === 0 ? <NoAccountsState rep={rep} staff={false} /> : <ClientReportView rep={rep} basePath={base} query={sp} />}
+        <Suspense fallback={<SectionSkeleton tiles={6} cards={2} />}>
+          <WithReport report={full}>
+            {(rep) => (client.accounts.length === 0 ? <NoAccountsState rep={rep} staff={false} /> : <ClientReportView rep={rep} basePath={base} query={sp} />)}
+          </WithReport>
+        </Suspense>
       </div>
     );
   }
@@ -151,33 +163,56 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       </div>
 
       {tab === "overview" && client.accounts.length === 0 && (
-        <>
-          <NoAccountsState rep={rep} staff />
-          <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />
-        </>
+        <Suspense fallback={<SectionSkeleton cards={2} tallFirst={false} />}>
+          <WithReport report={full}>
+            {(rep) => (
+              <>
+                <NoAccountsState rep={rep} staff />
+                <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />
+              </>
+            )}
+          </WithReport>
+        </Suspense>
       )}
 
       {tab === "overview" && client.accounts.length > 0 && (
-        <>
-          <KpiSection rep={rep} marker={mark("kpis")} />
-          <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand hover:underline">Open Insights</Link>} />
-          <NoteSection rep={rep} marker={mark("summary")} />
-          <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />
-        </>
+        <Suspense fallback={<SectionSkeleton tiles={6} cards={2} tallFirst={false} />}>
+          <WithReport report={full}>
+            {(rep) => (
+              <>
+                <KpiSection rep={rep} marker={mark("kpis")} />
+                <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand hover:underline">Open Insights</Link>} />
+                <NoteSection rep={rep} marker={mark("summary")} />
+                <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />
+              </>
+            )}
+          </WithReport>
+        </Suspense>
       )}
 
       {tab === "campaigns" && (
-        <>
-          <CampaignsSection rep={rep} staff basePath={base} marker={mark("campaigns")} />
-          {client.accounts.length > 1 && <PlatformSection rep={rep} staff marker={mark("platforms")} />}
-        </>
+        <Suspense fallback={<SectionSkeleton cards={1} />}>
+          <WithReport report={full}>
+            {(rep) => (
+              <>
+                <CampaignsSection rep={rep} staff basePath={base} marker={mark("campaigns")} />
+                {client.accounts.length > 1 && <PlatformSection rep={rep} staff marker={mark("platforms")} />}
+              </>
+            )}
+          </WithReport>
+        </Suspense>
       )}
 
       {tab === "trends" && (
         <>
-          <TrendsSection rep={rep} marker={mark("trends")} staff />
+          <Suspense fallback={<SectionSkeleton cards={1} />}>
+            <WithReport report={full}>{(rep) => <TrendsSection rep={rep} marker={mark("trends")} staff />}</WithReport>
+          </Suspense>
+          {/* The note form stays outside the suspended sections. */}
           <NotesCard clientId={id} agencyId={user.agencyId} defaultDate={rep.range.to} />
-          <HistorySection rep={rep} marker={mark("history")} />
+          <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
+            <WithReport report={full}>{(rep) => <HistorySection rep={rep} marker={mark("history")} />}</WithReport>
+          </Suspense>
         </>
       )}
 
@@ -194,7 +229,9 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                 <h3 className="text-sm font-semibold">Executive summary</h3>
                 <ClientVisibilityToggle clientId={id} section="executive" visible={rep.template.sections.executive} label="Executive summary" />
               </div>
-              <ExecutiveSummary rep={rep} copyable bare />
+              <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
+                <WithReport report={full}>{(rep) => <ExecutiveSummary rep={rep} copyable bare />}</WithReport>
+              </Suspense>
             </section>
             <div className="border-t border-border pt-5">
               <AiSuggestionsCard clientId={id} query={sp} bare />
@@ -205,7 +242,9 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
       {tab === "setup" && (
         <>
-          <PlatformSection rep={rep} staff status title="Ad accounts and data" />
+          <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
+            <WithReport report={full}>{(rep) => <PlatformSection rep={rep} staff status title="Ad accounts and data" />}</WithReport>
+          </Suspense>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {[
               { href: `${base}/accounts`, Icon: Plug, title: "Ad accounts", body: "Link or unlink this client's advertising accounts." },
@@ -225,6 +264,11 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       )}
     </div>
   );
+}
+
+/** Renders sections that need the full report once it has loaded; place inside a <Suspense> boundary. */
+async function WithReport({ report, children }: { report: Promise<ClientReport>; children: (rep: ClientReport) => ReactNode }) {
+  return <>{children(await report)}</>;
 }
 
 /** Dated notes shown as markers on this client's charts, with an add form and teammate tagging. */
