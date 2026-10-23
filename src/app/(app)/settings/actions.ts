@@ -12,7 +12,13 @@ const num = z.coerce.number().finite();
 const schema = z.object({
   name: z.string().trim().min(1).max(120),
   brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Brand color must be a hex color like #4f46e5"),
-  logoUrl: z.string().url("Logo must be an https URL").startsWith("https://", "Logo must be an https URL").or(z.literal("")),
+  // An https URL, or an uploaded image stored inline (resized in the browser to 256 px).
+  logoUrl: z
+    .string()
+    .url("Logo must be an https URL")
+    .startsWith("https://", "Logo must be an https URL")
+    .or(z.string().max(400_000, "That logo image is too large.").regex(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/, "Upload the logo as a PNG or JPEG image."))
+    .or(z.literal("")),
   reportHeader: z.string().max(500).optional(),
   reportFooter: z.string().max(500).optional(),
   under: num,

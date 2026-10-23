@@ -607,6 +607,8 @@ model ReportShareLink {
   createdAt    DateTime  @default(now())
   lastViewedAt DateTime?
   viewCount    Int       @default(0)
+  /// bcrypt hash of an optional password viewers must enter. Null = no password.
+  passwordHash String?
 
   @@index([clientId, createdAt])
 }

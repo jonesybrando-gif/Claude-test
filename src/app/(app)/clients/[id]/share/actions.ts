@@ -17,7 +17,9 @@ export async function createShareLinkAction(clientId: string, prev: CreateLinkSt
   const label = String(form.get("label") ?? "").trim().slice(0, 80) || null;
   if (!SHARE_RANGES.includes(range)) return { error: "Choose a date range." };
   if (!EXPIRY_DAYS.has(expiry)) return { error: "Choose when the link expires." };
-  const { url } = await createShareLink({ clientId, createdById: user.id, label, range, expiresInDays: expiry === "never" ? null : Number(expiry) });
+  const password = String(form.get("password") ?? "");
+  if (password && (password.length < 6 || password.length > 200)) return { error: "Use a password of at least 6 characters, or leave it blank." };
+  const { url } = await createShareLink({ clientId, createdById: user.id, label, range, expiresInDays: expiry === "never" ? null : Number(expiry), password: password || null });
   revalidatePath(`/clients/${clientId}/share`);
   return { url, n: (prev?.n ?? 0) + 1 };
 }

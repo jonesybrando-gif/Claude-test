@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, ExternalLink } from "lucide-react";
+import { ChevronLeft, ExternalLink, Lock } from "lucide-react";
 import { prisma } from "@/server/db";
 import { requireClientEdit } from "@/server/access";
 import { getClientTemplate } from "@/server/report-templates";
@@ -101,7 +101,7 @@ export default async function ShareLinksPage({ params }: { params: Promise<{ id:
                 return (
                   <TR key={l.id}>
                     <TD className="pl-5">
-                      <div className="font-medium">{l.label ?? "Untitled link"}</div>
+                      <div className="flex items-center gap-1.5 font-medium">{l.label ?? "Untitled link"}{l.hasPassword && <Lock className="h-3.5 w-3.5 text-text-3" aria-label="Password protected" />}</div>
                       <div className="text-xs text-text-3">Created {formatDate(l.createdAt.toISOString().slice(0, 10), { month: "short", day: "numeric", year: "numeric" })}</div>
                     </TD>
                     <TD className="text-sm">{l.range ? PRESET_LABEL[l.range as keyof typeof PRESET_LABEL] ?? l.range : "Report default"}</TD>

@@ -203,8 +203,14 @@ export function paragraph(doc: Doc, text: string, opts: { color?: string; size?:
   doc.font("Helvetica").fontSize(opts.size ?? 8.5).fillColor(opts.color ?? C.text2).text(pdfText(text), doc.page.margins.left, doc.y, { width: contentWidth(doc) });
 }
 
-/** Fetch an https logo for white-label headers (PNG/JPEG, ≤ 2 MB, 3 s timeout). Never throws. */
+/** The logo for white-label headers: an uploaded data URL, or an https URL (PNG/JPEG, ≤ 2 MB, 3 s timeout). Never throws. */
 export async function fetchLogo(url: string | null | undefined): Promise<Buffer | null> {
+  // Uploaded logos are stored inline as data URLs.
+  const inline = url?.match(/^data:image\/(?:png|jpeg);base64,([A-Za-z0-9+/=]+)$/);
+  if (inline) {
+    const buf = Buffer.from(inline[1], "base64");
+    return buf.length <= 2_000_000 ? buf : null;
+  }
   if (!url || !url.startsWith("https://")) return null;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(3000) });

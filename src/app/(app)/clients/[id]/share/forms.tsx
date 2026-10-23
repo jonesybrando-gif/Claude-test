@@ -58,6 +58,11 @@ export function CreateShareLinkForm({ clientId, ranges }: { clientId: string; ra
           </Select>
         </div>
         <Button type="submit" disabled={pending}><Link2 className="h-4 w-4" aria-hidden /> {pending ? "Creating…" : "Create link"}</Button>
+        <div className="flex flex-col gap-1.5 sm:col-span-4 sm:max-w-sm">
+          <Label htmlFor="share-password">Password (optional)</Label>
+          <Input id="share-password" name="password" type="password" minLength={6} maxLength={200} autoComplete="new-password" placeholder="Leave blank for no password" />
+          <p className="text-xs text-text-3">Viewers enter it once per browser. Send it separately from the link.</p>
+        </div>
       </form>
       {state?.error && <p className="text-sm text-critical-ink" role="alert">{state.error}</p>}
       {state?.url && (

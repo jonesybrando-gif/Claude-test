@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { Download } from "lucide-react";
 import { prisma } from "@/server/db";
 import { loadClientReport } from "@/server/client-report";
-import { recordShareView, resolveShareToken } from "@/server/share-links";
+import { cookies } from "next/headers";
+import { recordShareView, resolveShareToken, shareAccessGranted, shareCookieName } from "@/server/share-links";
+import { SharePasswordForm } from "./password-form";
 import { PRESET_LABEL } from "@/lib/date-ranges";
 import { formatDate } from "@/lib/time";
 import { buttonVariants } from "@/components/ui/button";
@@ -16,7 +18,9 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const { token } = await params;
   const link = await resolveShareToken(token);
-  const name = link ? (await prisma.client.findUnique({ where: { id: link.clientId }, select: { name: true } }))?.name : null;
+  // Don't reveal the client's name in the tab before a password is entered.
+  const open = link && shareAccessGranted(link, (await cookies()).get(shareCookieName(link.id))?.value);
+  const name = link && open ? (await prisma.client.findUnique({ where: { id: link.clientId }, select: { name: true } }))?.name : null;
   return { title: name ? `${name} · Advertising report` : "Advertising report", robots: { index: false, follow: false } };
 }
 
@@ -26,6 +30,18 @@ export default async function SharedReportPage({ params, searchParams }: { param
   const sp = await searchParams;
   const link = await resolveShareToken(token);
   if (!link) notFound();
+  if (!shareAccessGranted(link, (await cookies()).get(shareCookieName(link.id))?.value)) {
+    const agency = await prisma.agency.findUniqueOrThrow({ where: { id: link.client.agencyId }, select: { name: true, brandColor: true } });
+    return (
+      <div className="min-h-screen" style={{ ["--brand" as string]: agency.brandColor }}>
+        <div className="h-1.5 bg-brand" />
+        <main className="mx-auto flex max-w-sm flex-col gap-4 px-4 py-16">
+          <p className="text-sm font-semibold">{agency.name}</p>
+          <div className="rounded-xl border border-border bg-surface p-5"><SharePasswordForm token={token} /></div>
+        </main>
+      </div>
+    );
+  }
   const [rep, agency] = await Promise.all([
     loadClientReport(link.clientId, { range: link.range ?? undefined, compare: link.compare ?? undefined }),
     prisma.agency.findUniqueOrThrow({ where: { id: link.client.agencyId }, select: { name: true, brandColor: true, logoUrl: true, reportHeader: true, reportFooter: true } }),
