@@ -139,3 +139,9 @@ describe("disconnected lines", () => {
     expect(run([row({ status: "UNDERSPENDING" }, { disconnected: true })])).toEqual([]);
   });
 });
+
+describe("not-connected lines", () => {
+  it("raise no pacing alerts (there is no data to pace)", () => {
+    expect(run([row({ status: "UNDERSPENDING" }, { notConnected: true })])).toEqual([]);
+  });
+});

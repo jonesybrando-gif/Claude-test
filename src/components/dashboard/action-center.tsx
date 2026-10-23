@@ -14,7 +14,8 @@ const ICON: Record<ActionSeverity, { Icon: typeof Info; cls: string; label: stri
 const ORDER: Record<ActionSeverity, number> = { critical: 0, warning: 1, info: 2, ok: 3 };
 
 export function ActionCenter({ rows, limit = 8 }: { rows: PacingRow[]; limit?: number }) {
-  const sorted = [...rows].sort(
+  // Lines with no ad account linked have nothing to act on today; the dashboard banner covers them.
+  const sorted = rows.filter((r) => !r.notConnected).sort(
     (a, b) => ORDER[a.action.severity] - ORDER[b.action.severity] || Math.abs(b.result?.projectedVarianceMinor ?? 0) - Math.abs(a.result?.projectedVarianceMinor ?? 0),
   );
   const actionable = sorted.filter((r) => r.action.severity !== "ok");

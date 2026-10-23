@@ -89,6 +89,8 @@ export interface PacingRowInput {
   isDemo: boolean;
   /** Line depends on a disconnected account: its pacing reflects missing data, covered by ACCOUNT_DISCONNECTED. */
   disconnected?: boolean;
+  /** No ad account linked (or never synced): nothing to pace, so no pacing alerts. */
+  notConnected?: boolean;
   result: {
     phase: "NOT_STARTED" | "ACTIVE" | "ENDED";
     periodStart: IsoDate;
@@ -140,7 +142,7 @@ export function evaluateAlerts(input: {
   // 1. Pacing and month-end forecast (budget lines)
   for (const r of input.rows) {
     const res = r.result;
-    if (!res || res.phase !== "ACTIVE" || r.disconnected) continue;
+    if (!res || res.phase !== "ACTIVE" || r.disconnected || r.notConnected) continue;
     const base = { clientId: r.clientId, clientName: r.clientName, isDemo: r.isDemo, detail: r.action.detail };
     if (res.status === "OVERSPENDING" || res.status === "UNDERSPENDING") {
       out.push({ ...base, kind: res.status, severity: "critical", dedupeKey: `${res.status}:${r.key}:${res.periodStart}`, title: `${r.label}: ${r.action.headline}` });

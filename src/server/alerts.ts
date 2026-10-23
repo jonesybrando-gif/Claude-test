@@ -19,6 +19,7 @@ function toRowInput(r: PacingRow): PacingRowInput {
     currency: r.currency,
     isDemo: r.isDemo,
     disconnected: r.disconnected,
+    notConnected: r.notConnected,
     action: { headline: r.action.headline, detail: r.action.detail },
     result: r.result
       ? { phase: r.result.phase, periodStart: r.result.periodStart, status: r.result.status, forecastStatus: r.result.forecastStatus, budgetMinor: r.result.budgetMinor, projectedVarianceMinor: r.result.projectedVarianceMinor }

@@ -14,7 +14,7 @@ import { formatCustomerId } from "@/server/integrations/google-ads/gaql";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { KpiCard } from "@/components/kpi/kpi-card";
-import { NoBudgetBadge, StaleBadge, StatusBadge } from "@/components/status-badge";
+import { NoBudgetBadge, NotConnectedBadge, StaleBadge, StatusBadge } from "@/components/status-badge";
 import { PlatformLabel } from "@/components/platform-badge";
 import { PacingChart } from "@/components/charts/pacing-chart";
 import { TrendChart } from "@/components/charts/trend-chart";
@@ -187,7 +187,7 @@ export function ClientReportView({
                       <div className="font-medium">{r.level === "CLIENT" ? "Combined client budget" : r.label}</div>
                       <div className="text-xs text-text-3">{r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ")}{sub && " · sub-allocation"}{r.level === "UNBUDGETED" && " · not budgeted"}</div>
                     </TD>
-                    <TD>{r.result ? <StatusBadge status={r.result.status} /> : <NoBudgetBadge />}</TD>
+                    <TD>{r.notConnected ? <NotConnectedBadge label={r.accounts.length ? "Awaiting first sync" : "Not connected"} /> : r.result ? <StatusBadge status={r.result.status} /> : <NoBudgetBadge />}</TD>
                     <TD className="text-right">{r.result ? formatMoney(r.result.budgetMinor, c, { whole: true }) : "—"}</TD>
                     <TD className="text-right">{formatMoney(r.result?.actualToDateMinor ?? r.unbudgetedSpendMinor, c, { whole: true })}</TD>
                     <TD className="text-right">{r.result ? formatPct(r.result.pacingPct) : "—"}</TD>

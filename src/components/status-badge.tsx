@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, CheckCircle2, CircleDashed, MinusCircle } from "lucide-react";
+import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, CheckCircle2, CircleDashed, MinusCircle, Unplug } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { STATUS_LABEL, type PacingStatus } from "@/lib/pacing/status";
 
@@ -28,6 +28,16 @@ export function NoBudgetBadge() {
     <Badge variant="neutral">
       <MinusCircle className="h-3.5 w-3.5" aria-hidden />
       No budget
+    </Badge>
+  );
+}
+
+/** A budget line with no ad account linked (or never synced): grey, never a pacing colour. */
+export function NotConnectedBadge({ label = "Not connected" }: { label?: string }) {
+  return (
+    <Badge variant="neutral">
+      <Unplug className="h-3.5 w-3.5" aria-hidden />
+      {label}
     </Badge>
   );
 }
