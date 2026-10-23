@@ -81,6 +81,27 @@ export function CampaignTable({ rows, currency }: { rows: CampaignRow[]; currenc
           )}
         </span>
       </div>
+      {/* Phones: compact cards instead of an eight-column table. */}
+      <ul className="flex flex-col gap-2 px-3 md:hidden" aria-label="Campaigns">
+        {visible.map((r) => (
+          <li key={r.id} className="rounded-lg border border-border p-3">
+            <p className="font-medium">{r.name}</p>
+            <p className="text-xs text-text-3"><PlatformLabel platform={r.platform} /> · {r.status.charAt(0) + r.status.slice(1).toLowerCase()}</p>
+            <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+              <div><dt className="text-text-3">Spend</dt><dd className="font-medium tabular">{money(r.costMinor, true)}</dd></div>
+              <div><dt className="text-text-3">Conv.</dt><dd className="font-medium tabular">{formatNumber(r.conversions, 0)}</dd></div>
+              <div><dt className="text-text-3">Cost / conv.</dt><dd className="font-medium tabular">{money(cpa(r))}</dd></div>
+            </dl>
+          </li>
+        ))}
+        {visible.length > 1 && (
+          <li className="flex justify-between rounded-lg bg-surface-2 px-3 py-2 text-xs font-medium">
+            <span>Total ({visible.length})</span>
+            <span className="tabular">{money(total.costMinor, true)} · {formatNumber(total.conversions, 0)} conv.</span>
+          </li>
+        )}
+      </ul>
+      <div className="hidden md:block">
       <Table>
         <THead>
           <tr>
@@ -124,6 +145,7 @@ export function CampaignTable({ rows, currency }: { rows: CampaignRow[]; currenc
           </tfoot>
         )}
       </Table>
+      </div>
     </div>
   );
 }

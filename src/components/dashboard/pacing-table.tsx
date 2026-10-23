@@ -112,7 +112,40 @@ export function PacingTable({ rows, labels = [], labelsByClient = {}, initialSta
           )}
         </span>
       </div>
+      {/* Phones: one card per budget line instead of a wide table. */}
+      <ul className="flex flex-col gap-2 px-3 md:hidden" aria-label="Budget lines">
+        {visible.map((r) => {
+          const res = r.notConnected ? null : r.result;
+          const c = r.currency;
+          return (
+            <li key={r.key} className="rounded-lg border border-border p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <Link href={`/clients/${r.clientId}`} className="block truncate font-medium hover:underline">{r.clientName}</Link>
+                  <p className="truncate text-xs text-text-3">{r.level === "CLIENT" ? "All accounts" : r.label} · {r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ") || "no platform"}</p>
+                </div>
+                {r.notConnected ? <NotConnectedBadge label={r.accounts.length ? "Awaiting sync" : "Not connected"} /> : res ? <StatusBadge status={res.status} /> : <NoBudgetBadge />}
+              </div>
+              {res && res.pctBudgetConsumed !== null && (
+                <div className="mt-2"><PaceBar consumed={res.pctBudgetConsumed} elapsed={res.pctPeriodElapsed} expected={res.budgetMinor ? (res.expectedToDateMinor / res.budgetMinor) * 100 : 0} status={res.status} /></div>
+              )}
+              <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                <div><dt className="text-text-3">Spent</dt><dd className="font-medium tabular">{r.notConnected ? "—" : formatMoney(res?.actualToDateMinor ?? r.unbudgetedSpendMinor, c, { whole: true })}</dd></div>
+                <div><dt className="text-text-3">Budget</dt><dd className="font-medium tabular">{r.result ? formatMoney(r.result.budgetMinor, c, { whole: true }) : "—"}</dd></div>
+                <div><dt className="text-text-3">Projected</dt><dd className={`font-medium tabular ${res && res.projectedVarianceMinor > 0 ? "text-critical-ink" : ""}`}>{res ? formatMoney(res.projectedMinor, c, { whole: true }) : "—"}</dd></div>
+              </dl>
+              {r.notConnected ? (
+                <Link href={`/clients/${r.clientId}/accounts`} className="mt-2 inline-block text-xs text-brand hover:underline">{r.accounts.length ? "Check ad accounts" : "Link an ad account"}</Link>
+              ) : (
+                <p className="mt-2 text-xs text-text-2">{r.action.headline}{r.stale && " · stale data"}{r.disconnected && " · disconnected"}</p>
+              )}
+            </li>
+          );
+        })}
+        {visible.length === 0 && <li className="px-2 py-8 text-center text-sm text-text-3">No budget lines match these filters.</li>}
+      </ul>
       {/* Seven columns that fit a laptop screen: related figures share a cell. */}
+      <div className="hidden md:block">
       <Table className="min-w-[860px] table-fixed">
         <colgroup>
           <col className="w-[23%]" />
@@ -214,6 +247,7 @@ export function PacingTable({ rows, labels = [], labelsByClient = {}, initialSta
           )}
         </TBody>
       </Table>
+      </div>
       <p className="px-5 pt-3 pb-4 text-xs text-text-3">
         <strong className="font-medium text-text-2">Pacing</strong> = actual spend ÷ expected spend to date × 100. It is not the share of the monthly budget used — that is shown in the bar, with the tick marking where spend should be today.
       </p>

@@ -193,6 +193,27 @@ export function BudgetLinesCard({ rep, staff }: { rep: ClientReport; staff: bool
             : "Each budget and how it is tracking this period."}
         </CardDescription>
       </CardHeader>
+      {/* Phones: one card per budget. */}
+      <ul className="flex flex-col gap-2 px-3 md:hidden">
+        {lines.map((r) => (
+          <li key={r.key + (sub.has(r) ? ":sub" : "")} className="rounded-lg border border-border p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-medium">{lineName(r, staff)}</p>
+                <p className="text-xs text-text-3">{r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ")}{staff && sub.has(r) && " · sub-allocation"}</p>
+              </div>
+              {r.notConnected ? <NotConnectedBadge /> : r.result ? <StatusBadge status={r.result.status} /> : <NoBudgetBadge />}
+            </div>
+            <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+              <div><dt className="text-text-3">Spent</dt><dd className="font-medium tabular">{r.notConnected ? "—" : formatMoney(r.result?.actualToDateMinor ?? r.unbudgetedSpendMinor, c, { whole: true })}</dd></div>
+              <div><dt className="text-text-3">of</dt><dd className="font-medium tabular">{r.result ? formatMoney(r.result.budgetMinor, c, { whole: true }) : "—"}</dd></div>
+              <div><dt className="text-text-3">Projected</dt><dd className="font-medium tabular">{r.result && !r.notConnected ? formatMoney(r.result.projectedMinor, c, { whole: true }) : "—"}</dd></div>
+            </dl>
+            {staff && <p className="mt-2 text-xs text-text-2">{r.action.headline}. {r.action.detail}</p>}
+          </li>
+        ))}
+      </ul>
+      <div className="hidden md:block">
       <Table>
         <THead>
           <tr>
@@ -220,6 +241,7 @@ export function BudgetLinesCard({ rep, staff }: { rep: ClientReport; staff: bool
           })}
         </TBody>
       </Table>
+      </div>
       <div className="h-3" />
     </Card>
   );
