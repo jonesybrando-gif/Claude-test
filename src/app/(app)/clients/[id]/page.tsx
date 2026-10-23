@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { CalendarClock, Sparkles, StickyNote, Download, FileSliders, FileText, Link2, ListChecks, Mail, Plug, Settings2, Share2, Wallet } from "lucide-react";
 import { AiSuggestionsCard } from "@/components/ai/suggestions-card";
-import { requireClientView } from "@/server/access";
+import { requireClientView, userCanEditClient } from "@/server/access";
 import { prisma } from "@/server/db";
 import { completeClientReport, loadClientReportHead, type ClientReport } from "@/server/client-report";
 import { PRESET_LABEL } from "@/lib/date-ranges";
@@ -46,6 +46,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const sp = await searchParams;
   const user = await requireClientView(id);
   const staff = user.role !== "CLIENT_USER";
+  // Same rule as requireClientEdit, which the template save actions enforce.
+  const canEdit = await userCanEditClient(user, id);
 
   // The header needs only the quick part of the report. The heavy figures load
   // in the background and stream into the in-page <Suspense> boundaries below
@@ -182,7 +184,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           <WithReport report={full}>
             {(rep) => (
               <>
-                <KpiSection rep={rep} marker={mark("kpis")} />
+                <KpiSection rep={rep} marker={mark("kpis")} editable={canEdit} />
                 <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand hover:underline">Open Insights</Link>} />
                 <NoteSection rep={rep} marker={mark("summary")} />
                 <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />

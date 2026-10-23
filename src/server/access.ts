@@ -33,6 +33,13 @@ export async function userCanViewClient(user: SessionUser, clientId: string): Pr
   return !!facts && canViewClient(user, facts);
 }
 
+/** Non-throwing twin of requireClientEdit, for showing or hiding edit controls. */
+export async function userCanEditClient(user: SessionUser, clientId: string): Promise<boolean> {
+  if (user.role === "CLIENT_USER") return false; // no lookup needed: client logins never edit
+  const facts = await loadClientFacts(clientId);
+  return !!facts && canEditClient(user, facts);
+}
+
 /** 404s (rather than 403s) so the existence of other clients is not revealed. */
 export async function requireClientView(clientId: string): Promise<SessionUser> {
   const user = await requireUser();

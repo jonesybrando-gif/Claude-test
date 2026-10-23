@@ -3,6 +3,11 @@ import { formatKpi, KPI_BY_KEY, type KpiValue } from "@/lib/kpis";
 import { formatPct } from "@/lib/money";
 import { Sparkline } from "./sparkline";
 
+/** Ratios and costs with no value read "not reported"; counts fall back to KpiCard's own wording. */
+export function kpiNote(kv: KpiValue): string | undefined {
+  return kv.value === null && KPI_BY_KEY[kv.key].kind !== "count" ? "not reported" : undefined;
+}
+
 const TONE = { good: "text-good-ink", bad: "text-critical-ink", neutral: "text-text-2" } as const;
 
 export function KpiCard({ kv, currency, trend, note }: { kv: KpiValue; currency: string; trend?: (number | null)[]; note?: string }) {
