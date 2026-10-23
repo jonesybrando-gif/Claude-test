@@ -60,7 +60,7 @@ export function KpiTable({ rows, kpis, currency, firstHeader, showChange }: { ro
               const v = values[k];
               return (
                 <TD key={k} className="text-right">
-                  {formatKpi(k, v.value, currency)}
+                  {formatKpi(k, v.value, currency, { whole: true })}
                   {showChange?.includes(k) && v.changePct !== null && (
                     <div className={`text-[11px] ${v.tone === "good" ? "text-good-ink" : v.tone === "bad" ? "text-critical-ink" : "text-text-3"}`}>
                       {Math.abs(v.changePct) < 0.5 ? "0%" : `${v.changePct > 0 ? "+" : "−"}${formatPct(Math.abs(v.changePct), 0)}`}

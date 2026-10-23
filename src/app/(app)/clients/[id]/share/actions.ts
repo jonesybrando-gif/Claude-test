@@ -6,6 +6,7 @@ import { requireClientEdit } from "@/server/access";
 import { createShareLink, SHARE_RANGES, type ShareRange } from "@/server/share-links";
 import { deleteClientSchedule, saveClientSchedule, sendScheduledReport } from "@/server/scheduled-reports";
 import { parseRecipients, SCHEDULE_RANGES, type ScheduleRange } from "@/lib/report-schedule";
+import { PRESET_LABEL } from "@/lib/date-ranges";
 
 export type CreateLinkState = { url?: string; error?: string; n?: number } | undefined;
 const EXPIRY_DAYS = new Set(["7", "30", "90", "365", "never"]);
@@ -14,8 +15,10 @@ export async function createShareLinkAction(clientId: string, prev: CreateLinkSt
   const user = await requireClientEdit(clientId);
   const range = String(form.get("range") ?? "template") as ShareRange;
   const expiry = String(form.get("expiry") ?? "90");
-  const label = String(form.get("label") ?? "").trim().slice(0, 80) || null;
   if (!SHARE_RANGES.includes(range)) return { error: "Choose a date range." };
+  // Unnamed links get a useful default, e.g. "Board and Brew · Last month".
+  const client = await prisma.client.findUniqueOrThrow({ where: { id: clientId }, select: { name: true } });
+  const label = String(form.get("label") ?? "").trim().slice(0, 80) || `${client.name} · ${range === "template" ? "Report default" : PRESET_LABEL[range]}`;
   if (!EXPIRY_DAYS.has(expiry)) return { error: "Choose when the link expires." };
   const password = String(form.get("password") ?? "");
   if (password && (password.length < 6 || password.length > 200)) return { error: "Use a password of at least 6 characters, or leave it blank." };

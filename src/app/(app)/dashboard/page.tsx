@@ -17,6 +17,7 @@ import { SetupChecklist } from "@/components/setup-checklist";
 import { setupChecklist } from "@/server/first-run";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Budget pacing" };
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const user = await requireAgencyStaff();
@@ -58,7 +59,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-xl font-semibold">Advertising Budget Monitor</h1>
+          <h1 className="text-xl font-semibold">Budget pacing</h1>
           <p className="text-sm text-text-2">
             {[period, `${clients.length} client${clients.length === 1 ? "" : "s"}`, `${s.rowsTotal} budget line${s.rowsTotal === 1 ? "" : "s"} with data`].filter(Boolean).join(" · ")}
             {s.typicalAsOf && <> · data through {formatDate(s.typicalAsOf, { month: "short", day: "numeric" })}</>}

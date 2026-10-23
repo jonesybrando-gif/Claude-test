@@ -20,6 +20,7 @@ import { ClientPicker } from "./client-picker";
 import { PortfolioTable, type PortfolioRow } from "./portfolio-table";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Performance" };
 
 const PRESETS: RangePreset[] = ["mtd", "last_month", "last_7", "last_30", "last_90", "custom"];
 const TABLE_KPIS: KpiKey[] = ["spend", "impressions", "clicks", "ctr", "cpc", "conversions", "conversionRate", "costPerConversion", "leads", "costPerLead", "roas"];

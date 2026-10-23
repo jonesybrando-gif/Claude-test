@@ -6,6 +6,8 @@ import { PasswordForm, ProfileForm } from "./forms";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Your account" };
+
 export default async function AccountPage() {
   const me = await requireUser();
   const u = await prisma.user.findUniqueOrThrow({ where: { id: me.id } });

@@ -11,6 +11,7 @@ import { DisconnectButton } from "./disconnect-button";
 import { TokenConnectForm } from "./token-connect-form";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Integrations" };
 
 const STATE_BADGE: Record<IntegrationState, { label: string; variant: "neutral" | "warning" | "info" | "good" }> = {
   not_implemented: { label: "Not built yet", variant: "neutral" },

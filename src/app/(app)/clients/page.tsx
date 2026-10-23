@@ -16,6 +16,7 @@ import { BulkLabelBar, ClientFilters, LabelPicker, SelectAllBox, SelectClientBox
 import { bulkLabelAction, createLabelAction, deleteClientAction, deleteLabelAction, removeClientAction, restoreClientAction, setClientLabelsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Clients" };
 
 const COLOR_NAME: Record<string, string> = { neutral: "Grey", info: "Blue", good: "Green", warning: "Amber", serious: "Orange", critical: "Rose" };
 

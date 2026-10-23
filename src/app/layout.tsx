@@ -6,7 +6,8 @@ import { site } from "@/lib/site";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: site.appName,
+  // Each page sets its own title (matching its nav label); the app name follows it.
+  title: { default: site.appName, template: `%s · ${site.appName}` },
   description: "Multi-platform advertising reporting and budget pacing",
 };
 

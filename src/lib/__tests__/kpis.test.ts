@@ -50,6 +50,8 @@ describe("KPI catalog", () => {
     expect(formatKpi("ctr", 5.5)).toBe("5.50%");
     expect(formatKpi("roas", 5.8)).toBe("5.80×");
     expect(formatKpi("conversions", 79.4)).toBe("79.4");
+    expect(formatKpi("conversions", 2183.7)).toBe("2,184");
+    expect(formatKpi("conversions", 79.4, "USD", { whole: true })).toBe("79");
     expect(formatKpi("impressions", 200499)).toBe("200,499");
   });
 

@@ -9,6 +9,7 @@ import { resolveBudgetHierarchy, spendForUnit, type PacingUnit, type SpendRow } 
 import { DEFAULT_THRESHOLDS, needsAttention, type PacingThresholds } from "@/lib/pacing/status";
 import { recommendAction, type Action } from "@/lib/action-center";
 import { isNotConnected } from "@/lib/pacing/connection";
+import { formatDate } from "@/lib/time";
 import type { PlatformKey } from "@/lib/platforms";
 
 /** An account whose last successful sync is older than this is shown as stale. */
@@ -154,7 +155,7 @@ function paceUnit(unit: PacingUnit, budget: BudgetWithRevisions, ctx: UnitContex
       asOf = addDays(periodStart, -1);
     } else {
       if (a.dataCompleteThrough < ctx.yesterday && a.dataCompleteThrough >= periodStart) {
-        warnings.push(`${a.name}: data complete only through ${a.dataCompleteThrough}`);
+        warnings.push(`${a.name}: data complete only through ${formatDate(a.dataCompleteThrough)}`);
       }
       asOf = minDate(asOf, a.dataCompleteThrough);
     }

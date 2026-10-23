@@ -38,8 +38,8 @@ export function CreateShareLinkForm({ clientId, ranges }: { clientId: string; ra
     <div className="flex flex-col gap-4">
       <form {...form} className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px_160px_auto] sm:items-end">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="label">Note for yourself (optional)</Label>
-          <Input id="label" name="label" maxLength={80} placeholder="e.g. Sent to Dana, October" />
+          <Label htmlFor="label">Name (optional)</Label>
+          <Input id="label" name="label" maxLength={80} placeholder="Defaults to the client and range, e.g. “Acme · Last month”" />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="range">Date range</Label>
