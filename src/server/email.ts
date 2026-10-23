@@ -8,7 +8,7 @@ export interface OutgoingEmail {
   subject: string;
   text: string;
   html?: string;
-  kind: "invite" | "password_reset" | "alert" | "daily_summary" | "client_email";
+  kind: "invite" | "password_reset" | "alert" | "daily_summary" | "client_email" | "scheduled_report";
   /** Replies go here instead of EMAIL_FROM (e.g. the account manager). */
   replyTo?: string;
   /**
@@ -16,6 +16,8 @@ export interface OutgoingEmail {
    * stored copy, so secrets never sit in the database.
    */
   redact?: string[];
+  /** Files to attach (e.g. a report PDF). Not stored in the outbox copy. */
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }
 
 export interface SendResult {
@@ -49,7 +51,7 @@ export async function sendEmail(msg: OutgoingEmail): Promise<SendResult> {
     result = { status: "NOT_CONFIGURED" };
   } else {
     try {
-      await t.sendMail({ from: process.env.EMAIL_FROM, to: msg.to, replyTo: msg.replyTo, subject: msg.subject, text: msg.text, html: msg.html });
+      await t.sendMail({ from: process.env.EMAIL_FROM, to: msg.to, replyTo: msg.replyTo, subject: msg.subject, text: msg.text, html: msg.html, attachments: msg.attachments });
       result = { status: "SENT" };
     } catch (e) {
       result = { status: "FAILED", error: (e as Error).message.slice(0, 500) };
@@ -57,7 +59,7 @@ export async function sendEmail(msg: OutgoingEmail): Promise<SendResult> {
   }
   const scrub = (s: string | undefined) => (s === undefined ? s : (msg.redact ?? []).reduce((acc, r) => acc.split(r).join("[link removed]"), s));
   await prisma.emailMessage.create({
-    data: { agencyId: msg.agencyId ?? null, to: msg.to, subject: msg.subject, text: scrub(msg.text)!, html: scrub(msg.html) ?? null, kind: msg.kind, status: result.status, error: result.error ?? null },
+    data: { agencyId: msg.agencyId ?? null, to: msg.to, subject: msg.subject, text: scrub(msg.text)! + (msg.attachments?.length ? `\n\n[Attached: ${msg.attachments.map((a) => a.filename).join(", ")}]` : ""), html: scrub(msg.html) ?? null, kind: msg.kind, status: result.status, error: result.error ?? null },
   });
   return result;
 }

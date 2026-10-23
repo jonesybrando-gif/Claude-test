@@ -4,13 +4,17 @@ import { prisma } from "@/server/db";
 import { requireClientEdit } from "@/server/access";
 import { getClientTemplate } from "@/server/report-templates";
 import { listShareLinks } from "@/server/share-links";
+import { getClientSchedule } from "@/server/scheduled-reports";
+import { emailConfigured } from "@/server/email";
+import { describeSchedule } from "@/lib/report-schedule";
 import { PRESET_LABEL } from "@/lib/date-ranges";
 import { formatDate, relativeTime } from "@/lib/time";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { revokeShareLinkAction } from "./actions";
-import { CopyButton, CreateShareLinkForm, RevokeButton } from "./forms";
+import { deleteScheduleAction, revokeShareLinkAction } from "./actions";
+import { CopyButton, CreateShareLinkForm, RevokeButton, ScheduleForm } from "./forms";
+import { ActionButton } from "@/components/action-button";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +23,11 @@ const RANGES = ["mtd", "last_month", "last_7", "last_30", "last_90"] as const;
 export default async function ShareLinksPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireClientEdit(id);
-  const [client, { template }, links] = await Promise.all([
-    prisma.client.findUniqueOrThrow({ where: { id }, select: { name: true } }),
+  const [client, { template }, links, schedule] = await Promise.all([
+    prisma.client.findUniqueOrThrow({ where: { id }, select: { name: true, timezone: true, users: { where: { deactivatedAt: null }, select: { email: true } } } }),
     getClientTemplate(user.agencyId, id),
     listShareLinks(id),
+    getClientSchedule(id),
   ]);
   const now = new Date();
   const ranges: [string, string][] = [["template", `Report default (${PRESET_LABEL[template.defaultRange].toLowerCase()})`], ...RANGES.map((r) => [r, PRESET_LABEL[r]] as [string, string])];
@@ -42,6 +47,39 @@ export default async function ShareLinksPage({ params }: { params: Promise<{ id:
       <Card>
         <CardHeader><CardTitle>New link</CardTitle></CardHeader>
         <CardContent><CreateShareLinkForm clientId={id} ranges={ranges} /></CardContent>
+      </Card>
+
+      <Card id="schedule" className="scroll-mt-4">
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <CardTitle>Scheduled email</CardTitle>
+              <CardDescription>
+                Email the client-facing PDF on a set day, with the executive summary in the message.
+                {schedule && (schedule.enabled
+                  ? <> {describeSchedule(schedule)} ({client.timezone}).{schedule.nextRunAt && <> Next: {schedule.nextRunAt.toLocaleString("en-US", { timeZone: client.timezone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}.</>}</>
+                  : <> Paused.</>)}
+                {schedule?.lastSentAt && <> Last sent {relativeTime(schedule.lastSentAt.toISOString()).toLowerCase()}.</>}
+              </CardDescription>
+            </div>
+            {schedule && <ActionButton action={deleteScheduleAction.bind(null, id)} label="Delete schedule" variant="ghost" confirm="Delete this schedule? No more reports are sent automatically." />}
+          </div>
+          {!emailConfigured() && <p className="mt-1 text-xs text-warning-ink">Outgoing email isn&apos;t set up (SMTP_URL and EMAIL_FROM), so scheduled emails are only recorded in Settings → Email log.</p>}
+        </CardHeader>
+        <CardContent>
+          <ScheduleForm
+            clientId={id}
+            exists={!!schedule}
+            values={{
+              enabled: schedule?.enabled ?? true,
+              frequency: schedule?.frequency ?? "monthly",
+              dayOfMonth: schedule?.dayOfMonth ?? 3,
+              dayOfWeek: schedule?.dayOfWeek ?? 1,
+              recipients: (schedule?.recipients ?? client.users.map((u) => u.email)).join(", "),
+              range: schedule?.range ?? "last_month",
+            }}
+          />
+        </CardContent>
       </Card>
 
       <Card>

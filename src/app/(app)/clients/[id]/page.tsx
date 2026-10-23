@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Download, FileSliders, FileText, Link2, ListChecks, Mail, Plug, Settings2, Share2, Wallet } from "lucide-react";
+import { CalendarClock, Download, FileSliders, FileText, Link2, ListChecks, Mail, Plug, Settings2, Share2, Wallet } from "lucide-react";
 import { AiSuggestionsCard } from "@/components/ai/suggestions-card";
 import { requireClientView } from "@/server/access";
 import { prisma } from "@/server/db";
@@ -94,6 +94,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                   items: [
                     { href: `${base}/share`, label: "Share link", hint: "A link the client opens without signing in", icon: <Link2 className="h-4 w-4" /> },
                     { href: `${base}/email`, label: "Email client", hint: "Draft an update from this report", icon: <Mail className="h-4 w-4" /> },
+                    { href: `${base}/share#schedule`, label: "Schedule email", hint: "Send the PDF automatically each month", icon: <CalendarClock className="h-4 w-4" /> },
                   ],
                 },
                 {
