@@ -12,7 +12,12 @@ import { ClientReportView } from "@/components/reports/client-report-view";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Advertising report", robots: { index: false, follow: false } };
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const link = await resolveShareToken(token);
+  const name = link ? (await prisma.client.findUnique({ where: { id: link.clientId }, select: { name: true } }))?.name : null;
+  return { title: name ? `${name} · Advertising report` : "Advertising report", robots: { index: false, follow: false } };
+}
 
 /** A client-facing report opened from a shared link, without signing in. */
 export default async function SharedReportPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
@@ -61,7 +66,7 @@ export default async function SharedReportPage({ params, searchParams }: { param
             <Download className="h-4 w-4" aria-hidden /> Download PDF
           </a>
         </div>
-        <ClientReportView rep={rep} staff={false} basePath={`/r/${token}`} query={{ line: sp.line }} />
+        <ClientReportView rep={rep} basePath={`/r/${token}`} query={{ line: sp.line }} />
         <footer className="border-t border-border pt-4 text-xs text-text-3">
           {agency.reportFooter && <p className="mb-1">{agency.reportFooter}</p>}
           <p>Prepared by {agency.name}. Figures are as reported by each ad platform; today&apos;s partial data is excluded.</p>
