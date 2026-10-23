@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import type { PlatformKey } from "@/lib/platforms";
 import { formatMoney, formatNumber } from "@/lib/money";
-import { Input } from "@/components/ui/input";
+import { Input, Select } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { PlatformLabel } from "@/components/platform-badge";
 
@@ -32,6 +32,8 @@ const SORTERS: Record<SortKey, (a: CampaignRow, b: CampaignRow) => number> = {
   cpa: (a, b) => (cpa(a) ?? Infinity) - (cpa(b) ?? Infinity),
   roas: (a, b) => (roas(a) ?? -Infinity) - (roas(b) ?? -Infinity),
 };
+
+const MOBILE_SORTS = new Set(["spend:-1", "spend:1", "conversions:-1", "clicks:-1", "cpa:1", "roas:-1", "name:1"]);
 
 /**
  * Campaigns for the selected range: sorted by spend, with campaigns that
@@ -69,6 +71,25 @@ export function CampaignTable({ rows, currency }: { rows: CampaignRow[]; currenc
     <div>
       <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
         <Input placeholder="Search campaigns…" value={q} onChange={(e) => setQ(e.target.value)} className="w-full sm:w-60" aria-label="Search campaigns" />
+        {/* Phones have no column headers to click, so offer the same sorts here. */}
+        <Select
+          aria-label="Sort campaigns"
+          className="w-auto md:hidden"
+          value={`${sort.key}:${sort.dir}`}
+          onChange={(e) => {
+            const [key, dir] = e.target.value.split(":");
+            setSort({ key: key as SortKey, dir: Number(dir) as 1 | -1 });
+          }}
+        >
+          <option value="spend:-1">Highest spend</option>
+          <option value="spend:1">Lowest spend</option>
+          <option value="conversions:-1">Most conversions</option>
+          <option value="clicks:-1">Most clicks</option>
+          <option value="cpa:1">Lowest cost / conv.</option>
+          <option value="roas:-1">Highest ROAS</option>
+          <option value="name:1">Name A–Z</option>
+          {!MOBILE_SORTS.has(`${sort.key}:${sort.dir}`) && <option value={`${sort.key}:${sort.dir}`}>Custom</option>}
+        </Select>
         <span className="ml-auto text-xs text-text-3">
           {visible.length} of {rows.length} campaigns
           {inactive > 0 && !q && (

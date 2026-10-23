@@ -59,7 +59,14 @@ export function Menu({ label, icon, sections, variant = "outline", align = "end"
 
   const itemClass = "flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-text hover:bg-surface-2 focus:bg-surface-2 focus:outline-none";
   return (
-    <div ref={ref} className="relative">
+    <div
+      ref={ref}
+      className="relative"
+      // Close when keyboard focus tabs out of the button and menu.
+      onBlur={(e) => {
+        if (open && !ref.current?.contains(e.relatedTarget as Node | null) && e.relatedTarget) setOpen(false);
+      }}
+    >
       <button ref={button} type="button" aria-haspopup="menu" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)} className={buttonVariants({ variant })}>
         {icon}
         {label}
