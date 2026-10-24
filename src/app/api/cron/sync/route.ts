@@ -10,18 +10,14 @@ import { sendDueScheduledReports } from "@/server/scheduled-reports";
 // Syncs due accounts, then evaluates alerts and sends any due daily summaries
 // and scheduled client reports.
 export const maxDuration = 300;
+/** Stop starting new data-source syncs this long after the run began (one asset in progress may still finish). */
+const DATA_SYNC_BUDGET_MS = 200_000;
 
 async function run(req: NextRequest) {
   if (!cronAuthorized(req.headers.get("authorization"))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const started = Date.now();
   const results = await syncDueAccounts();
   const count = (s: string) => results.filter((r) => r.status === s).length;
-  let dataSources: unknown;
-  try {
-    const d = await syncDueDataAssets();
-    dataSources = { synced: d.length, failed: d.filter((r) => r.status === "FAILED").map((r) => ({ assetId: r.assetId, error: r.error })) };
-  } catch (e) {
-    dataSources = { error: (e as Error).message };
-  }
   let alerts: unknown;
   try {
     alerts = await runAllAlerts();
@@ -33,6 +29,16 @@ async function run(req: NextRequest) {
     scheduledReports = await sendDueScheduledReports();
   } catch (e) {
     scheduledReports = { error: (e as Error).message };
+  }
+  // Non-ad data sources run last, within what is left of maxDuration, so a large
+  // first backfill never delays (or times out) ad sync, alerts and reports.
+  // Assets not reached are picked up on the next run.
+  let dataSources: unknown;
+  try {
+    const d = await syncDueDataAssets({ deadline: started + DATA_SYNC_BUDGET_MS });
+    dataSources = { synced: d.length, failed: d.filter((r) => r.status === "FAILED").map((r) => ({ assetId: r.assetId, error: r.error })) };
+  } catch (e) {
+    dataSources = { error: (e as Error).message };
   }
   return NextResponse.json({
     scheduledReports,

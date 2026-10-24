@@ -28,20 +28,44 @@ export async function writeMetricRows(assetId: string, clientId: string, from: I
   return clean.length;
 }
 
+/**
+ * Assets being synced in this process. The in-process scheduler, /api/cron/sync
+ * and the after() syncs started by link/rank actions can otherwise run the same
+ * asset at once (double API spend, e.g. duplicate DataForSEO tasks).
+ */
+function inFlight(): Set<string> {
+  const g = globalThis as { __pmDataSyncInFlight?: Set<string> };
+  return (g.__pmDataSyncInFlight ??= new Set());
+}
+
 export async function syncDataAsset(assetId: string, opts: { force?: boolean; now?: Date } = {}): Promise<DataSyncResult> {
+  const running = inFlight();
+  if (running.has(assetId)) return { assetId, status: "SKIPPED", rows: 0, error: "Already syncing." };
+  running.add(assetId);
+  try {
+    return await syncDataAssetOnce(assetId, opts);
+  } finally {
+    running.delete(assetId);
+  }
+}
+
+async function syncDataAssetOnce(assetId: string, opts: { now?: Date }): Promise<DataSyncResult> {
   const asset = await prisma.dataAsset.findUnique({ where: { id: assetId }, include: { connection: true, client: { select: { timezone: true, archivedAt: true } } } });
   if (!asset || !asset.connection || asset.client.archivedAt) return { assetId, status: "SKIPPED", rows: 0 };
+  // "Don't monitor" / paused rank projects and disconnected logins never sync (no API spend).
+  if (asset.status === "DISCONNECTED" || asset.connection.status === "DISCONNECTED") return { assetId, status: "SKIPPED", rows: 0 };
   const adapter = getDataSourceAdapter(asset.connection.provider);
   if (!adapter) return { assetId, status: "SKIPPED", rows: 0, error: "No adapter for this source yet." };
   const now = opts.now ?? new Date();
   await prisma.dataAsset.update({ where: { id: assetId }, data: { lastSyncAttemptAt: now } });
-  const tz = asset.timezone ?? asset.client.timezone;
-  const to = todayInTimeZone(tz, now);
-  const win = adapter.windowFor?.(asset) ?? {};
-  const refetchDays = win.refetchDays ?? adapter.refetchDays ?? 3;
-  const backfillDays = win.backfillDays ?? adapter.backfillDays ?? 395;
-  const from = asset.dataCompleteThrough ? addDays(dateToIso(asset.dataCompleteThrough), -refetchDays) : addDays(to, -backfillDays);
   try {
+    // Inside the try: a bad stored time zone must fail this asset only, not the whole run.
+    const tz = asset.timezone ?? asset.client.timezone;
+    const to = todayInTimeZone(tz, now);
+    const win = adapter.windowFor?.(asset) ?? {};
+    const refetchDays = win.refetchDays ?? adapter.refetchDays ?? 3;
+    const backfillDays = win.backfillDays ?? adapter.backfillDays ?? 395;
+    const from = asset.dataCompleteThrough ? addDays(dateToIso(asset.dataCompleteThrough), -refetchDays) : addDays(to, -backfillDays);
     const accessToken = await dataSourceAccessToken(asset.connection, adapter);
     const secret = readSecret(asset.connection);
     let rows = 0;
@@ -57,24 +81,43 @@ export async function syncDataAsset(assetId: string, opts: { force?: boolean; no
     await prisma.dataAsset.update({ where: { id: assetId }, data: { lastSuccessfulSyncAt: new Date(), dataCompleteThrough: isoToDate(addDays(to, -1)), status: "ACTIVE", lastError: null } });
     return { assetId, status: "SUCCEEDED", rows };
   } catch (e) {
-    const msg = (e as Error).message ?? String(e);
+    const msg = (e as Error)?.message ?? String(e);
     const auth = /invalid_grant|unauthori[sz]ed|401|revoked|expired/i.test(msg);
     if (auth) await markDataSourceNeedsReauth(asset.connection.id, msg);
     await prisma.dataAsset.update({ where: { id: assetId }, data: { lastError: msg.slice(0, 500), ...(auth ? { status: "NEEDS_REAUTH" as const } : {}) } });
-    return { assetId, status: "FAILED", rows: 0, error: msg };
+    return { assetId, status: "FAILED", rows: 0, error: msg.slice(0, 500) };
   }
 }
 
-export async function syncDueDataAssets(opts: { now?: Date; limit?: number } = {}): Promise<DataSyncResult[]> {
+/**
+ * Syncs assets that are due, oldest attempt first. `deadline` (epoch ms): no
+ * new asset starts after it, so a large first backfill can't hold up the
+ * caller's other work or run past a request time limit; the rest are picked
+ * up next hour. Each asset is claimed atomically, so two runners (in-process
+ * scheduler and /api/cron/sync, or two instances) don't sync it twice.
+ */
+export async function syncDueDataAssets(opts: { now?: Date; limit?: number; deadline?: number } = {}): Promise<DataSyncResult[]> {
   const now = opts.now ?? new Date();
   const cutoff = new Date(now.getTime() - DATA_SYNC_INTERVAL_MS);
+  const dueWhere = { OR: [{ lastSyncAttemptAt: null }, { lastSyncAttemptAt: { lt: cutoff } }] };
   const due = await prisma.dataAsset.findMany({
-    where: { status: { not: "DISCONNECTED" }, connection: { status: "ACTIVE" }, client: { archivedAt: null }, OR: [{ lastSyncAttemptAt: null }, { lastSyncAttemptAt: { lt: cutoff } }] },
+    where: { status: { not: "DISCONNECTED" }, connection: { status: "ACTIVE" }, client: { archivedAt: null }, ...dueWhere },
     select: { id: true },
     orderBy: { lastSyncAttemptAt: { sort: "asc", nulls: "first" } },
     take: opts.limit ?? 200,
   });
   const out: DataSyncResult[] = [];
-  for (const a of due) out.push(await syncDataAsset(a.id, { now }));
+  for (const a of due) {
+    if (opts.deadline !== undefined && Date.now() >= opts.deadline) break;
+    try {
+      const startedAt = new Date();
+      const claimed = await prisma.dataAsset.updateMany({ where: { id: a.id, ...dueWhere }, data: { lastSyncAttemptAt: startedAt } });
+      if (claimed.count === 0) continue; // another runner took it
+      out.push(await syncDataAsset(a.id, { now: startedAt }));
+    } catch (e) {
+      // One asset (or a DB hiccup) never stops the rest.
+      out.push({ assetId: a.id, status: "FAILED", rows: 0, error: ((e as Error)?.message ?? String(e)).slice(0, 500) });
+    }
+  }
   return out;
 }

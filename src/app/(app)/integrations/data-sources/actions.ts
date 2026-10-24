@@ -88,7 +88,7 @@ export async function linkDataAssets(connectionId: string, _prev: LinkAssetsStat
   // History import runs after the response is sent.
   if (toSync.length) {
     after(async () => {
-      for (const id of toSync) await syncDataAsset(id, { force: true });
+      for (const id of toSync) await syncDataAsset(id).catch((e) => console.error("[data-sources] initial sync failed", id, (e as Error)?.message));
     });
   }
   revalidatePath("/integrations", "layout");
