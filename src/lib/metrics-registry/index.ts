@@ -7,6 +7,7 @@ import * as ga4 from "./ga4";
 import * as gbp from "./gbp";
 import * as gsc from "./gsc";
 import * as instagram from "./instagram";
+import * as rank from "./rank";
 
 // --- source registrations (one line each) ---
 const SOURCES: { metrics: MetricDef[]; dimensions?: DimensionDef[] }[] = [
@@ -16,6 +17,7 @@ const SOURCES: { metrics: MetricDef[]; dimensions?: DimensionDef[] }[] = [
   gbp,
   gsc,
   instagram,
+  rank,
 ];
 // --- end source registrations ---
 

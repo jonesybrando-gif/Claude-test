@@ -6,6 +6,7 @@ import { facebookTemplate } from "./facebook";
 import { ga4Template } from "./ga4";
 import { gbpTemplate } from "./gbp";
 import { instagramTemplate } from "./instagram";
+import { rankingsTemplate } from "./rankings";
 import { seoTemplate } from "./seo";
 
 export interface DashboardTemplateDef {
@@ -23,5 +24,6 @@ export const DASHBOARD_TEMPLATES: DashboardTemplateDef[] = [
   ga4Template,
   gbpTemplate,
   instagramTemplate,
+  rankingsTemplate,
   seoTemplate,
 ];

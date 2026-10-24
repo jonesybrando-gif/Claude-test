@@ -98,6 +98,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                     { href: `${base}/campaigns?${rangeQs}`, label: "Campaigns", hint: "Choose which campaigns count", icon: <ListChecks className="h-4 w-4" /> },
                     { href: `${base}/budgets`, label: "Budgets", hint: "Monthly budgets and pacing rules", icon: <Wallet className="h-4 w-4" /> },
                     { href: `${base}/report`, label: "Customize report", hint: "KPIs and sections the client sees", icon: <FileSliders className="h-4 w-4" /> },
+                    { href: `${base}/rankings`, label: "Keyword rankings", hint: "Daily Google positions (DataForSEO)", icon: <ListChecks className="h-4 w-4" /> },
                   ],
                 },
               ]}
