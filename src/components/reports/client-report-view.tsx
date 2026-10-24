@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { ClientReport } from "@/server/client-report";
 import { ExecutiveSummary } from "./executive-summary";
 import { BudgetLinesCard, CampaignsSection, HistorySection, KpiSection, NoteSection, PacingSection, PlatformSection, TrendsSection } from "./report-sections";
@@ -8,7 +9,8 @@ import { BudgetLinesCard, CampaignsSection, HistorySection, KpiSection, NoteSect
  * expands, then the detail. Only sections the report template includes are
  * shown, and nothing internal (recommendations, sync errors, setup links).
  */
-export function ClientReportView({ rep, basePath, query }: { rep: ClientReport; basePath: string; query: Record<string, string | undefined> }) {
+/** `afterSummary`: extra sections (client-visible custom dashboards) placed after the KPI and summary sections. */
+export function ClientReportView({ rep, basePath, query, afterSummary }: { rep: ClientReport; basePath: string; query: Record<string, string | undefined>; afterSummary?: ReactNode }) {
   const on = rep.template.sections;
   return (
     <>
@@ -16,6 +18,7 @@ export function ClientReportView({ rep, basePath, query }: { rep: ClientReport; 
       {on.trends && <TrendsSection rep={rep} metrics={rep.template.trendKpis.length ? rep.template.trendKpis : undefined} title="Trend" />}
       {on.executive && <ExecutiveSummary rep={rep} compact title="Summary" />}
       {on.summary && <NoteSection rep={rep} />}
+      {afterSummary}
       {on.pacing && <PacingSection rep={rep} staff={false} basePath={basePath} query={query} showLines={false} />}
       {/* Detail tables last. */}
       {on.campaigns && <CampaignsSection rep={rep} staff={false} basePath={basePath} />}
