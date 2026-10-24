@@ -1,6 +1,7 @@
 import { LoginForm } from "./login-form";
 import { site } from "@/lib/site";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BrandMark } from "@/components/brand-mark";
 
 // Rendered per request so SHOW_DEMO_LOGINS can be toggled without a rebuild.
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">{site.appName}</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-lg"><BrandMark className="h-7 w-7" />{site.appName}</CardTitle>
             <CardDescription>Sign in to your agency workspace</CardDescription>
           </CardHeader>
           <CardContent>
