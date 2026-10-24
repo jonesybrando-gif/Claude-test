@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { site } from "@/lib/site";
+import { BrandMark } from "@/components/brand-mark";
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-bg">
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-[960px] flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6">
-          <Link href="/" className="text-sm font-semibold">{site.appName}</Link>
+          <Link href="/" className="flex items-center gap-2 text-sm font-semibold"><BrandMark className="h-6 w-6" />{site.appName}</Link>
           <nav className="flex items-center gap-4 text-sm text-text-2" aria-label="Site">
             <Link href="/privacy" className="hover:text-text">Privacy</Link>
             <Link href="/terms" className="hover:text-text">Terms</Link>
