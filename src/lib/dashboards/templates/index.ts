@@ -2,8 +2,10 @@
 // adds ONE import and ONE entry (alphabetical). See ../types.ts for widgets.
 import type { DashboardWidget } from "../types";
 import { callrailTemplate } from "./callrail";
+import { facebookTemplate } from "./facebook";
 import { ga4Template } from "./ga4";
 import { gbpTemplate } from "./gbp";
+import { instagramTemplate } from "./instagram";
 import { seoTemplate } from "./seo";
 
 export interface DashboardTemplateDef {
@@ -17,7 +19,9 @@ export interface DashboardTemplateDef {
 
 export const DASHBOARD_TEMPLATES: DashboardTemplateDef[] = [
   callrailTemplate,
+  facebookTemplate,
   ga4Template,
   gbpTemplate,
+  instagramTemplate,
   seoTemplate,
 ];

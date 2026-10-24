@@ -2,8 +2,10 @@
 import type { ComponentType } from "react";
 import { CallRailCard } from "./callrail-card";
 import { GoogleDataSourceCard } from "./google-card";
+import { MetaOrganicCard } from "./meta-organic-card";
 
 export const DATA_SOURCE_CARDS: { key: string; Card: ComponentType }[] = [
   { key: "callrail", Card: CallRailCard },
   { key: "google", Card: GoogleDataSourceCard },
+  { key: "meta-organic", Card: MetaOrganicCard },
 ];
