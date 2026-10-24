@@ -1,0 +1,87 @@
+// Keyword rank tracking (DataForSEO) daily summaries. Written once per day per
+// rank project by src/server/data-sources/dataforseo. Per-keyword positions
+// live in KeywordRank (read via src/server/metrics/rankings.ts), not here.
+// Counts are of tracked checks: a keyword tracked on desktop and mobile counts twice.
+import type { MetricDef } from "./types";
+
+export const metrics: MetricDef[] = [
+  {
+    key: "rank.avgPosition",
+    source: "rank",
+    label: "Average keyword position",
+    short: "Avg position",
+    format: "position",
+    aggregation: "weighted",
+    ratioOf: { numerator: "rank.positionSum", denominator: "rank.rankedCount" },
+    better: "down",
+    description: "Average Google organic position of tracked keywords that rank in the top 100 (lower is better).",
+  },
+  {
+    key: "rank.positionSum",
+    source: "rank",
+    label: "Sum of keyword positions",
+    format: "count",
+    aggregation: "sum",
+    better: "neutral",
+    description: "Sum of positions of ranked keywords; used to compute the average position over any range.",
+  },
+  {
+    key: "rank.rankedCount",
+    source: "rank",
+    label: "Keyword checks ranked",
+    format: "count",
+    aggregation: "sum",
+    better: "up",
+    description: "Number of keyword checks that found the site in the top 100; used to compute the average position.",
+  },
+  {
+    key: "rank.top3",
+    source: "rank",
+    label: "Keywords in top 3",
+    short: "Top 3",
+    format: "count",
+    aggregation: "last",
+    better: "up",
+    description: "Tracked keywords ranking in positions 1-3 on the latest day.",
+  },
+  {
+    key: "rank.top10",
+    source: "rank",
+    label: "Keywords in top 10",
+    short: "Top 10",
+    format: "count",
+    aggregation: "last",
+    better: "up",
+    description: "Tracked keywords ranking on page one (positions 1-10) on the latest day.",
+  },
+  {
+    key: "rank.top20",
+    source: "rank",
+    label: "Keywords in top 20",
+    short: "Top 20",
+    format: "count",
+    aggregation: "last",
+    better: "up",
+    description: "Tracked keywords ranking in positions 1-20 on the latest day.",
+  },
+  {
+    key: "rank.top100",
+    source: "rank",
+    label: "Keywords in top 100",
+    short: "Top 100",
+    format: "count",
+    aggregation: "last",
+    better: "up",
+    description: "Tracked keywords ranking anywhere in the top 100 on the latest day.",
+  },
+  {
+    key: "rank.tracked",
+    source: "rank",
+    label: "Keywords tracked",
+    short: "Tracked",
+    format: "count",
+    aggregation: "last",
+    better: "neutral",
+    description: "Keyword checks tracked per day (keywords x devices).",
+  },
+];
