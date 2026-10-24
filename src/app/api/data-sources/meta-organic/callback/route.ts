@@ -57,6 +57,10 @@ export async function GET(req: NextRequest) {
     ? await prisma.dataSourceConnection.update({ where: { id: existing.id }, data: { label }, select: { id: true } })
     : await prisma.dataSourceConnection.create({ data: { agencyId: user.agencyId, provider: "META_ORGANIC", label, externalId: fbUser.id, createdById: user.id }, select: { id: true } });
   await storeDataSourceTokens(connection.id, { accessToken: tokens.accessToken, expiresAt: tokens.expiresAt, scopes: fbUser.granted.join(",") || null });
+  if (existing) {
+    // Pages/accounts paused by a disconnect or an expired token resume (ones set to "Don't monitor" stay off).
+    await prisma.dataAsset.updateMany({ where: { connectionId: connection.id, status: "NEEDS_REAUTH" }, data: { status: "ACTIVE", lastError: null } });
+  }
 
   const res = NextResponse.redirect(publicUrl(`/integrations/data-sources/${connection.id}`, req.url));
   res.cookies.delete({ name: OAUTH_NONCE_COOKIE, path: META_ORGANIC_COOKIE_PATH });

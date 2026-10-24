@@ -7,7 +7,7 @@ import { GOOGLE_DS_CALLBACK_PATH, GOOGLE_DS_STATE_PLATFORM, googleAuthorizationU
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user || user.role !== "AGENCY_ADMIN") return NextResponse.json({ error: "Only agency administrators can connect data sources" }, { status: 403 });
-  if (!googleOAuthClient()) return NextResponse.redirect(publicUrl(`/integrations?error=${encodeURIComponent("Google OAuth is not configured on the server (GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET).")}`, req.url));
+  if (!googleOAuthClient()) return NextResponse.redirect(publicUrl(`/integrations?error=${encodeURIComponent("Google OAuth is not configured on the server (GOOGLE_DATA_CLIENT_ID / GOOGLE_DATA_CLIENT_SECRET).")}`, req.url));
   const { state, nonce, maxAge } = await createOAuthState(user.id, user.agencyId, GOOGLE_DS_STATE_PLATFORM);
   const res = NextResponse.redirect(googleAuthorizationUrl(state, redirectUri(GOOGLE_DS_CALLBACK_PATH, req.url)));
   res.cookies.set(OAUTH_NONCE_COOKIE, nonce, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge, path: "/api/data-sources/google" });

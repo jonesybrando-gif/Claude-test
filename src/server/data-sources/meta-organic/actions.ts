@@ -16,7 +16,8 @@ export async function disconnectMetaOrganic(connectionId: string): Promise<void>
   if (!c) throw new Error("Connection not found");
   await prisma.$transaction([
     prisma.dataSourceConnection.update({ where: { id: c.id }, data: { status: "DISCONNECTED", encryptedAccessToken: null, encryptedRefreshToken: null, accessTokenExpiresAt: null, lastError: null } }),
-    prisma.dataAsset.updateMany({ where: { connectionId: c.id }, data: { status: "DISCONNECTED" } }),
+    // Paused, not unlinked: reconnecting the same Facebook user resumes them (assets set to "Don't monitor" stay off).
+    prisma.dataAsset.updateMany({ where: { connectionId: c.id, status: "ACTIVE" }, data: { status: "NEEDS_REAUTH", lastError: "The login was disconnected." } }),
   ]);
   revalidatePath("/integrations");
 }
