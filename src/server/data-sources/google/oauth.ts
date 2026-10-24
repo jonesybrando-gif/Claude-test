@@ -3,8 +3,9 @@ import type { FetchLike } from "./http";
 import { googleScopes } from "./modules";
 
 // OAuth for the GOOGLE data-source login (GA4, Search Console, Business
-// Profile). Reuses the Google Ads OAuth client (GOOGLE_ADS_CLIENT_ID/SECRET)
-// but is a separate login with its own scopes and redirect URI.
+// Profile). Uses its own OAuth client (GOOGLE_DATA_CLIENT_ID/SECRET, a
+// separate Cloud project so its scopes never touch the Google Ads app's
+// verification). Falls back to the Google Ads client when those aren't set.
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -17,13 +18,14 @@ export const GOOGLE_DS_STATE_PLATFORM = "DS_GOOGLE";
 export interface GoogleOAuthClient { clientId: string; clientSecret: string }
 
 export function googleOAuthClient(env: NodeJS.ProcessEnv = process.env): GoogleOAuthClient | null {
+  if (env.GOOGLE_DATA_CLIENT_ID && env.GOOGLE_DATA_CLIENT_SECRET) return { clientId: env.GOOGLE_DATA_CLIENT_ID, clientSecret: env.GOOGLE_DATA_CLIENT_SECRET };
   if (missingGoogleAdsEnv(env).length) return null;
   return { clientId: env.GOOGLE_ADS_CLIENT_ID!, clientSecret: env.GOOGLE_ADS_CLIENT_SECRET! };
 }
 
 function requireClient(c?: GoogleOAuthClient | null): GoogleOAuthClient {
   const client = c ?? googleOAuthClient();
-  if (!client) throw new Error("Google OAuth is not configured on the server (GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET).");
+  if (!client) throw new Error("Google OAuth is not configured on the server (GOOGLE_DATA_CLIENT_ID / GOOGLE_DATA_CLIENT_SECRET).");
   return client;
 }
 

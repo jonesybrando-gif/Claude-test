@@ -47,7 +47,7 @@ describe("GA4 response mapping", () => {
   it("maps a breakdown report to metric rows with derived bounced sessions", () => {
     const rows = ga4RowsToMetricRows(parseGa4Report(report, "sessionDefaultChannelGroup"), "channel");
     expect(rows).toContainEqual({ date: "2026-10-20", metric: "ga4.sessions", value: 100, dimension: "channel", dimensionValue: "Organic Search" });
-    expect(rows).toContainEqual({ date: "2026-10-20", metric: "ga4.totalRevenue", value: 12.5, dimension: "channel", dimensionValue: "Organic Search" });
+    expect(rows).toContainEqual({ date: "2026-10-20", metric: "ga4.totalRevenue", value: 1250, dimension: "channel", dimensionValue: "Organic Search" });
     expect(rows).toContainEqual({ date: "2026-10-20", metric: "ga4.bouncedSessions", value: 30, dimension: "channel", dimensionValue: "Direct" });
     expect(rows).toHaveLength(8);
     for (const r of rows) expect(isMetricKey(r.metric)).toBe(true);
@@ -200,5 +200,13 @@ describe("GA4 dashboard template", () => {
     const t = DASHBOARD_TEMPLATES.find((x) => x.key === "ga4-overview")!;
     expect(t).toBeTruthy();
     for (const w of t.widgets) for (const k of w.metrics ?? []) expect(isMetricKey(k)).toBe(true);
+  });
+});
+
+describe("googleOAuthClient", () => {
+  it("prefers the dedicated data-source client and falls back to the Google Ads client", async () => {
+    const { googleOAuthClient } = await import("../oauth");
+    expect(googleOAuthClient({ GOOGLE_DATA_CLIENT_ID: "d", GOOGLE_DATA_CLIENT_SECRET: "ds", GOOGLE_ADS_CLIENT_ID: "a", GOOGLE_ADS_CLIENT_SECRET: "as" } as unknown as NodeJS.ProcessEnv)).toEqual({ clientId: "d", clientSecret: "ds" });
+    expect(googleOAuthClient({ GOOGLE_ADS_CLIENT_ID: "a", GOOGLE_ADS_CLIENT_SECRET: "as" } as unknown as NodeJS.ProcessEnv)).toEqual({ clientId: "a", clientSecret: "as" });
   });
 });

@@ -20,6 +20,9 @@ import { deleteChartNoteAction } from "./notes-actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SectionSkeleton } from "@/components/ui/skeleton";
 import { ExecutiveSummary } from "@/components/reports/executive-summary";
+import { ClientDashboardsTab } from "@/components/dashboards/client-dashboards-tab";
+import { ClientFacingDashboards } from "@/components/dashboards/dashboard-section";
+import { listClientDashboards } from "@/server/dashboards/access";
 import { CampaignsSection, DataFreshness, hiddenMarker, HistorySection, KpiSection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +31,7 @@ const TABS = [
   { key: "overview", label: "Overview" },
   { key: "campaigns", label: "Campaigns" },
   { key: "trends", label: "Trends" },
+  { key: "dashboards", label: "Dashboards" },
   { key: "insights", label: "Insights" },
   { key: "setup", label: "Setup" },
 ] as const;
@@ -140,7 +144,11 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         {header}
         <Suspense fallback={<SectionSkeleton tiles={6} cards={2} />}>
           <WithReport report={full}>
-            {(rep) => (client.accounts.length === 0 ? <NoAccountsState rep={rep} staff={false} /> : <ClientReportView rep={rep} basePath={base} query={sp} />)}
+            {(rep) => {
+              // Client logins also see their client-visible custom dashboards after the KPI and summary sections.
+              const dashboards = <ClientFacingDashboards dashboards={listClientDashboards(user, id)} rep={rep} staff={false} basePath={base} query={sp} />;
+              return client.accounts.length === 0 ? <><NoAccountsState rep={rep} staff={false} />{dashboards}</> : <ClientReportView rep={rep} basePath={base} query={sp} afterSummary={dashboards} />;
+            }}
           </WithReport>
         </Suspense>
       </div>
@@ -219,6 +227,12 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             <WithReport report={full}>{(rep) => <HistorySection rep={rep} marker={mark("history")} />}</WithReport>
           </Suspense>
         </>
+      )}
+
+      {tab === "dashboards" && (
+        <Suspense fallback={<SectionSkeleton tiles={6} cards={2} tallFirst={false} />}>
+          <WithReport report={full}>{(rep) => <ClientDashboardsTab rep={rep} user={user} canEdit={canEdit} query={sp} />}</WithReport>
+        </Suspense>
       )}
 
       {tab === "insights" && (

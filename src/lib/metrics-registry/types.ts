@@ -6,6 +6,7 @@
 
 export type MetricSource = "ads" | "ga4" | "gsc" | "gbp" | "callrail" | "facebook" | "instagram" | "rank";
 
+/** "money" values are stored in minor units (cents), like ad spend. "duration" is seconds. */
 export type MetricFormat = "count" | "money" | "pct" | "duration" | "position" | "ratio";
 
 /**

@@ -55,7 +55,8 @@ export function parseGa4Report(report: Ga4Report, apiDimension?: string): Parsed
     const metrics: Record<string, number> = {};
     mets.forEach((m, i) => {
       const n = Number(r.metricValues?.[i]?.value ?? 0);
-      metrics[m] = Number.isFinite(n) ? n : 0;
+      // Money metrics are stored in minor units (cents), like ad spend.
+      metrics[m] = !Number.isFinite(n) ? 0 : m === "totalRevenue" ? Math.round(n * 100) : n;
     });
     return { date: ga4Date(r.dimensionValues?.[di]?.value ?? ""), value: vi >= 0 ? r.dimensionValues?.[vi]?.value ?? "" : "", metrics };
   });
