@@ -5,7 +5,7 @@ import type { PacingRow } from "@/server/pacing-service";
 import type { ClientReport } from "@/server/client-report";
 import { PRESET_LABEL } from "@/lib/date-ranges";
 import { derive, type MetricTotals } from "@/lib/metrics";
-import { dailyKpiValue, KPI_BY_KEY, kpiValues, type KpiKey } from "@/lib/kpis";
+import { ALL_KPI_KEYS, dailyKpiValue, kpiValues, type KpiKey, type KpiValue } from "@/lib/kpis";
 import type { SectionKey } from "@/lib/report-template";
 import { formatMoney, formatNumber, formatPct } from "@/lib/money";
 import { formatDate, relativeTime } from "@/lib/time";
@@ -14,7 +14,8 @@ import { formatCustomerId } from "@/server/integrations/google-ads/gaql";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { KpiCard } from "@/components/kpi/kpi-card";
+import { KpiCard, kpiNote } from "@/components/kpi/kpi-card";
+import { KpiEditor } from "./kpi-editor";
 import { NoBudgetBadge, NotConnectedBadge, StaleBadge, StatusBadge } from "@/components/status-badge";
 import { PlatformLabel } from "@/components/platform-badge";
 import { PacingChart } from "@/components/charts/pacing-chart";
@@ -40,16 +41,32 @@ export function hiddenMarker(rep: Pick<ClientReport, "template">, staff: boolean
   };
 }
 
-export function KpiSection({ rep, marker }: { rep: ClientReport; marker?: ReactNode }) {
+/** `editable` (staff who may edit the client) adds the inline "Edit KPIs" editor. */
+export function KpiSection({ rep, marker, editable = false }: { rep: ClientReport; marker?: ReactNode; editable?: boolean }) {
   const { template, perf, cmpPerf, client } = rep;
   const t = perf.totals;
-  const kvs = kpiValues(template.kpis, t, cmpPerf?.totals ?? null);
+  // The editor previews any catalogue KPI, so it gets every value; the static view only the chosen ones.
+  const kvs = kpiValues(editable ? ALL_KPI_KEYS : template.kpis, t, cmpPerf?.totals ?? null);
+  const trend = (k: KpiKey) => perf.byDate.map((d) => dailyKpiValue(d, k));
   return (
     <section aria-label="Key metrics" className="flex flex-col gap-2">
-      {marker}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {kvs.map((kv) => <KpiCard key={kv.key} kv={kv} currency={client.currency} trend={perf.byDate.map((d) => dailyKpiValue(d, kv.key))} note={kv.value === null && KPI_BY_KEY[kv.key].kind !== "count" ? "not reported" : undefined} />)}
-      </div>
+      {editable ? (
+        <KpiEditor
+          clientId={client.id}
+          kpis={template.kpis}
+          values={Object.fromEntries(kvs.map((kv) => [kv.key, kv])) as Record<KpiKey, KpiValue>}
+          trends={Object.fromEntries(ALL_KPI_KEYS.map((k) => [k, trend(k)])) as Record<KpiKey, (number | null)[]>}
+          currency={client.currency}
+          marker={marker}
+        />
+      ) : (
+        <>
+          {marker}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            {kvs.map((kv) => <KpiCard key={kv.key} kv={kv} currency={client.currency} trend={trend(kv.key)} note={kpiNote(kv)} />)}
+          </div>
+        </>
+      )}
       {t.hasEstimatedCost && <p className="text-xs text-warning-ink">Spend includes estimated Local Services cost.</p>}
       {noActivity(rep) && client.accounts.length > 0 && <p className="text-xs text-text-3">No advertising activity was recorded from {formatDate(rep.range.from)} to {formatDate(rep.range.to)}. Try a different date range, or check the accounts under Setup.</p>}
     </section>

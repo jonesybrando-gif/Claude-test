@@ -12,6 +12,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { DemoBadge } from "@/components/status-badge";
 import { ClientReportView } from "@/components/reports/client-report-view";
 import { DataFreshness, NoAccountsState } from "@/components/reports/report-sections";
+import { ClientFacingDashboards } from "@/components/dashboards/dashboard-section";
+import { sharedReportDashboards } from "@/server/dashboards/access";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +86,12 @@ export default async function SharedReportPage({ params, searchParams }: { param
             <Download className="h-4 w-4" aria-hidden /> Download PDF
           </a>
         </div>
-        {client.accounts.length === 0 ? <NoAccountsState rep={rep} staff={false} /> : <ClientReportView rep={rep} basePath={`/r/${token}`} query={{ line: sp.line }} />}
+        {/* Only the link client's client-visible dashboards, after the KPI and summary sections. */}
+        {client.accounts.length === 0 ? (
+          <><NoAccountsState rep={rep} staff={false} /><ClientFacingDashboards dashboards={sharedReportDashboards(link.clientId)} rep={rep} staff={false} basePath={`/r/${token}`} query={{ line: sp.line }} /></>
+        ) : (
+          <ClientReportView rep={rep} basePath={`/r/${token}`} query={{ line: sp.line }} afterSummary={<ClientFacingDashboards dashboards={sharedReportDashboards(link.clientId)} rep={rep} staff={false} basePath={`/r/${token}`} query={{ line: sp.line }} />} />
+        )}
         <footer className="border-t border-border pt-4 text-xs text-text-3">
           {agency.reportFooter && <p className="mb-1">{agency.reportFooter}</p>}
           <p>Prepared by {agency.name}. Figures are as reported by each ad platform; today&apos;s partial data is excluded.</p>

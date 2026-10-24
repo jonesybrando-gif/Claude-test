@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TEMPLATE, parseTemplate, templateFromForm } from "../report-template";
+import { DEFAULT_TEMPLATE, MAX_KPIS, parseKpiOrder, parseTemplate, templateFromForm, withKpis } from "../report-template";
+import { ALL_KPI_KEYS } from "../kpis";
 
 function form(entries: [string, string][]) {
   return { getAll: (k: string) => entries.filter(([a]) => a === k).map(([, v]) => v), get: (k: string) => entries.find(([a]) => a === k)?.[1] ?? null };
@@ -46,5 +47,25 @@ describe("report templates", () => {
     expect(templateFromForm(form([["title", "x"]])).problems).toContain("Choose at least one KPI.");
     const tooMany = templateFromForm(form(["spend", "clicks", "ctr", "leads"].map((k) => ["trendKpis", k] as [string, string]).concat([["kpis", "spend"]])));
     expect(tooMany.problems).toContain("Choose at most 3 trend charts.");
+  });
+});
+
+describe("inline KPI editing", () => {
+  it("accepts an ordered list of known, distinct KPIs", () => {
+    expect(parseKpiOrder(["roas", "spend", "leads"])).toEqual({ kpis: ["roas", "spend", "leads"] });
+    expect(parseKpiOrder(ALL_KPI_KEYS.slice(0, MAX_KPIS))).toEqual({ kpis: ALL_KPI_KEYS.slice(0, MAX_KPIS) });
+  });
+
+  it("rejects empty, oversized, unknown, duplicate and non-array input instead of quietly fixing it", () => {
+    for (const bad of [[], ALL_KPI_KEYS.slice(0, MAX_KPIS + 1), ["spend", "bogus"], ["spend", "spend"], [1], "spend", null, { 0: "spend" }]) {
+      expect(parseKpiOrder(bad)).toHaveProperty("error");
+    }
+  });
+
+  it("replaces only the KPI list and keeps every other template field", () => {
+    const t = parseTemplate({ title: "Monthly review", kpis: ["spend", "clicks"], trendKpis: ["leads"], sections: { pacing: false }, summary: "Hi", executiveAi: false, defaultRange: "last_30", compare: "none" });
+    const next = withKpis(t, ["leads", "spend"]);
+    expect(next.kpis).toEqual(["leads", "spend"]);
+    expect({ ...next, kpis: t.kpis }).toEqual(t);
   });
 });

@@ -1,5 +1,6 @@
 import "server-only";
 import { syncDueAccounts } from "./sync/sync-account";
+import { syncDueDataAssets } from "./data-sources/sync";
 import { runAllAlerts } from "./alerts";
 import { sendDueScheduledReports } from "./scheduled-reports";
 
@@ -9,6 +10,7 @@ import { sendDueScheduledReports } from "./scheduled-reports";
 // with it on.
 
 const HOUR = 3_600_000;
+const DATA_SYNC_BUDGET_MS = 45 * 60_000;
 let running = false;
 
 async function tick() {
@@ -23,6 +25,15 @@ async function tick() {
     console.log(`[scheduler] synced ${results.length} account(s), ${failed} failed, alerts checked, ${reports.filter((r) => r.sent > 0).length} scheduled report(s) sent (${Math.round((Date.now() - started) / 1000)}s)`);
   } catch (e) {
     console.error("[scheduler] run failed", e);
+  }
+  // Non-ad data sources run after ad sync, alerts and reports (and even when
+  // those failed), with a time budget so a large backfill can't hold the
+  // `running` flag into the next hour's tick.
+  try {
+    const data = await syncDueDataAssets({ deadline: started + DATA_SYNC_BUDGET_MS });
+    if (data.length) console.log(`[scheduler] synced ${data.length} data source(s), ${data.filter((r) => r.status === "FAILED").length} failed`);
+  } catch (e) {
+    console.error("[scheduler] data source sync failed", e);
   } finally {
     running = false;
   }

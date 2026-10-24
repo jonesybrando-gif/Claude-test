@@ -52,6 +52,8 @@ model Agency {
   platformConnections PlatformConnection[]
   alerts            Alert[]
   reports           Report[]
+  dataSourceConnections DataSourceConnection[]
+  dashboards            Dashboard[]
 }
 
 enum Role {
@@ -177,6 +179,8 @@ model Client {
   reports     Report[]
   labels      ClientLabel[]
   chartNotes  ChartNote[]
+  dataAssets  DataAsset[]
+  dashboards  Dashboard[]
 
   @@index([agencyId])
 }
@@ -628,4 +632,163 @@ model ReportShareLink {
   passwordHash String?
 
   @@index([clientId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Non-ad data sources (GA4, Search Console, Business Profile, CallRail,
+// Facebook/Instagram organic, rank tracking) and custom dashboards.
+// See src/server/data-sources/README.md for the contract.
+// ---------------------------------------------------------------------------
+
+/// The login/credential kind. One connection can expose several asset kinds
+/// (a Google login exposes GA4 properties, Search Console sites and Business
+/// Profile locations).
+enum DataSourceProvider {
+  GOOGLE       // GA4, Search Console, Business Profile (one OAuth login)
+  META_ORGANIC // Facebook Pages and Instagram business accounts
+  CALLRAIL     // API key
+  DATAFORSEO   // API login + password (rank tracking)
+}
+
+enum DataAssetKind {
+  GA4_PROPERTY
+  GSC_SITE
+  GBP_LOCATION
+  FB_PAGE
+  IG_ACCOUNT
+  CALLRAIL_COMPANY
+  RANK_PROJECT
+}
+
+/// Agency-level credential for a non-ad data source. Secrets are encrypted
+/// with src/server/crypto.ts and only decrypted on the server.
+model DataSourceConnection {
+  id                    String   @id @default(cuid())
+  agencyId              String
+  agency                Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  provider              DataSourceProvider
+  label                 String
+  externalId            String?
+  status                ConnectionStatus @default(ACTIVE)
+  lastError             String?
+  encryptedAccessToken  String?
+  encryptedRefreshToken String?
+  accessTokenExpiresAt  DateTime?
+  /// API key / secret for key-based providers (CallRail, DataForSEO).
+  encryptedSecret       String?
+  scopes                String?
+  createdById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  assets DataAsset[]
+
+  @@index([agencyId, provider])
+}
+
+/// One property / site / location / page / company / rank project, linked to a client.
+model DataAsset {
+  id           String   @id @default(cuid())
+  clientId     String
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  connectionId String?
+  connection   DataSourceConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  kind         DataAssetKind
+  externalId   String
+  name         String
+  timezone     String?
+  /// Provider-specific settings (e.g. GSC site URL form, CallRail account id).
+  settings     Json?
+  status       ConnectionStatus @default(ACTIVE)
+  lastError    String?
+  lastSyncAttemptAt    DateTime?
+  lastSuccessfulSyncAt DateTime?
+  dataCompleteThrough  DateTime? @db.Date
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  metrics  MetricDaily[]
+  keywords TrackedKeyword[]
+
+  @@unique([kind, externalId, clientId])
+  @@index([clientId])
+}
+
+/// Daily metric values for non-ad sources. dimension/dimensionValue are ""
+/// for account-level totals; otherwise e.g. ("channel","Organic Search"),
+/// ("query","dentist near me"), ("page","/contact"), ("source","google").
+/// Metric keys come from src/lib/metrics-registry (e.g. "ga4.sessions").
+model MetricDaily {
+  id             String   @id @default(cuid())
+  assetId        String
+  asset          DataAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  clientId       String
+  date           DateTime @db.Date
+  metric         String
+  dimension      String   @default("")
+  dimensionValue String   @default("")
+  value          Float
+
+  @@unique([assetId, date, metric, dimension, dimensionValue])
+  @@index([clientId, metric, date])
+  @@index([assetId, date])
+}
+
+/// Keyword tracked for exact daily rank (DataForSEO).
+model TrackedKeyword {
+  id           String   @id @default(cuid())
+  assetId      String
+  asset        DataAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  clientId     String
+  keyword      String
+  /// DataForSEO location code (e.g. 2840 = United States) and language.
+  locationCode Int      @default(2840)
+  languageCode String   @default("en")
+  device       String   @default("desktop") // "desktop" | "mobile"
+  targetDomain String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  ranks KeywordRank[]
+
+  @@unique([assetId, keyword, locationCode, device])
+  @@index([clientId])
+}
+
+model KeywordRank {
+  id        String   @id @default(cuid())
+  keywordId String
+  keyword   TrackedKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  /// Organic position, null when not in the checked results.
+  position  Int?
+  url       String?
+  serpFeatures Json?
+  checkedAt DateTime @default(now())
+
+  @@unique([keywordId, date])
+}
+
+/// A custom dashboard (AgencyAnalytics-style). clientId null + isTemplate =
+/// agency template that can be applied to clients. widgets: see
+/// src/lib/dashboards/types.ts (DashboardWidget[]).
+model Dashboard {
+  id          String   @id @default(cuid())
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  clientId    String?
+  client      Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name        String
+  isTemplate  Boolean  @default(false)
+  /// Shown on the client-facing report / to client logins.
+  clientVisible Boolean @default(true)
+  position    Int      @default(0)
+  defaultRange String  @default("last_30")
+  widgets     Json     @default("[]")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([agencyId, isTemplate])
+  @@index([clientId, position])
 }

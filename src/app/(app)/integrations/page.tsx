@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { DisconnectButton } from "./disconnect-button";
 import { TokenConnectForm } from "./token-connect-form";
+import { DATA_SOURCE_CARDS } from "@/components/data-sources/cards";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Integrations" };
@@ -143,6 +144,14 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           );
         })}
       </div>
+      {DATA_SOURCE_CARDS.length > 0 && (
+        <>
+          <h2 className="mt-4 text-sm font-semibold text-text-2">Website, SEO, calls and social</h2>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {DATA_SOURCE_CARDS.map(({ key, Card: SourceCard }) => <SourceCard key={key} />)}
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin, requireClientEdit } from "./access";
 import { prisma } from "./db";
 import { getClientTemplate, resetClientTemplate, saveTemplate } from "./report-templates";
-import { SECTION_KEYS, templateFromForm, type SectionKey } from "@/lib/report-template";
+import { parseKpiOrder, SECTION_KEYS, templateFromForm, withKpis, type SectionKey } from "@/lib/report-template";
 
 export type TemplateFormState = { ok?: string; errors?: string[] } | undefined;
 
@@ -47,4 +47,25 @@ export async function setSectionVisibilityAction(clientId: string, section: Sect
   const { template } = await getClientTemplate(client.agencyId, clientId);
   await saveTemplate(client.agencyId, clientId, { ...template, sections: { ...template.sections, [section]: visible } });
   revalidatePath(`/clients/${clientId}`, "layout");
+}
+
+export type SaveKpisResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Saves the KPI tiles arranged inline on the client page. Replaces only the
+ * template's `kpis`; title, sections, trends and the rest stay as they are.
+ * Same permission check as saving the whole template.
+ */
+export async function saveClientKpisAction(clientId: string, kpis: unknown): Promise<SaveKpisResult> {
+  const user = await requireClientEdit(clientId);
+  const parsed = parseKpiOrder(kpis);
+  if ("error" in parsed) return { ok: false, error: parsed.error };
+  const client = await prisma.client.findUniqueOrThrow({ where: { id: clientId }, select: { agencyId: true } });
+  if (client.agencyId !== user.agencyId) return { ok: false, error: "Client not found." };
+  const { template } = await getClientTemplate(client.agencyId, clientId);
+  await saveTemplate(client.agencyId, clientId, withKpis(template, parsed.kpis));
+  // The client page (Overview), its PDF route and shared links all read the saved template.
+  revalidatePath(`/clients/${clientId}`, "layout");
+  revalidatePath("/r/[token]", "page");
+  return { ok: true };
 }

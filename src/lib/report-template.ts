@@ -96,3 +96,22 @@ export function templateFromForm(form: { getAll(k: string): unknown[]; get(k: st
   if (String(form.get("summary") ?? "").length > 5000) problems.push("The summary can be at most 5,000 characters.");
   return { template, problems };
 }
+
+/**
+ * Validates a KPI order sent from the inline editor. Stricter than parseTemplate:
+ * unknown keys, duplicates and an empty or oversized list are rejected rather
+ * than quietly dropped, so what is saved is exactly what the user arranged.
+ */
+export function parseKpiOrder(raw: unknown): { kpis: KpiKey[] } | { error: string } {
+  if (!Array.isArray(raw)) return { error: "Choose at least one KPI." };
+  if (raw.length === 0) return { error: "Keep at least one KPI." };
+  if (raw.length > MAX_KPIS) return { error: `Choose at most ${MAX_KPIS} KPIs.` };
+  if (!raw.every(isKpiKey)) return { error: "That KPI isn't available. Reload the page and try again." };
+  if (new Set(raw).size !== raw.length) return { error: "Each KPI can appear only once." };
+  return { kpis: raw };
+}
+
+/** The template with only its KPI list replaced; every other field is kept as is. */
+export function withKpis(template: ReportTemplate, kpis: KpiKey[]): ReportTemplate {
+  return parseTemplate({ ...template, kpis }, template);
+}

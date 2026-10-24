@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { CalendarClock, Sparkles, StickyNote, Download, FileSliders, FileText, Link2, ListChecks, Mail, Plug, Settings2, Share2, Wallet } from "lucide-react";
 import { AiSuggestionsCard } from "@/components/ai/suggestions-card";
-import { requireClientView } from "@/server/access";
+import { requireClientView, userCanEditClient } from "@/server/access";
 import { prisma } from "@/server/db";
 import { completeClientReport, loadClientReportHead, type ClientReport } from "@/server/client-report";
 import { PRESET_LABEL } from "@/lib/date-ranges";
@@ -20,6 +20,9 @@ import { deleteChartNoteAction } from "./notes-actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SectionSkeleton } from "@/components/ui/skeleton";
 import { ExecutiveSummary } from "@/components/reports/executive-summary";
+import { ClientDashboardsTab } from "@/components/dashboards/client-dashboards-tab";
+import { ClientFacingDashboards } from "@/components/dashboards/dashboard-section";
+import { listClientDashboards } from "@/server/dashboards/access";
 import { CampaignsSection, DataFreshness, hiddenMarker, HistorySection, KpiSection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +31,7 @@ const TABS = [
   { key: "overview", label: "Overview" },
   { key: "campaigns", label: "Campaigns" },
   { key: "trends", label: "Trends" },
+  { key: "dashboards", label: "Dashboards" },
   { key: "insights", label: "Insights" },
   { key: "setup", label: "Setup" },
 ] as const;
@@ -46,6 +50,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const sp = await searchParams;
   const user = await requireClientView(id);
   const staff = user.role !== "CLIENT_USER";
+  // Same rule as requireClientEdit, which the template save actions enforce.
+  const canEdit = await userCanEditClient(user, id);
 
   // The header needs only the quick part of the report. The heavy figures load
   // in the background and stream into the in-page <Suspense> boundaries below
@@ -96,6 +102,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                     { href: `${base}/campaigns?${rangeQs}`, label: "Campaigns", hint: "Choose which campaigns count", icon: <ListChecks className="h-4 w-4" /> },
                     { href: `${base}/budgets`, label: "Budgets", hint: "Monthly budgets and pacing rules", icon: <Wallet className="h-4 w-4" /> },
                     { href: `${base}/report`, label: "Customize report", hint: "KPIs and sections the client sees", icon: <FileSliders className="h-4 w-4" /> },
+                    { href: `${base}/rankings`, label: "Keyword rankings", hint: "Daily Google positions (DataForSEO)", icon: <ListChecks className="h-4 w-4" /> },
                   ],
                 },
               ]}
@@ -137,7 +144,11 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         {header}
         <Suspense fallback={<SectionSkeleton tiles={6} cards={2} />}>
           <WithReport report={full}>
-            {(rep) => (client.accounts.length === 0 ? <NoAccountsState rep={rep} staff={false} /> : <ClientReportView rep={rep} basePath={base} query={sp} />)}
+            {(rep) => {
+              // Client logins also see their client-visible custom dashboards after the KPI and summary sections.
+              const dashboards = <ClientFacingDashboards dashboards={listClientDashboards(user, id)} rep={rep} staff={false} basePath={base} query={sp} />;
+              return client.accounts.length === 0 ? <><NoAccountsState rep={rep} staff={false} />{dashboards}</> : <ClientReportView rep={rep} basePath={base} query={sp} afterSummary={dashboards} />;
+            }}
           </WithReport>
         </Suspense>
       </div>
@@ -182,7 +193,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           <WithReport report={full}>
             {(rep) => (
               <>
-                <KpiSection rep={rep} marker={mark("kpis")} />
+                <KpiSection rep={rep} marker={mark("kpis")} editable={canEdit} />
                 <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand hover:underline">Open Insights</Link>} />
                 <NoteSection rep={rep} marker={mark("summary")} />
                 <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />
@@ -216,6 +227,12 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             <WithReport report={full}>{(rep) => <HistorySection rep={rep} marker={mark("history")} />}</WithReport>
           </Suspense>
         </>
+      )}
+
+      {tab === "dashboards" && (
+        <Suspense fallback={<SectionSkeleton tiles={6} cards={2} tallFirst={false} />}>
+          <WithReport report={full}>{(rep) => <ClientDashboardsTab rep={rep} user={user} canEdit={canEdit} query={sp} />}</WithReport>
+        </Suspense>
       )}
 
       {tab === "insights" && (
