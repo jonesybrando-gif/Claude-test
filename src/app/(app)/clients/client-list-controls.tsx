@@ -121,10 +121,12 @@ export function BulkLabelBar({ labels, action, returnQuery }: { labels: LabelInf
     for (const b of document.querySelectorAll<HTMLInputElement>('input[aria-label="Select all clients in this list"]')) b.checked = false;
     setCount(0);
   };
+  // Nothing selected: the form stays (the row checkboxes belong to it) but shows nothing.
+  if (!count) return <form id={BULK_FORM} action={action} hidden />;
   return (
-    <form id={BULK_FORM} action={action} className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm ${count ? "border-brand bg-surface" : "border-border bg-surface-2"}`}>
+    <form id={BULK_FORM} action={action} className="flex flex-wrap items-center gap-2 rounded-xl border border-text/20 bg-surface px-3 py-2 text-sm shadow-sm">
       <input type="hidden" name="return" value={returnQuery} />
-      <span className="font-medium">{count ? `${count} selected` : "Select clients to label them in bulk"}</span>
+      <span className="font-medium">{count} selected</span>
       <Select name="label" required value={choice} onChange={(e) => setChoice(e.target.value)} className="w-full sm:w-48" aria-label="Label to add or remove" disabled={!count}>
         <option value="" disabled>Choose a label…</option>
         {labels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}

@@ -39,13 +39,13 @@ export function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate?:
               aria-current={active ? "page" : undefined}
               className={cn(
                 "flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60",
-                active ? "bg-brand/10 font-medium text-text ring-1 ring-inset ring-focus-ring" : "text-text-2 hover:bg-surface-2 hover:text-text",
+                active ? "bg-surface-2 font-semibold text-text shadow-[inset_0_0_0_1px_var(--border)]" : "text-text-2 hover:bg-surface-2 hover:text-text",
               )}
             >
               <Icon className={cn("h-4 w-4 shrink-0", active && "text-brand-text")} aria-hidden />
               {label}
               {count > 0 && (
-                <span className="ml-auto rounded-full bg-critical px-1.5 text-xs font-semibold text-white tabular">
+                <span className="ml-auto text-xs font-semibold text-text-2 tabular">
                   <span aria-hidden>{count > 99 ? "99+" : count}</span>
                   <span className="sr-only">, {count} unread</span>
                 </span>
