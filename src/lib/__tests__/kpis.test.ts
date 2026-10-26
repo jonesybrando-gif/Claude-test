@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { formatKpi, kpiValues, KPIS } from "../kpis";
+import { formatKpi, kpiChangeWords, kpiValues, KPIS, untrackedKpis } from "../kpis";
+import { METRICS } from "../metrics-registry";
+import { PLAIN } from "../metrics-registry/plain";
 import { addInto, emptyTotals, type MetricTotals } from "../metrics";
 
 const t = (o: Partial<MetricTotals>): MetricTotals => ({ ...emptyTotals(), ...o });
@@ -57,5 +59,33 @@ describe("KPI catalog", () => {
 
   it("every KPI has a definition", () => {
     expect(new Set(KPIS.map((k) => k.key)).size).toBe(KPIS.length);
+    expect(KPIS.every((k) => k.plain.length > 10)).toBe(true);
+  });
+
+  it("every registry metric has a plain definition of its own", () => {
+    const missing = METRICS.filter((m) => !PLAIN[m.key] && !m.plain).map((m) => m.key);
+    expect(missing).toEqual([]);
+  });
+
+  it("puts changes in words, with small samples and late results held neutral", () => {
+    const cur = t({ costMinor: 12000, clicks: 100, conversions: 8, leads: 30 });
+    const prev = t({ costMinor: 10000, clicks: 100, conversions: 20, leads: 20 });
+    const [spend, conv, cpl, leads] = kpiValues(["spend", "conversions", "costPerLead", "leads"], cur, prev);
+    expect(kpiChangeWords(spend, "USD").text).toBe("Up 20% from $100");
+    expect(kpiChangeWords(spend, "USD").aria).toContain("neither good nor bad on its own");
+    expect(conv.verdict).toBe("few"); // 8 conversions
+    expect(cpl.verdict).toBe("better"); // 30 vs 20 leads, cost per lead down 20%
+    expect(kpiChangeWords(leads, "USD").text).toBe("Up 50% from 20 · better");
+    const [lateLeads] = kpiValues(["leads"], cur, prev, { stillCounting: true });
+    expect(lateLeads).toMatchObject({ verdict: "counting", tone: "neutral" });
+  });
+
+  it("knows which tiles a client doesn't track", () => {
+    expect([...untrackedKpis(t({ conversions: 10 }))].sort()).toEqual(["conversionValue", "costPerLead", "leads", "roas"]);
+    // The $1-per-conversion placeholder isn't a real value; reported zero leads count as not tracked.
+    expect(untrackedKpis(t({ conversions: 10, conversionValueMinor: 1000, leadsReported: true })).has("roas")).toBe(true);
+    expect(untrackedKpis(t({ conversions: 10, conversionValueMinor: 90_000, leads: 3 })).size).toBe(0);
+    // Tracked in the comparison period is enough.
+    expect(untrackedKpis(t({}), t({ leads: 2 })).has("leads")).toBe(false);
   });
 });

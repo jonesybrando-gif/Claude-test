@@ -9,7 +9,8 @@ import { shortRangeLabel, withReportQuery } from "@/lib/client-nav";
 import { ClientSwitcher } from "@/components/client-switcher";
 import { prisma } from "@/server/db";
 import { completeClientReport, loadClientReportHead, type ClientReport } from "@/server/client-report";
-import { PRESET_LABEL } from "@/lib/date-ranges";
+import { rangeLabel } from "@/lib/date-ranges";
+import { ClientAlertsStrip } from "@/components/alerts/client-alerts-strip";
 import { formatDate } from "@/lib/time";
 import { DemoBadge } from "@/components/status-badge";
 import { CompactRangeControls, RangeControls } from "@/components/range-controls";
@@ -27,7 +28,8 @@ import { ClientDashboardsTab } from "@/components/dashboards/client-dashboards-t
 import { ClientFacingDashboards } from "@/components/dashboards/dashboard-section";
 import { ConnectedDataSection } from "@/components/dashboards/connected-data-section";
 import { listClientDashboards } from "@/server/dashboards/access";
-import { CampaignsSection, DataFreshness, hiddenMarker, HistorySection, KpiSection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
+import { AdvertisingDetail, CampaignsSection, DataFreshness, hiddenMarker, HistorySection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
+import { AtAGlance } from "@/components/reports/at-a-glance";
 
 export const dynamic = "force-dynamic";
 
@@ -100,7 +102,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           {isDemo && <DemoBadge />}
         </div>
         <p className="hidden text-sm text-text-2 md:block">
-          {PRESET_LABEL[preset]}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
+          {rangeLabel(preset, range)}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
           {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
           {pacing.client.managerName && staff && <> · Manager: {pacing.client.managerName}</>}
         </p>
@@ -178,6 +180,12 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </nav>
       </div>
 
+      {tab === "overview" && (
+        <Suspense fallback={null}>
+          <ClientAlertsStrip clientId={id} user={user} />
+        </Suspense>
+      )}
+
       {tab === "overview" && client.accounts.length === 0 && (
         <Suspense fallback={<SectionSkeleton cards={2} tallFirst={false} />}>
           <WithReport report={full}>
@@ -197,7 +205,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           <WithReport report={full}>
             {(rep) => (
               <>
-                <KpiSection rep={rep} marker={mark("kpis")} editable={canEdit} />
+                <AtAGlance rep={rep} />
+                <AdvertisingDetail rep={rep} marker={mark("kpis")} editable={canEdit} />
                 <ConnectedDataSection rep={rep} canEdit={canEdit} query={sp} />
                 <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand hover:underline">Open Insights</Link>} />
                 <NoteSection rep={rep} marker={mark("summary")} />

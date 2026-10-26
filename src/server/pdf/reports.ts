@@ -1,9 +1,17 @@
 import "server-only";
 import type { PacingResult, PacingSeriesPoint } from "@/lib/pacing/engine";
-import type { ClientReport } from "../client-report";
+import { reportResults, type ClientReport } from "../client-report";
+import { contextInput } from "../ai/context";
+import { analyzePerformance } from "@/lib/insights";
+import { attentionLines, budgetTile, headlineSentence, pacingHeadline, sentenceMoney } from "@/lib/at-a-glance";
+import { changeVerdict, changeWords } from "@/lib/change";
+import { pctChange } from "@/lib/metrics";
+import { displayPacingStatus } from "@/lib/pacing/display-status";
+import { summarySections } from "@/lib/exec-summary";
+import { rangeLabel } from "@/lib/date-ranges";
 import type { AgencySummary, ClientPacing } from "../pacing-service";
 import { derive } from "@/lib/metrics";
-import { dailyKpiValue, formatKpi, KPI_BY_KEY, kpiValues, type KpiKey } from "@/lib/kpis";
+import { dailyKpiValue, formatKpi, KPI_BY_KEY, kpiChangeWords, kpiValues, untrackedKpis, type KpiKey } from "@/lib/kpis";
 import type { DailyMetrics } from "../reporting";
 import type { ExecSummary } from "../exec-summary";
 import { formatMoney, formatMoneyCompact, formatNumber, formatPct } from "@/lib/money";
@@ -158,13 +166,88 @@ export function drawTrendChart(doc: Doc, key: KpiKey, current: DailyMetrics[], c
   doc.y = bottom + 22;
 }
 
-function pacingFacts(r: PacingResult, currency: string): string[][] {
+/** Pacing figures: four plain ones for the client; every figure, in plain words, for the internal PDF. */
+function pacingFacts(r: PacingResult, currency: string, internal: boolean): string[][] {
+  if (!internal) {
+    return [
+      ["Spent", money(r.actualToDateMinor, currency), "Budget", money(r.budgetMinor, currency)],
+      ["Left", money(r.remainingBudgetMinor, currency), "Estimated period-end", money(r.projectedMinor, currency)],
+    ];
+  }
   return [
-    ["Spent to date", money(r.actualToDateMinor, currency), "Expected to date", money(r.expectedToDateMinor, currency)],
-    ["Pacing (actual / expected)", formatPct(r.pacingPct), "Budget used / period elapsed", `${formatPct(r.pctBudgetConsumed, 0)} / ${formatPct(r.pctPeriodElapsed, 0)}`],
-    ["Projected period-end", `${money(r.projectedMinor, currency)} (${signed(r.projectedVarianceMinor, currency)})`, "Remaining budget", money(r.remainingBudgetMinor, currency)],
-    ["Required daily spend", r.requiredDailyMinor === null ? "—" : `${money(r.requiredDailyMinor, currency)} x ${r.remainingActiveDays} days`, "Current daily rate (7-day)", money(r.currentDailyRateMinor, currency)],
+    ["Spent so far", money(r.actualToDateMinor, currency), "Planned by now", money(r.expectedToDateMinor, currency)],
+    ["Spending pace", r.pacingPct === null ? "—" : `${formatPct(r.pacingPct, 0)} of plan`, "Budget used vs period elapsed", `${formatPct(r.pctBudgetConsumed, 0)} vs ${formatPct(r.pctPeriodElapsed, 0)}`],
+    ["Estimated period-end", `${money(r.projectedMinor, currency)} (${signed(r.projectedVarianceMinor, currency)})`, "Left to spend", money(r.remainingBudgetMinor, currency)],
+    ["Daily spend needed", r.requiredDailyMinor === null ? "—" : `${money(r.requiredDailyMinor, currency)} a day for ${r.remainingActiveDays} days`, "Daily spend lately (7-day)", money(r.currentDailyRateMinor, currency)],
   ];
+}
+
+const TONE_COLOR = { good: C.good, bad: C.critical, neutral: C.text2 } as const;
+
+/** PDF tiles fit about 30 characters: "Down 21% from $218.18 · still counting" becomes "Down 21% · still counting". */
+const compact = (text: string) => (text.length > 30 ? text.replace(/ from [^·]+?(?= ·|$)/, "") : text);
+
+/** The "At a glance" block that opens every client report PDF: headline, four tiles, what needs attention. */
+function drawAtAGlance(doc: Doc, rep: ClientReport) {
+  const c = rep.client.currency;
+  const t = rep.perf.totals;
+  const p = rep.cmpPerf?.totals ?? null;
+  const { current: r, previous: pr, stillCounting } = reportResults(rep);
+  const insights = analyzePerformance(contextInput(rep), { skipBudget: true });
+  const total = rep.pacing.total;
+  const { start, end } = rep.pacing.period;
+  const monthly = start.endsWith("-01") && start.slice(0, 7) === end.slice(0, 7);
+  const periodName = monthly ? formatDate(start, { month: "long" }) : "this budget period";
+  const awareness = r.goal === "AWARENESS";
+  const unit = awareness ? "click" : r.singular;
+  const label = awareness ? "Clicks" : r.label;
+  const sample = pr ? { current: r.value, previous: pr.value } : null;
+  const counting = stillCounting && !awareness;
+  const sub = (name: string, cur: number | null, prev: number | null | undefined, prevText: string, better: "up" | "down" | "neutral", withSample: boolean) => {
+    if (cur === null || prev === null || prev === undefined) return { sub: undefined, subColor: undefined };
+    const ch = pctChange(cur, prev);
+    const v = changeVerdict({ changePct: ch, better, sample: withSample ? sample : null, stillCounting: withSample && counting });
+    return { sub: compact(changeWords(v.verdict, ch, prevText, name).text) || undefined, subColor: v.tone ? TONE_COLOR[v.tone] : undefined };
+  };
+
+  sectionTitle(doc, "At a glance");
+  paragraph(doc, headlineSentence({ range: rep.range, comparison: rep.cmpRange, today: rep.today, currency: c, results: r, previous: pr, stillCounting, driver: insights.driver }), { size: 11, color: C.text });
+  if (stillCounting) paragraph(doc, "The last few days may still rise as ad platforms finish counting results.", { size: 7.5 });
+  doc.moveDown(0.5);
+  const budget = budgetTile(total, c);
+  tiles(
+    doc,
+    [
+      { label: t.hasEstimatedCost ? "Spent (estimated)" : "Spent", value: money(t.costMinor, c), ...sub("Spent", t.costMinor, p?.costMinor, money(p?.costMinor, c), "neutral", false) },
+      { label, value: formatNumber(Math.round(r.value)), ...sub(label, r.value, pr?.value, formatNumber(Math.round(pr?.value ?? 0)), "up", true) },
+      {
+        label: `Cost per ${unit}`,
+        value: r.costPerMinor === null ? "—" : sentenceMoney(r.costPerMinor, c),
+        ...(pr?.costPerMinor != null && r.costPerMinor !== null ? sub(`Cost per ${unit}`, r.costPerMinor, pr.costPerMinor, sentenceMoney(pr.costPerMinor, c), "down", true) : { sub: undefined, subColor: undefined }),
+      },
+      {
+        // PDF tiles are narrow: "$375 over" with "Estimate · $5,141 of $6,000" below.
+        label: monthly ? "Budget this month" : "Budget this period",
+        value: budget.short.replace(/^About /, ""),
+        sub: total && total.phase !== "NOT_STARTED" ? `${budget.short.startsWith("About ") ? "Estimate · " : ""}${money(total.actualToDateMinor, c)} of ${money(total.budgetMinor, c)}` : (budget.detail ?? undefined),
+      },
+    ],
+    4,
+  );
+  const calls = rep.callsFromAds;
+  if (calls) paragraph(doc, `Calls from ads (CallRail): ${formatNumber(calls.current)}. Shown alongside, not added to ${label.toLowerCase()}, because the ad platforms often count the same calls.`, { size: 8.5 });
+  if (r.valueMinor) paragraph(doc, `${label} worth ${money(r.valueMinor, c)} by the ad platforms' count.`, { size: 8.5 });
+  paragraph(doc, "Results are counted by each ad platform and may not match your own records.", { size: 7.5 });
+  doc.moveDown(0.5);
+  const attention = attentionLines(total, insights.notWorking, c, periodName);
+  doc.font("Helvetica-Bold").fontSize(10).fillColor(C.text).text("Needs your attention", doc.page.margins.left, doc.y);
+  doc.moveDown(0.2);
+  if (!attention.length) paragraph(doc, "Nothing needs attention right now.", { size: 9.5, color: C.text });
+  for (const x of attention) {
+    paragraph(doc, `•  ${x}`, { size: 9.5, color: C.text });
+    doc.moveDown(0.2);
+  }
+  doc.moveDown(0.8);
 }
 
 export async function renderClientReportPdf(
@@ -183,7 +266,7 @@ export async function renderClientReportPdf(
   // Title
   doc.font("Helvetica-Bold").fontSize(20).fillColor(C.text).text(pdfText(client.name), doc.page.margins.left, doc.page.margins.top);
   doc.font("Helvetica").fontSize(10).fillColor(C.text2).text(
-    pdfText(`${template.title} · ${PRESET_LABEL[preset]}: ${formatDate(range.from, { month: "short", day: "numeric", year: "numeric" })} - ${formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}` +
+    pdfText(`${template.title} · ${rangeLabel(preset, range)}: ${formatDate(range.from, { month: "short", day: "numeric", year: "numeric" })} - ${formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}` +
       (cmpRange ? ` · compared with ${formatDate(cmpRange.from)} - ${formatDate(cmpRange.to)}` : "")),
   );
   if (isDemo) {
@@ -191,6 +274,9 @@ export async function renderClientReportPdf(
     doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#1c5cab").text("Illustrative demo data - not real advertising results.");
   }
   doc.moveDown(0.8);
+
+  // Every report opens on At a glance, like the client page.
+  drawAtAGlance(doc, rep);
 
   if (on.executive && opts.executiveSummary) {
     sectionTitle(doc, "Executive summary");
@@ -210,11 +296,10 @@ export async function renderClientReportPdf(
         doc.moveDown(0.25);
       });
     };
-    list("What's working", es.working);
-    list("What needs attention", es.notWorking);
-    list("Recommendations", es.recommendations, true);
+    // The client's copy shows "What we're doing next" (agency voice) instead of the agency's recommendations, or nothing when empty.
+    for (const sec of summarySections(!opts.internal)) list(sec.title, es[sec.key] ?? [], sec.numbered);
     doc.moveDown(0.3);
-    paragraph(doc, `${es.source === "ai" ? "Written by AI" : "Worked out automatically"} from the figures in this report. Recommendations are suggestions; nothing has been changed in the ad accounts.`, { size: 7.5 });
+    paragraph(doc, `${es.source === "ai" ? "Written by AI" : "Worked out automatically"} from the figures in this report.${opts.internal ? " Recommendations are suggestions; nothing has been changed in the ad accounts." : ""}`, { size: 7.5 });
     doc.moveDown(1);
   }
 
@@ -224,18 +309,19 @@ export async function renderClientReportPdf(
     doc.moveDown(0.8);
   }
 
-  if (on.kpis && template.kpis.length) {
-    const toneColor = { good: C.good, bad: C.critical, neutral: C.text2 } as const;
+  // The full KPI tiles, without the ones the client doesn't track (no leads, no real sales values).
+  const hidden = untrackedKpis(t, cmpPerf?.totals ?? null);
+  const shownKpis = template.kpis.filter((k) => !hidden.has(k));
+  if (on.kpis && shownKpis.length) {
+    sectionTitle(doc, "Advertising detail");
     tiles(
       doc,
-      kpiValues(template.kpis, t, cmpPerf?.totals ?? null).map((kv) => {
+      kpiValues(shownKpis, t, cmpPerf?.totals ?? null, { stillCounting: reportResults(rep).stillCounting }).map((kv) => {
         const parts = [
-          kv.key === "spend" && t.hasEstimatedCost ? "incl. estimated" : null,
-          kv.changePct === null
-            ? kv.value === null ? "not reported" : cmpPerf ? "no comparison data" : null
-            : Math.abs(kv.changePct) < 0.05 ? "no change" : `${kv.changePct > 0 ? "up" : "down"} ${formatPct(Math.abs(kv.changePct))} vs ${formatKpi(kv.key, kv.previous, c)}`,
+          kv.key === "spend" && t.hasEstimatedCost ? "estimated" : null,
+          kv.changePct === null || kv.verdict === null ? (kv.value === null ? "not reported" : cmpPerf ? "no comparison data" : null) : compact(kpiChangeWords(kv, c).text),
         ];
-        return { label: KPI_BY_KEY[kv.key].label, value: formatKpi(kv.key, kv.value, c), sub: parts.filter(Boolean).join(" · ") || undefined, subColor: kv.tone ? toneColor[kv.tone] : undefined };
+        return { label: KPI_BY_KEY[kv.key].label, value: formatKpi(kv.key, kv.value, c), sub: parts.filter(Boolean).join(" · ") || undefined, subColor: kv.tone ? TONE_COLOR[kv.tone] : undefined };
       }),
       4,
     );
@@ -251,41 +337,55 @@ export async function renderClientReportPdf(
     // left out by the report template
   } else if (total) {
     ensureSpace(doc, 260); // keep the heading with its chart
-    sectionTitle(doc, `Budget pacing · ${formatDate(pacing.period.start, { month: "long", year: "numeric" })}`, total.asOf ? `Complete data through ${formatDate(total.asOf)}. Status: ${STATUS_LABEL[total.status]}.` : "No complete days of data in this period yet.");
+    const shownStatus = displayPacingStatus(total);
+    sectionTitle(
+      doc,
+      `Budget pacing · ${formatDate(pacing.period.start, { month: "long", year: "numeric" })}`,
+      total.asOf ? `Complete data through ${formatDate(total.asOf)}. Status: ${shownStatus.label}${shownStatus.forecastNote ? ` (${shownStatus.forecastNote})` : ""}.` : "No complete days of data in this period yet.",
+    );
+    paragraph(doc, pacingHeadline(total, c, formatDate(pacing.period.start, { month: "long" })), { size: 9.5, color: C.text });
+    doc.moveDown(0.3);
     drawPacingChart(doc, total.series, total.budgetMinor, c);
-    table(doc, [{ header: "", width: 0.25 }, { header: "", width: 0.25, align: "right" }, { header: "", width: 0.27 }, { header: "", width: 0.23, align: "right" }], pacingFacts(total, c), { noHeader: true });
+    table(doc, [{ header: "", width: 0.25 }, { header: "", width: 0.25, align: "right" }, { header: "", width: 0.27 }, { header: "", width: 0.23, align: "right" }], pacingFacts(total, c, opts.internal), { noHeader: true });
     // The client-facing version drops internal terms, unbudgeted accounts and lines with no data.
     const lines = opts.internal ? [...pacing.rows, ...pacing.subRows] : [...pacing.rows, ...pacing.subRows].filter((r) => r.level !== "UNBUDGETED" && !r.notConnected);
     if (lines.length > 1 || opts.internal) {
       if (opts.internal) sectionTitle(doc, "Budget lines", "Sub-allocations are paced individually but already included in a parent budget.");
       else sectionTitle(doc, "Budget", "Each budget and how it is tracking this period.");
       const sub = new Set(pacing.subRows);
-      const lineCols: Column[] = [
-          { header: opts.internal ? "Line" : "Budget", width: opts.internal ? 0.24 : 0.34 },
-          { header: "Status", width: 0.12 },
-          { header: "Budget", width: 0.1, align: "right" },
-          { header: "Spent", width: 0.1, align: "right" },
-          { header: "Pacing", width: 0.08, align: "right" },
-          { header: "Projected", width: 0.11, align: "right" },
-          { header: "Req./day", width: 0.09, align: "right" },
-          ...(opts.internal ? [{ header: "Recommendation", width: 0.16 }] : []),
-      ];
+      const lineCols: Column[] = opts.internal
+        ? [
+            { header: "Line", width: 0.24 },
+            { header: "Status", width: 0.12 },
+            { header: "Budget", width: 0.1, align: "right" },
+            { header: "Spent", width: 0.1, align: "right" },
+            { header: "Pace (of plan)", width: 0.08, align: "right" },
+            { header: "Estimated end", width: 0.11, align: "right" },
+            { header: "Needed per day", width: 0.09, align: "right" },
+            { header: "Recommendation", width: 0.16 },
+          ]
+        : [
+            { header: "Budget", width: 0.34 },
+            { header: "Status", width: 0.14 },
+            { header: "Amount", width: 0.13, align: "right" },
+            { header: "Spent", width: 0.13, align: "right" },
+            { header: "Left", width: 0.12, align: "right" },
+            { header: "Estimated end", width: 0.14, align: "right" },
+          ];
       // First column absorbs any rounding so widths sum to 100%.
       lineCols[0].width += 1 - lineCols.reduce((sum, x) => sum + x.width, 0);
       table(
         doc,
         lineCols,
-        lines.map((r) => [
-          `${r.level === "CLIENT" ? (opts.internal ? "Combined client budget" : "Total budget") : r.label}${opts.internal && sub.has(r) ? " (sub-allocation)" : ""}\n${r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ")}`,
-          r.notConnected ? "Not connected" : r.result ? STATUS_LABEL[r.result.status] : "No budget",
-          money(r.result?.budgetMinor, c),
-          money(r.result?.actualToDateMinor ?? r.unbudgetedSpendMinor, c),
-          r.result ? formatPct(r.result.pacingPct) : "—",
-          money(r.result?.projectedMinor, c),
-          money(r.result?.requiredDailyMinor, c),
-          ...(opts.internal ? [`${r.action.headline}. ${r.action.detail}`] : []),
-        ]),
-        { colors: lines.map((r) => [undefined, r.result ? STATUS_COLOR[r.result.status] : C.text3]) },
+        lines.map((r) => {
+          const name = `${r.level === "CLIENT" ? (opts.internal ? "Combined client budget" : "Total budget") : r.label}${opts.internal && sub.has(r) ? " (sub-allocation)" : ""}\n${r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ")}`;
+          const status = r.notConnected ? "Not connected" : r.result ? displayPacingStatus(r.result).label : "No budget";
+          const head = [name, status, money(r.result?.budgetMinor, c), money(r.result?.actualToDateMinor ?? r.unbudgetedSpendMinor, c)];
+          return opts.internal
+            ? [...head, r.result && r.result.pacingPct !== null ? formatPct(r.result.pacingPct, 0) : "—", money(r.result?.projectedMinor, c), money(r.result?.requiredDailyMinor, c), `${r.action.headline}. ${r.action.detail}`]
+            : [...head, money(r.result?.remainingBudgetMinor, c), money(r.result?.projectedMinor, c)];
+        }),
+        { colors: lines.map((r) => [undefined, r.result ? STATUS_COLOR[displayPacingStatus(r.result).status] : C.text3]) },
       );
     }
   } else {
@@ -295,8 +395,36 @@ export async function renderClientReportPdf(
 
   // Platforms
   if (on.platforms) {
-    sectionTitle(doc, "Platform breakdown", `${PRESET_LABEL[preset]} · conversions are platform-reported and defined differently by each platform.`);
-    table(
+    sectionTitle(doc, "Platform breakdown", `${PRESET_LABEL[preset]} · each ad platform counts conversions in its own way.`);
+    if (!opts.internal) {
+      // The client's copy: fewer columns, full names.
+      table(
+        doc,
+        [
+          { header: "Account", width: 0.27 },
+          { header: "Ad spend", width: 0.12, align: "right" },
+          { header: "Clicks", width: 0.1, align: "right" },
+          { header: "Conversions", width: 0.12, align: "right" },
+          { header: "Cost per conversion", width: 0.14, align: "right" },
+          { header: "Leads", width: 0.1, align: "right" },
+          { header: "Return on ad spend", width: 0.15, align: "right" },
+        ],
+        client.accounts.map((a) => {
+          const m = perf.byAccount[a.id];
+          const x = m ? derive(m) : null;
+          const lsa = a.platform === "GOOGLE_LSA";
+          return [
+            `${PLATFORM_LABEL[a.platform]}\n${a.name}`,
+            m ? `${money(m.costMinor, c)}${a.spendIsVerified ? "" : "*"}` : "—",
+            lsa ? "n/a" : m ? formatNumber(m.clicks) : "—",
+            m ? formatNumber(m.conversions, 1) : "—",
+            x?.costPerConversionMinor == null ? "—" : formatMoney(x.costPerConversionMinor, c),
+            m && (m.leads || m.leadsReported) ? formatNumber(m.leads) : "—",
+            x?.roas == null || lsa ? "—" : `${x.roas.toFixed(2)}x`,
+          ];
+        }),
+      );
+    } else table(
       doc,
       [
         { header: "Account", width: 0.26 },
@@ -328,7 +456,7 @@ export async function renderClientReportPdf(
         ];
       }),
     );
-    if (client.accounts.some((a) => !a.spendIsVerified)) paragraph(doc, "* Spend is estimated or incomplete for this account (see data notes).", { size: 7.5 });
+    if (client.accounts.some((a) => !a.spendIsVerified)) paragraph(doc, `* Spend is estimated or incomplete for this account${opts.internal ? " (see data notes)" : ""}.`, { size: 7.5 });
   }
 
   // Campaigns
@@ -338,13 +466,13 @@ export async function renderClientReportPdf(
     table(
       doc,
       [
-        { header: "Campaign", width: 0.36 },
-        { header: "Platform", width: 0.14 },
-        { header: "Spend", width: 0.11, align: "right" },
+        { header: "Campaign", width: 0.31 },
+        { header: "Platform", width: 0.13 },
+        { header: "Ad spend", width: 0.11, align: "right" },
         { header: "Clicks", width: 0.09, align: "right" },
-        { header: "Conv.", width: 0.09, align: "right" },
-        { header: "Cost/conv.", width: 0.11, align: "right" },
-        { header: "ROAS", width: 0.1, align: "right" },
+        { header: "Conversions", width: 0.11, align: "right" },
+        { header: "Cost per conversion", width: 0.13, align: "right" },
+        { header: "Return on ad spend", width: 0.12, align: "right" },
       ],
       campaigns
         .sort((p, q) => q.m.costMinor - p.m.costMinor)
@@ -387,15 +515,16 @@ export async function renderClientReportPdf(
   // Notes
   if (on.notes) {
     const notes = [...new Set([...pacing.rows, ...pacing.subRows].flatMap((r) => r.warnings))];
-    const defs = template.kpis.filter((k) => KPI_BY_KEY[k].kind !== "count" && k !== "spend" && k !== "conversionValue").map((k) => `${KPI_BY_KEY[k].label}: ${KPI_BY_KEY[k].description}`);
+    // The same plain definitions as the ⓘ on the page. Data notes (time zones, estimates) only in the internal copy.
+    const defs = shownKpis.map((k) => `${KPI_BY_KEY[k].label}: ${KPI_BY_KEY[k].plain}`);
     sectionTitle(doc, "Notes");
     paragraph(
       doc,
       [
-        "Pacing compares spend to date with the planned spend to date (actual / expected). Today's partial spend is excluded.",
-        "Conversions and conversion value are as reported by each ad platform under its own attribution settings.",
+        "Spending pace compares what has been spent so far with what was planned by now. Today's partial spend is left out, and month-end figures are estimates.",
+        "Results, conversions and sales values are counted by each ad platform in its own way and may not match your own records.",
         ...defs,
-        ...notes,
+        ...(opts.internal ? notes : []),
       ].map((n) => `- ${n}`).join("\n"),
     );
   }

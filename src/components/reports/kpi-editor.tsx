@@ -20,10 +20,14 @@ export interface KpiEditorProps {
   trends: Record<KpiKey, (number | null)[]>;
   currency: string;
   marker?: ReactNode;
+  /** KPIs the client doesn't track: left out of the normal view, still offered (and shown) while editing. */
+  hidden?: KpiKey[];
+  /** Small labels on a tile's value, e.g. { spend: "Estimated" }. */
+  chips?: Partial<Record<KpiKey, string>>;
 }
 
 /** The Overview's KPI tiles, with an inline editor for staff: reorder, remove, add, then save. */
-export function KpiEditor({ clientId, kpis, values, trends, currency, marker }: KpiEditorProps) {
+export function KpiEditor({ clientId, kpis, values, trends, currency, marker, hidden = [], chips = {} }: KpiEditorProps) {
   const [editing, setEditing] = useState(false);
   // What is shown outside edit mode: the saved order, updated as soon as a save succeeds.
   const [committed, setCommitted] = useState(kpis);
@@ -57,7 +61,9 @@ export function KpiEditor({ clientId, kpis, values, trends, currency, marker }: 
       }
     });
 
-  const tile = (k: KpiKey) => <KpiCard kv={values[k]} currency={currency} trend={trends[k]} note={kpiNote(values[k])} />;
+  const tile = (k: KpiKey) => <KpiCard kv={values[k]} currency={currency} trend={trends[k]} note={kpiNote(values[k])} chip={chips[k]} />;
+  const shown = committed.filter((k) => !hidden.includes(k));
+  const hiddenCount = committed.length - shown.length;
 
   return (
     <div ref={rootRef} className="flex flex-col gap-2">
@@ -79,7 +85,14 @@ export function KpiEditor({ clientId, kpis, values, trends, currency, marker }: 
           {error && <p className="text-sm text-critical-ink" role="alert">{error}</p>}
         </EditGrid>
       ) : (
-        <div className={GRID}>{committed.map((k) => <div key={k}>{tile(k)}</div>)}</div>
+        <>
+          <div className={GRID}>{shown.map((k) => <div key={k}>{tile(k)}</div>)}</div>
+          {hiddenCount > 0 && (
+            <p className="text-xs text-text-3">
+              {hiddenCount} tile{hiddenCount === 1 ? " is" : "s are"} hidden because this client doesn&apos;t track {hiddenCount === 1 ? "it" : "them"} (no leads or no real sales values). Edit KPIs shows every tile.
+            </p>
+          )}
+        </>
       )}
     </div>
   );
@@ -203,7 +216,7 @@ function TileButton({ label, danger, children, ...props }: { label: string; dang
       type="button"
       aria-label={label}
       title={label}
-      className={cn("flex h-7 w-7 cursor-pointer items-center justify-center rounded text-text-2 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-default disabled:opacity-30", danger && "hover:text-critical-ink")}
+      className={cn("flex h-7 w-7 cursor-pointer items-center justify-center rounded text-text-2 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-default disabled:opacity-30", danger && "hover:text-critical-ink")}
       {...props}
     >
       {children}

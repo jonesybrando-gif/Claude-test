@@ -261,13 +261,13 @@ function buildKpi(w: DashboardWidget, p: Period, ctx: ResolveContext, l: Loaded)
   if (ad) {
     if (!l.ad) return emptyFor("ads", ctx.linked);
     const [kv] = kpiValues([ad], l.ad.cur.totals, l.ad.cmp?.totals ?? null);
-    return { kind: "kpi", metric: info, value: kv.value, previous: kv.previous, changePct: kv.changePct, tone: kv.tone, spark: adDaily(l.ad.cur, ad, p.range), hasComparison: !!l.ad.cmp };
+    return { kind: "kpi", metric: info, value: kv.value, previous: kv.previous, changePct: kv.changePct, tone: kv.tone, verdict: kv.verdict, spark: adDaily(l.ad.cur, ad, p.range), hasComparison: !!l.ad.cmp };
   }
   const value = l.totals?.cur[key] ?? null;
   const previous = l.totals?.cmp?.[key] ?? null;
   const spark = alignDaily(l.series?.cur[key], p.range);
   if (value === null && spark.every((v) => v === null)) return emptyFor(info.source, ctx.linked);
-  return { kind: "kpi", metric: info, value, previous, ...changeOf(value, previous, info.better), spark, hasComparison: !!p.cmp };
+  return { kind: "kpi", metric: info, value, previous, ...changeOf(value, previous, info.better, { format: info.format }), spark, hasComparison: !!p.cmp };
 }
 
 function buildSeries(w: DashboardWidget, p: Period, ctx: ResolveContext, l: Loaded): WidgetData {

@@ -18,6 +18,15 @@ export const PRESET_LABEL: Record<RangePreset, string> = {
 };
 
 /**
+ * The label for a resolved range: the preset's name, except "Month to date"
+ * on the 1st of a month, which shows last month and says so.
+ */
+export function rangeLabel(preset: RangePreset, range: DateRange): string {
+  if (preset === "mtd" && range.from === monthBounds(range.from).start && range.to === monthBounds(range.from).end) return "Month to date (showing last month: this month has no complete day yet)";
+  return PRESET_LABEL[preset];
+}
+
+/**
  * Resolve a preset against the client's local today. Ranges end on the last
  * complete day (yesterday) because today's data is partial.
  */
@@ -26,7 +35,9 @@ export function resolveRange(preset: RangePreset, today: IsoDate, custom?: Parti
   switch (preset) {
     case "mtd": {
       const { start } = monthBounds(today);
-      return { from: start, to: maxDate(start, yesterday) };
+      // On the 1st there is no complete day this month yet, so show last month (see rangeLabel).
+      if (today === start) return resolveRange("last_month", today);
+      return { from: start, to: yesterday };
     }
     case "last_month": {
       const prev = monthBounds(addDays(monthBounds(today).start, -1));

@@ -5,10 +5,12 @@
 
 import { formatDate } from "./time";
 import { formatKpi, KPI_BY_KEY, kpiValues, type KpiKey } from "./kpis";
-import { formatMoney, formatPct } from "./money";
+import { formatMoney, formatNumber, formatPct } from "./money";
 import { derive, type MetricTotals } from "./metrics";
 import { STATUS_LABEL, type PacingStatus } from "./pacing/status";
-import { hasPlaceholderValues } from "./insights";
+import { hasPlaceholderValues, resolveGoal, resultsFor } from "./results";
+import type { ClientGoal } from "@prisma/client";
+import type { Verdict } from "./change";
 
 export interface AiPacing {
   periodStart: string;
@@ -49,7 +51,22 @@ export interface AiContextInput {
   /** Final budget result when the reporting period is exactly a past budget month. */
   pastBudget?: { month: string; budgetMinor: number; spentMinor: number; status: PacingStatus } | null;
   notes: string[];
+  /** What the client wants from advertising; null/undefined = guessed from the data. */
+  goal?: ClientGoal | null;
+  /** The client's local today (for "So far in October"); defaults to the day after the range. */
+  today?: string;
+  /** The range ends so recently that platforms may still add late-counted results. */
+  stillCounting?: boolean;
 }
+
+const VERDICT_NOTE: Record<Verdict, string> = {
+  better: " (favourable)",
+  worse: " (unfavourable)",
+  few: " (too few to compare)",
+  same: " (about the same: normal variation)",
+  counting: " (recent results are still being counted, so don't judge this change yet)",
+  neutral: "",
+};
 
 const ACCOUNT_KPIS: KpiKey[] = ["spend", "impressions", "clicks", "ctr", "cpc", "conversions", "costPerConversion", "leads", "costPerLead", "roas"];
 const CAMPAIGN_KPIS: KpiKey[] = ["spend", "clicks", "ctr", "conversions", "conversionRate", "costPerConversion", "leads", "costPerLead"];
@@ -63,7 +80,7 @@ function kpiLine(keys: KpiKey[], cur: MetricTotals, prev: MetricTotals | null, c
     .map((kv) => {
       const v = kv.value === null ? "not reported" : formatKpi(kv.key, kv.value, currency);
       const change = kv.changePct === null ? "" : ` (${pct(kv.changePct)} vs ${formatKpi(kv.key, kv.previous, currency)})`;
-      return `${KPI_BY_KEY[kv.key].short}: ${v}${change}`;
+      return `${KPI_BY_KEY[kv.key].label}: ${v}${change}`;
     })
     .join("; ");
 }
@@ -81,12 +98,22 @@ export function buildAiContext(i: AiContextInput): string {
   lines.push(`Reporting period: ${i.rangeLabel}, ${longDate(i.range.from)} to ${longDate(i.range.to)} (complete days only)`);
   lines.push(i.comparison ? `Comparison period: ${longDate(i.comparison.from)} to ${longDate(i.comparison.to)}` : "Comparison period: none");
   lines.push("");
+  // The client's headline result, counted per ad account so nothing is counted twice.
+  const accountTotals = i.accounts.map((a) => a.totals).filter((x): x is MetricTotals => !!x);
+  const resolved = resolveGoal(i.goal, accountTotals.length ? accountTotals : i.totals, i.previous);
+  const res = resultsFor(resolved.goal, accountTotals.length ? accountTotals : i.totals, resolved.guessed);
+  const resultName = res.goal === "AWARENESS" ? "people who clicked" : res.label.toLowerCase();
+  lines.push("## Results (lead with these)");
+  lines.push(`- Goal: ${resolved.guessed ? `not set by the agency; treated as ${res.goal === "AWARENESS" ? "awareness" : res.goal === "SALES" ? "sales" : "results (conversions and leads)"} from the data` : resolved.goal.toLowerCase()}`);
+  lines.push(`- ${resultName}: ${formatNumber(Math.round(res.value))}; cost per ${res.goal === "AWARENESS" ? "click" : res.singular}: ${res.costPerMinor === null ? "n/a" : formatMoney(Math.round(res.costPerMinor), c)}${res.valueMinor ? `; sales value credited by the ad platforms: ${formatMoney(res.valueMinor, c, { whole: true })}` : ""}`);
+  if (i.stillCounting) lines.push("- Note: the period ended recently; ad platforms may still add results for the last few days, so result figures may rise.");
+  lines.push("");
   lines.push("## Totals, all platforms");
-  for (const kv of kpiValues(i.kpis, i.totals, i.previous)) {
+  for (const kv of kpiValues(i.kpis, i.totals, i.previous, { stillCounting: i.stillCounting })) {
     const def = KPI_BY_KEY[kv.key];
     const v = kv.value === null ? "not reported" : formatKpi(kv.key, kv.value, c);
     const prev = i.previous ? `; comparison ${kv.previous === null ? "not reported" : formatKpi(kv.key, kv.previous, c)}` : "";
-    const change = kv.changePct === null ? "" : `; change ${pct(kv.changePct)}${def.better === "neutral" ? "" : kv.tone === "good" ? " (favourable)" : kv.tone === "bad" ? " (unfavourable)" : ""}`;
+    const change = kv.changePct === null ? "" : `; change ${pct(kv.changePct)}${kv.verdict ? VERDICT_NOTE[kv.verdict] : ""}`;
     lines.push(`- ${def.label}: ${v}${prev}${change}`);
   }
   if (i.totals.hasEstimatedCost) lines.push("- Note: spend includes estimated Local Services Ads cost.");
@@ -135,6 +162,8 @@ export function buildAiContext(i: AiContextInput): string {
     lines.push("", "## Data notes");
     for (const n of i.notes) lines.push(`- ${n}`);
   }
+  lines.push("", "## What the metrics mean (use these plain explanations when you mention a metric)");
+  for (const k of [...new Set([...i.kpis, ...ACCOUNT_KPIS, ...CAMPAIGN_KPIS])]) lines.push(`- ${KPI_BY_KEY[k].label}: ${KPI_BY_KEY[k].plain}`);
   lines.push("", "Conversions and conversion value are reported by each platform under its own attribution settings; platforms count them differently.");
   return lines.join("\n");
 }

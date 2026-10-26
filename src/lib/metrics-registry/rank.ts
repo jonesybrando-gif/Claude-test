@@ -8,7 +8,7 @@ export const metrics: MetricDef[] = [
   {
     key: "rank.avgPosition",
     source: "rank",
-    label: "Average keyword position",
+    label: "Average Google position (tracked keywords)",
     short: "Avg position",
     format: "position",
     aggregation: "weighted",

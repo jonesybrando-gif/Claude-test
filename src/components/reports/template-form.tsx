@@ -16,7 +16,7 @@ const COMPARE_LABEL = { previous_period: "Previous period", previous_month: "Sam
 const SECTION_HINT: Record<(typeof SECTION_KEYS)[number], string> = {
   executive: "A paragraph or two at the top about the selected date range, rewritten whenever the range changes.",
   summary: "Your own note below, shown as written.",
-  kpis: "Scorecards for the KPIs you choose.",
+  kpis: "The KPI tiles you choose, folded under “Advertising detail”. At a glance always opens the report.",
   trends: "Daily charts for the trend KPIs, with the comparison period.",
   pacing: "Monthly budget, spend to date and month-end projection.",
   platforms: "One row per connected ad account.",
@@ -266,7 +266,7 @@ export function TemplateForm({
           rows={5}
           maxLength={5000}
           placeholder="Optional. A note for the client, such as what changed this month and what's next."
-          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
         />
         {draftNote && <p className={`text-xs ${draftNote.ok ? "text-good-ink" : "text-critical-ink"}`} role={draftNote.ok ? "status" : "alert"}>{draftNote.text}</p>}
         <p className="text-xs text-text-3">Shown exactly as saved. {draftSummary ? "An AI draft uses this client's figures for the default date range; it isn't updated automatically afterwards." : "It isn't generated from the data."}</p>
