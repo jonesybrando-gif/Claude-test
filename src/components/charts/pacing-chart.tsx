@@ -4,6 +4,7 @@ import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Too
 import type { PacingSeriesPoint } from "@/lib/pacing/engine";
 import { formatMoney, formatMoneyCompact } from "@/lib/money";
 import { formatDate } from "@/lib/time";
+import { ChartSummary, ChartTable } from "./chart-table";
 
 interface Props {
   series: PacingSeriesPoint[];
@@ -66,6 +67,11 @@ export function PacingChart({ series, budgetMinor, asOf, currency = "USD", heigh
   const last = series.at(-1);
   const projectedEnd = last?.projectedCumulative ?? last?.actualCumulative ?? null;
   const ticks = series.filter((_, i) => i === 0 || (i + 1) % 7 === 0 || i === series.length - 1).map((p) => p.date);
+  const spent = [...series].reverse().find((p) => p.actualCumulative !== null)?.actualCumulative ?? null;
+  const summary =
+    spent === null
+      ? `No spend yet against a budget of ${formatMoney(budgetMinor, currency, { whole: true })}.`
+      : `Spent ${formatMoney(spent, currency, { whole: true })} of ${formatMoney(budgetMinor, currency, { whole: true })} so far${projectedEnd !== null && projectedEnd !== spent ? `; on this pace, about ${formatMoney(projectedEnd, currency, { whole: true })} by the end of the period` : ""}.`;
   const maxY = Math.max(budgetMinor, projectedEnd ?? 0, ...series.map((p) => p.actualCumulative ?? 0)) * 1.08;
 
   return (
@@ -77,7 +83,8 @@ export function PacingChart({ series, budgetMinor, asOf, currency = "USD", heigh
         <span role="listitem" className="flex items-center gap-1.5 text-text-3">— Budget {formatMoney(budgetMinor, currency, { whole: true })}</span>
         {inRange.length > 0 && <span role="listitem" className="flex items-center gap-1.5 text-text-3"><span className="text-[var(--series-projected)]">◆</span> Note</span>}
       </div>
-      <div style={{ height }}>
+      <ChartSummary text={summary} />
+      <div style={{ height }} aria-hidden>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 64, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="var(--grid)" vertical={false} />
@@ -95,31 +102,16 @@ export function PacingChart({ series, budgetMinor, asOf, currency = "USD", heigh
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <details className="mt-2 text-xs text-text-2">
-        <summary className="cursor-pointer text-text-3">View as table</summary>
-        <div className="mt-2 max-h-64 overflow-auto">
-          <table className="w-full tabular">
-            <thead>
-              <tr className="text-left text-text-3">
-                <th className="py-1 pr-3 font-medium">Date</th>
-                <th className="py-1 pr-3 font-medium">Planned (cum.)</th>
-                <th className="py-1 pr-3 font-medium">Actual (cum.)</th>
-                <th className="py-1 font-medium">Projected (cum.)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {series.map((p) => (
-                <tr key={p.date} className="border-t border-border">
-                  <td className="py-1 pr-3">{formatDate(p.date)}</td>
-                  <td className="py-1 pr-3">{formatMoney(p.plannedCumulative, currency, { whole: true })}</td>
-                  <td className="py-1 pr-3">{p.actualCumulative === null ? "—" : formatMoney(p.actualCumulative, currency, { whole: true })}</td>
-                  <td className="py-1">{p.projectedCumulative === null ? "—" : formatMoney(p.projectedCumulative, currency, { whole: true })}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
+      <ChartTable
+        caption="Cumulative spend by day"
+        columns={["Date", "Planned (cumulative)", "Actual (cumulative)", "Projected (cumulative)"]}
+        rows={series.map((p) => [
+          formatDate(p.date),
+          formatMoney(p.plannedCumulative, currency, { whole: true }),
+          p.actualCumulative === null ? "—" : formatMoney(p.actualCumulative, currency, { whole: true }),
+          p.projectedCumulative === null ? "—" : formatMoney(p.projectedCumulative, currency, { whole: true }),
+        ])}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
 import { cn } from "./cn";
@@ -26,14 +26,20 @@ export function ClientCombobox({
   emptyLabel,
   ariaLabel,
   className,
+  onChange,
+  buttonContent,
 }: {
   name: string;
   options: ComboOption[];
   defaultValue?: string;
-  /** Label for the "" value, e.g. "Don't monitor". */
-  emptyLabel: string;
+  /** Label for the "" value, e.g. "Don't monitor". Omit to offer no empty choice. */
+  emptyLabel?: string;
   ariaLabel: string;
   className?: string;
+  /** Called with the chosen value (e.g. to navigate), as well as updating the hidden input. */
+  onChange?: (value: string) => void;
+  /** Replaces the button's text (the selected label), e.g. an icon for a compact switcher. */
+  buttonContent?: ReactNode;
 }) {
   const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
@@ -45,13 +51,13 @@ export function ClientCombobox({
   const listRef = useRef<HTMLUListElement>(null);
   const listId = useId();
 
-  const all = useMemo(() => [{ value: "", label: emptyLabel }, ...options], [options, emptyLabel]);
+  const all = useMemo(() => (emptyLabel === undefined ? options : [{ value: "", label: emptyLabel }, ...options]), [options, emptyLabel]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return all;
     return all.filter((o) => o.label.toLowerCase().includes(q));
   }, [all, query]);
-  const selected = all.find((o) => o.value === value) ?? all[0];
+  const selected = all.find((o) => o.value === value) ?? all[0] ?? { value: "", label: "" };
 
   // Keep the hidden input in sync for form.reset() (restores defaultValue).
   const hiddenRef = useRef<HTMLInputElement>(null);
@@ -114,6 +120,7 @@ export function ClientCombobox({
     setValue(v);
     setOpen(false);
     buttonRef.current?.focus({ preventScroll: true });
+    if (v !== value) onChange?.(v);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -146,8 +153,12 @@ export function ClientCombobox({
           className,
         )}
       >
-        <span className="truncate">{selected.label}</span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-text-3" aria-hidden />
+        {buttonContent ?? (
+          <>
+            <span className="truncate">{selected.label}</span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-text-3" aria-hidden />
+          </>
+        )}
       </button>
       {open && pos && typeof document !== "undefined" &&
         createPortal(

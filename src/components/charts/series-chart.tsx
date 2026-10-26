@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from "recharts";
 import { formatMetric, type MetricInfo } from "@/lib/dashboards/metrics";
 import { formatDate } from "@/lib/time";
-import { cn } from "../ui/cn";
+import { isAdditiveMetric, summarizeSeries } from "@/lib/chart-summary";
+import { ChartSummary, ChartTable, MetricToggle } from "./chart-table";
 
 /**
  * Daily values of one or more metrics (one shown at a time, chosen with the
@@ -37,6 +38,17 @@ export function SeriesChart({
     previous: previous?.[m.key]?.[i] ?? null,
     previousDate: previousDates?.[i] ?? null,
   }));
+  const fmt = (v: number | null) => formatMetric(m, v, currency);
+  const summary = summarizeSeries({
+    label: m.label,
+    dates,
+    values: data.map((d) => d.current),
+    // Additive metrics compare whole-period totals; the comparison series is aligned day by day.
+    previous: previous ? previous[m.key] ?? null : null,
+    additive: isAdditiveMetric(m.key),
+    count: m.format === "count",
+    format: (v) => fmt(v),
+  });
 
   function Tip({ active, payload }: TooltipProps<number, string>) {
     if (!active || !payload?.length) return null;
@@ -58,17 +70,11 @@ export function SeriesChart({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col">
       {(metrics.length > 1 || previous) && (
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           {metrics.length > 1 ? (
-            <div className="flex flex-wrap gap-1" role="tablist" aria-label="Metric">
-              {metrics.map((x) => (
-                <button key={x.key} type="button" role="tab" aria-selected={m.key === x.key} onClick={() => setSelected(x.key)} className={cn("rounded-md px-2.5 py-1 text-xs cursor-pointer", m.key === x.key ? "bg-surface-2 font-medium text-text ring-1 ring-border" : "text-text-2 hover:text-text")}>
-                  {x.short}
-                </button>
-              ))}
-            </div>
+            <MetricToggle options={metrics.map((x) => ({ key: x.key, label: x.short }))} value={m.key} onChange={setSelected} />
           ) : <span />}
           {previous && (
             <div className="flex gap-3 text-[11px] text-text-3">
@@ -78,7 +84,8 @@ export function SeriesChart({
           )}
         </div>
       )}
-      <div className="min-h-0 flex-1">
+      <ChartSummary text={summary} className="mb-1 line-clamp-2" />
+      <div className="min-h-0 flex-1" aria-hidden>
         <ResponsiveContainer width="100%" height="100%">
           {type === "bar" ? (
             <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barCategoryGap="20%">
@@ -97,6 +104,13 @@ export function SeriesChart({
           )}
         </ResponsiveContainer>
       </div>
+      <ChartTable
+        caption={`${m.label} by day`}
+        columns={previous ? ["Date", m.label, "Comparison date", "Comparison"] : ["Date", m.label]}
+        rows={data.map((d) => (previous ? [formatDate(d.date), fmt(d.current), d.previousDate ? formatDate(d.previousDate) : "—", fmt(d.previous)] : [formatDate(d.date), fmt(d.current)]))}
+        className="mt-1 shrink-0"
+        overlay
+      />
     </div>
   );
 }
