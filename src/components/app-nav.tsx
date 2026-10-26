@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { BarChart3, Bell, Building2, Home, LineChart, Menu as MenuIcon, Plug, Settings, X } from "lucide-react";
+import { BarChart3, Bell, Building2, Home, Menu as MenuIcon, Plug, Settings, X } from "lucide-react";
 import { cn } from "./ui/cn";
 
-const ICONS = { home: Home, allClients: LineChart, clients: Building2, reports: BarChart3, alerts: Bell, integrations: Plug, settings: Settings } as const;
+const ICONS = { home: Home, clients: Building2, reports: BarChart3, alerts: Bell, integrations: Plug, settings: Settings } as const;
 
 export interface NavItem {
   href: string;

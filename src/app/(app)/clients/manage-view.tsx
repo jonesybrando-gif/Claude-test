@@ -56,7 +56,7 @@ export async function ManageView({ user, sp }: { user: SessionUser; sp: ManageSp
   // The manager column only earns its place once the agency has account managers.
   const showManager = managers.length > 0 || clients.some((c) => c.primaryManager);
 
-  // Bulk labelling: a checkbox per row and a bar above the list (admins, once labels exist).
+  // Bulk labelling (admins): a checkbox per row; the label bar floats at the bottom once one is ticked.
   const bulk = admin && !removedView;
   const returnQuery = new URLSearchParams(Object.entries({ q: sp.q, label: sp.label, sort: sp.sort, group: sp.group }).filter((e): e is [string, string] => !!e[1])).toString();
 
@@ -105,7 +105,7 @@ export async function ManageView({ user, sp }: { user: SessionUser; sp: ManageSp
           <TH>Labels</TH>
           <TH>Platforms</TH>
           {showManager && <TH>Account manager</TH>}
-          {removedView && <TH>Removed</TH>}
+          {removedView ? <TH>Removed</TH> : <TH>Time zone</TH>}
           {admin && <TH className="pr-5 text-right"><span className="sr-only">Actions</span></TH>}
         </tr>
       </THead>
@@ -117,7 +117,7 @@ export async function ManageView({ user, sp }: { user: SessionUser; sp: ManageSp
             <TD><div className="flex flex-wrap gap-1">{c.labels.map((l) => <LabelBadge key={l.id} label={l} />)}{c.labels.length === 0 && <span className="text-xs text-text-3">—</span>}</div></TD>
             <TD className="text-[13px]"><div className="flex flex-wrap gap-3">{[...new Set(c.accounts.map((a) => a.platform))].map((p) => <PlatformLabel key={p} platform={p} />)}{c.accounts.length === 0 && <span className="text-text-3">No accounts linked</span>}</div></TD>
             {showManager && <TD className="text-text-2">{c.primaryManager?.name ?? <span className="text-text-3">—</span>}</TD>}
-            {removedView && <TD className="text-text-2">{relativeTime(c.archivedAt?.toISOString() ?? null)}</TD>}
+            <TD className="text-[13px] text-text-2">{removedView ? relativeTime(c.archivedAt?.toISOString() ?? null) : c.timezone.replace(/_/g, " ")}</TD>
             {admin && (
               <TD className="pr-5">
                 <div className="flex items-center justify-end gap-1">{rowActions(c)}</div>
@@ -126,7 +126,7 @@ export async function ManageView({ user, sp }: { user: SessionUser; sp: ManageSp
           </TR>
         ))}
         {rows.length === 0 && (
-          <tr><td colSpan={2 + (bulk ? 1 : 0) + (showManager ? 1 : 0) + (removedView ? 1 : 0) + (admin ? 1 : 0) + 1} className="px-5 py-8 text-center text-sm text-text-3">{removedView ? "No removed clients." : "No clients match these filters."}</td></tr>
+          <tr><td colSpan={3 + (bulk ? 1 : 0) + (showManager ? 1 : 0) + (admin ? 1 : 0) + 1} className="px-5 py-8 text-center text-sm text-text-3">{removedView ? "No removed clients." : "No clients match these filters."}</td></tr>
         )}
       </TBody>
     </Table>
@@ -199,7 +199,6 @@ export async function ManageView({ user, sp }: { user: SessionUser; sp: ManageSp
         </div>
       )}
       </div>
-      {bulk && <BulkLabelBar labels={labels} action={bulkLabelAction} returnQuery={returnQuery} />}
       {groups.map((g) => (
         <Card key={g.key}>
           {g.key !== "all" && (
@@ -211,6 +210,7 @@ export async function ManageView({ user, sp }: { user: SessionUser; sp: ManageSp
           {cards(g.rows)}
         </Card>
       ))}
+      {bulk && <BulkLabelBar labels={labels} action={bulkLabelAction} returnQuery={returnQuery} />}
       </>
       )}
     </div>

@@ -76,7 +76,7 @@ const boxes = (root: ParentNode = document) => [...root.querySelectorAll<HTMLInp
 
 /** Row checkbox for bulk labelling; belongs to the bulk form wherever it sits in the table. */
 export function SelectClientBox({ id, name }: { id: string; name: string }) {
-  return <input type="checkbox" name="client" value={id} form={BULK_FORM} aria-label={`Select ${name}`} className="h-4 w-4 accent-[var(--brand)]" />;
+  return <input type="checkbox" name="client" value={id} form={BULK_FORM} aria-label={`Select ${name}`} title="Select to add or remove labels in bulk" className="h-4 w-4 accent-[var(--brand)]" />;
 }
 
 /** Header checkbox: selects or clears every client row in its table. */
@@ -115,7 +115,6 @@ export function BulkLabelBar({ labels, action, returnQuery }: { labels: LabelInf
       document.removeEventListener("bulk-selection", update);
     };
   }, []);
-  if (!labels.length) return null;
   const clear = () => {
     for (const b of boxes()) b.checked = false;
     for (const b of document.querySelectorAll<HTMLInputElement>('input[aria-label="Select all clients in this list"]')) b.checked = false;
@@ -124,7 +123,7 @@ export function BulkLabelBar({ labels, action, returnQuery }: { labels: LabelInf
   // Nothing selected: the form stays (the row checkboxes belong to it) but shows nothing.
   if (!count) return <form id={BULK_FORM} action={action} hidden />;
   return (
-    <form id={BULK_FORM} action={action} className="flex flex-wrap items-center gap-2 rounded-xl border border-text/20 bg-surface px-3 py-2 text-sm shadow-sm">
+    <form id={BULK_FORM} action={action} aria-label="Label the selected clients" className="sticky bottom-4 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-text/20 bg-surface px-3 py-2 text-sm shadow-lg">
       <input type="hidden" name="return" value={returnQuery} />
       <span className="font-medium">{count} selected</span>
       <Select name="label" required value={choice} onChange={(e) => setChoice(e.target.value)} className="w-full sm:w-48" aria-label="Label to add or remove" disabled={!count}>

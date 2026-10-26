@@ -18,7 +18,8 @@ import {
 
 export interface PortfolioResults {
   range: DateRange;
-  previousRange: DateRange;
+  /** Null when there is nothing to compare with. */
+  previousRange: DateRange | null;
   byClient: Map<string, ClientResults>;
   /** Currency used for the agency totals: the one most clients report in. */
   currency: string;
@@ -87,7 +88,7 @@ export async function portfolioResultsFor(where: Prisma.ClientWhereInput, range:
   }
   return {
     range,
-    previousRange: previousRange ?? range,
+    previousRange,
     byClient,
     currency,
     currencies: [...counts.keys()],

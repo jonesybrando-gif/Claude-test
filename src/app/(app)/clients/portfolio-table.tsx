@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Columns3, SlidersHorizontal } from "lucide-react";
 import type { PlatformKey } from "@/lib/platforms";
 import { STATUS_SEVERITY } from "@/lib/pacing/status";
@@ -13,7 +13,7 @@ import { relativeTime } from "@/lib/time";
 import { Input, Select } from "@/components/ui/input";
 import { LabelBadge, type LabelInfo } from "@/components/label-badge";
 import { PlatformLabel } from "@/components/platform-badge";
-import { BudgetStatus, Dot } from "@/components/status-dot";
+import { BudgetStatus } from "@/components/status-dot";
 import { Sparkline } from "@/components/kpi/sparkline";
 import { cn } from "@/components/ui/cn";
 
@@ -56,7 +56,7 @@ export interface PortfolioTotals {
   costPerResultChange: ChangeWords | null;
 }
 
-type SortKey = "attention" | "name" | "spend" | "results" | "cpr" | "budget";
+type SortKey = "attention" | "name" | "spend" | "spendChange" | "results" | "cpr" | "budget" | "sync";
 type FilterKey = "all" | "attention" | "over" | "under" | "well" | "missing";
 type OptionalColumn = "platforms" | "owner" | "sync";
 
@@ -81,6 +81,8 @@ const SORTERS: Record<SortKey, (a: PortfolioRow, b: PortfolioRow) => number> = {
   results: (a, b) => a.results - b.results,
   cpr: (a, b) => (a.costPerResultMinor ?? Infinity) - (b.costPerResultMinor ?? Infinity),
   budget: (a, b) => budgetRank(a) - budgetRank(b) || Math.abs(a.varianceMinor ?? 0) - Math.abs(b.varianceMinor ?? 0),
+  spendChange: (a, b) => (a.spendChangePct ?? -Infinity) - (b.spendChangePct ?? -Infinity),
+  sync: (a, b) => (a.lastSyncAt ?? "").localeCompare(b.lastSyncAt ?? ""),
 };
 
 const COLUMN_LABEL: Record<OptionalColumn, string> = { platforms: "Platforms", owner: "Account manager", sync: "Last sync" };
@@ -102,20 +104,40 @@ function Delta({ c, pct }: { c?: ChangeWords | null; pct?: number | null }) {
   return <span className="ml-1.5 text-xs text-text-3" title={words}><span aria-hidden>{short}</span><span className="sr-only">, {words}</span></span>;
 }
 
+/** Critical is a filled red dot, Watch a hollow amber ring: the shape differs, not only the colour. */
 function AttentionDot({ r }: { r: PortfolioRow }) {
-  if (!r.attentionTone) return <span className="inline-block h-2 w-2 shrink-0" aria-hidden />;
+  if (!r.attentionTone) return <span className="inline-block h-2.5 w-2.5 shrink-0" aria-hidden />;
+  const words = r.reasons.map((x) => x.label).join(" · ");
   return (
-    <span title={r.reasons.map((x) => x.label).join(" · ")} className="inline-flex">
-      <Dot tone={r.attentionTone} />
+    <span title={`${r.attentionTone === "critical" ? "Critical" : "Watch"}: ${words}`} className="inline-flex shrink-0">
+      <span aria-hidden className={cn("inline-block h-2.5 w-2.5 rounded-full", r.attentionTone === "critical" ? "bg-critical" : "border-2 border-dot-watch")} />
       <span className="sr-only">{r.attentionTone === "critical" ? "Critical: " : "Watch: "}{r.reasons.map((x) => x.label).join(", ")}.</span>
     </span>
   );
 }
 
-/** A small popover (details/summary) for the toolbar's Filters and Columns menus. */
+/** A small popover (details/summary) for the toolbar's Filters and Columns menus; Escape or a click outside closes it. */
 function ToolbarMenu({ label, icon, active, children }: { label: string; icon: React.ReactNode; active?: boolean; children: React.ReactNode }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (ref.current?.open && !ref.current.contains(e.target as Node)) ref.current.removeAttribute("open");
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && ref.current?.open) {
+        ref.current.removeAttribute("open");
+        ref.current.querySelector("summary")?.focus();
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, []);
   return (
-    <details className="relative">
+    <details ref={ref} className="relative">
       <summary className={cn("inline-flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-surface-2", active ? "font-medium text-text" : "text-text-2")}>
         {icon}
         {label}
@@ -130,7 +152,7 @@ function ToolbarMenu({ label, icon, active, children }: { label: string; icon: R
  * and a spend trend. A row opens the client; the chevron shows why it needs
  * attention and the next step. Phones get one card per client.
  */
-export function PortfolioTable({ rows, totals, labels, initialFilter }: { rows: PortfolioRow[]; totals: PortfolioTotals; labels: LabelInfo[]; initialFilter?: string }) {
+export function PortfolioTable({ rows, totals, labels, initialFilter, combinedHref }: { rows: PortfolioRow[]; totals: PortfolioTotals; labels: LabelInfo[]; initialFilter?: string; combinedHref?: string }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [label, setLabel] = useState("");
@@ -252,7 +274,24 @@ export function PortfolioTable({ rows, totals, labels, initialFilter }: { rows: 
         </div>
       </div>
 
-      {/* Phones: one card per client. */}
+      {/* Phones: sort, the totals, then one card per client. */}
+      <div className="flex flex-col gap-2 md:hidden">
+        <Select value={`${sort.key}:${sort.dir}`} onChange={(e) => { const [key, dir] = e.target.value.split(":"); setSort({ key: key as SortKey, dir: Number(dir) as 1 | -1 }); }} aria-label="Sort clients">
+          <option value="attention:-1">Needs attention first</option>
+          <option value="spend:-1">Highest spend</option>
+          <option value="spendChange:-1">Biggest spend increase</option>
+          <option value="results:-1">Most results</option>
+          <option value="cpr:1">Lowest cost per result</option>
+          <option value="budget:-1">Furthest off budget</option>
+          <option value="name:1">Name A–Z</option>
+        </Select>
+        <div className="grid grid-cols-3 gap-2 rounded-xl border border-border bg-surface-2/70 p-3 text-sm tabular">
+          <span className="col-span-3 text-xs font-medium text-text-2">{totals.label}</span>
+          <span><span className="block text-xs text-text-3">Ad spend</span><span className="font-semibold">{totals.spend}</span><Delta pct={totals.spendChangePct} /></span>
+          <span><span className="block text-xs text-text-3">Results</span><span className="font-semibold">{totals.results}</span><Delta c={totals.resultsChange} /></span>
+          <span><span className="block text-xs text-text-3">Cost / result</span><span className="font-semibold">{totals.costPerResult}</span><Delta c={totals.costPerResultChange} /></span>
+        </div>
+      </div>
       <ul className="flex flex-col gap-2 md:hidden" aria-label="Clients">
         {visible.map((r) => (
           <li key={r.id}>
@@ -263,11 +302,15 @@ export function PortfolioTable({ rows, totals, labels, initialFilter }: { rows: 
                 <BudgetStatus state={r.pacing} varianceMinor={r.varianceMinor} currency={r.currency} className="text-[13px]" />
               </span>
               <span className="grid grid-cols-3 gap-2 text-sm tabular">
-                <span><span className="block text-xs text-text-3">Ad spend</span>{formatMoney(r.spendMinor, r.currency, { whole: true })}</span>
+                <span><span className="block text-xs text-text-3">Ad spend</span>{formatMoney(r.spendMinor, r.currency, { whole: true })}<Delta pct={r.spendChangePct} /></span>
                 <span><span className="block text-xs text-text-3">Results</span>{formatNumber(r.results, 0)}<Delta c={r.resultsChange} /></span>
-                <span><span className="block text-xs text-text-3">Cost / result</span>{r.costPerResultMinor === null ? "—" : formatMoney(r.costPerResultMinor, r.currency)}</span>
+                <span><span className="block text-xs text-text-3">Cost / result</span>{r.costPerResultMinor === null ? "—" : formatMoney(r.costPerResultMinor, r.currency)}<Delta c={r.costPerResultChange} /></span>
               </span>
               {r.reasons.length > 0 && <span className="text-xs text-text-2">{r.reasons.map((x) => x.label).join(" · ")}</span>}
+              <span className="text-xs text-text-3">
+                {r.platforms.length ? <>Synced {relativeTime(r.lastSyncAt).toLowerCase()}{r.stale && <span className="text-warning-ink"> · data is old</span>}</> : "No accounts linked"}
+                {r.isDemo && " · demo"}
+              </span>
             </Link>
           </li>
         ))}
@@ -284,7 +327,7 @@ export function PortfolioTable({ rows, totals, labels, initialFilter }: { rows: 
               {head("cpr", "Cost / result")}
               {head("budget", "Budget")}
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-text-2">Spend trend</th>
-              {extra.map((c) => <th key={c} scope="col" className="px-4 py-3 text-left text-xs font-medium whitespace-nowrap text-text-2">{COLUMN_LABEL[c]}</th>)}
+              {extra.map((c) => (c === "sync" ? <Fragment key={c}>{head("sync", COLUMN_LABEL[c], "text-left")}</Fragment> : <th key={c} scope="col" className="px-4 py-3 text-left text-xs font-medium whitespace-nowrap text-text-2">{COLUMN_LABEL[c]}</th>))}
               <th scope="col" className="w-12 pr-3"><span className="sr-only">Details</span></th>
             </tr>
           </thead>
@@ -384,9 +427,15 @@ export function PortfolioTable({ rows, totals, labels, initialFilter }: { rows: 
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-text-3">
-        {visible.length} of {rows.length} clients. Results are conversions or leads reported by the ad platforms, each counted once. The dot marks clients that need attention, judged on the last 30 complete days; budget status is for the current budget period.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 text-xs text-text-3">
+        <p className="max-w-[90ch]">
+          {visible.length} of {rows.length} clients.{" "}
+          <span className="inline-flex items-center gap-1 align-middle"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-critical" /> critical</span>,{" "}
+          <span className="inline-flex items-center gap-1 align-middle"><span aria-hidden className="inline-block h-2 w-2 rounded-full border-2 border-dot-watch" /> watch</span>
+          , judged on the last 30 complete days. Results are conversions or leads reported by the ad platforms, each counted once. Budget status is for the current budget period.
+        </p>
+        {combinedHref && <Link href={combinedHref} className="shrink-0 text-[13px] font-medium text-brand-text hover:underline">All clients combined →</Link>}
+      </div>
     </div>
   );
 }

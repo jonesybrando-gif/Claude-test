@@ -114,7 +114,7 @@ export async function PerformanceView({ user, today, range, cmpRange, preset, co
       {results.currencies.length > 1 && (
         <Banner tone="warning">Clients report in more than one currency ({results.currencies.join(", ")}). Each row is in its own currency; the totals cover {tc} clients only.</Banner>
       )}
-      <PortfolioTable rows={rows} totals={totals} labels={labels} initialFilter={initialFilter} />
+      <PortfolioTable rows={rows} totals={totals} labels={labels} initialFilter={initialFilter} combinedHref={`/clients?view=combined&${rangeQuery}`} />
     </div>
   );
 }
