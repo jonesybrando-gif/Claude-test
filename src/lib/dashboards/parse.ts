@@ -12,7 +12,7 @@ export const MAX_H = 16;
 export const MAX_TEXT = 5000;
 export const MAX_TITLE = 120;
 
-export const WIDGET_KINDS: WidgetKind[] = ["kpi", "line", "bar", "table", "pie", "rankings", "calllog", "text", "pacing", "campaigns"];
+export const WIDGET_KINDS: WidgetKind[] = ["kpi", "line", "bar", "table", "pie", "rankings", "calllog", "formlog", "text", "pacing", "campaigns"];
 
 /** Kinds that chart or tabulate metrics, and how many metrics each takes. */
 export const METRIC_LIMITS: Partial<Record<WidgetKind, { min: number; max: number }>> = {
@@ -32,6 +32,7 @@ export const MIN_SIZE: Record<WidgetKind, { w: number; h: number }> = {
   pie: { w: 3, h: 3 },
   rankings: { w: 4, h: 3 },
   calllog: { w: 6, h: 4 },
+  formlog: { w: 6, h: 4 },
   text: { w: 2, h: 1 },
   pacing: { w: 6, h: 4 },
   campaigns: { w: 6, h: 4 },
@@ -46,6 +47,7 @@ export const DEFAULT_SIZE: Record<WidgetKind, { w: number; h: number }> = {
   pie: { w: 4, h: 4 },
   rankings: { w: 6, h: 5 },
   calllog: { w: 12, h: 8 },
+  formlog: { w: 12, h: 6 },
   text: { w: 4, h: 2 },
   pacing: { w: 12, h: 6 },
   campaigns: { w: 12, h: 7 },

@@ -9,6 +9,7 @@ export type WidgetKind =
   | "pie"        // share by dimension
   | "rankings"   // tracked keyword positions (rank source)
   | "calllog"    // recent individual calls (CallRail)
+  | "formlog"    // recent form submissions (CallRail form tracking)
   | "text"       // free text / heading / note
   | "pacing"     // existing budget pacing block (ads)
   | "campaigns"; // existing campaign table (ads)

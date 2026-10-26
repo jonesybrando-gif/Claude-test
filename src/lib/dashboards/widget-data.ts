@@ -35,12 +35,25 @@ export interface CallLogRow {
   recordingUrl: string | null;
 }
 
+/** One form submission in a form log widget (CallRail form tracking). */
+export interface FormLogRow {
+  id: string;
+  submittedAt: string;
+  name: string | null;
+  formUrl: string | null;
+  referrer: string | null;
+  referringUrl: string | null;
+  firstForm: boolean;
+  lead: boolean;
+}
+
 export type WidgetData =
   | { kind: "kpi"; metric: MetricInfo; value: number | null; previous: number | null; changePct: number | null; tone: Tone | null; spark: (number | null)[]; hasComparison: boolean }
   | { kind: "series"; metrics: MetricInfo[]; dates: string[]; current: Record<string, (number | null)[]>; previous: Record<string, (number | null)[]> | null; previousDates: string[] | null }
   | { kind: "breakdown"; metrics: MetricInfo[]; dimensionLabel: string; rows: { label: string; values: Record<string, number | null> }[] }
   | { kind: "rankings"; rows: KeywordRankRow[]; hasComparison: boolean }
   | { kind: "calllog"; rows: CallLogRow[]; total: number; timeZone: string | null }
+  | { kind: "formlog"; rows: FormLogRow[]; total: number; timeZone: string | null }
   | { kind: "text" }
   | { kind: "pacing" }
   | { kind: "campaigns" }

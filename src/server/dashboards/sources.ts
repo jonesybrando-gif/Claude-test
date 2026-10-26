@@ -4,7 +4,7 @@ import { prisma } from "../db";
 import type { MetricSource } from "@/lib/metrics-registry";
 import { diffDays, type IsoDate } from "@/lib/pacing/dates";
 import { keywordRankTable as rankRows } from "../metrics/rankings";
-import type { CallLogRow, KeywordRankRow } from "@/lib/dashboards/widget-data";
+import type { CallLogRow, FormLogRow, KeywordRankRow } from "@/lib/dashboards/widget-data";
 
 // Data a dashboard needs from sources that live outside the metric registry's
 // query API. Kept behind small functions so the resolver (./data.ts) can be
@@ -84,5 +84,22 @@ export const callLog: CallLogFn = async (clientId, { from, to, limit = 100, staf
       tags: r.tags,
       recordingUrl: staff ? r.recordingUrl : null,
     })),
+  };
+};
+
+export type FormLogFn = (clientId: string, opts: { from: IsoDate; to: IsoDate; limit?: number }) => Promise<{ rows: FormLogRow[]; total: number; timeZone: string | null }>;
+
+/** Most recent form submissions in the range (CallRail form tracking), newest first. */
+export const formLog: FormLogFn = async (clientId, { from, to, limit = 100 }) => {
+  const where = { clientId, date: { gte: new Date(`${from}T00:00:00.000Z`), lte: new Date(`${to}T00:00:00.000Z`) } };
+  const [rows, total, asset] = await Promise.all([
+    prisma.formRecord.findMany({ where, orderBy: { submittedAt: "desc" }, take: Math.min(Math.max(limit, 1), 500) }),
+    prisma.formRecord.count({ where }),
+    prisma.dataAsset.findFirst({ where: { clientId, kind: "CALLRAIL_COMPANY" }, select: { timezone: true } }),
+  ]);
+  return {
+    total,
+    timeZone: asset?.timezone ?? null,
+    rows: rows.map((r) => ({ id: r.id, submittedAt: r.submittedAt.toISOString(), name: r.name, formUrl: r.formUrl, referrer: r.referrer, referringUrl: r.referringUrl, firstForm: r.firstForm, lead: r.leadStatus === "good_lead" })),
   };
 };

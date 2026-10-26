@@ -59,6 +59,7 @@ function deps(over: Partial<ResolverDeps> = {}): ResolverDeps & { calls: Record<
       return [];
     }),
     callLog: vi.fn(async () => ({ rows: [], total: 0, timeZone: null })),
+    formLog: vi.fn(async () => ({ rows: [], total: 0, timeZone: null })),
     adPerformance: vi.fn(async (_c: string, r: { from: string; to: string }) => {
       calls.ads.push([r]);
       return perf(r, { costMinor: 100 });

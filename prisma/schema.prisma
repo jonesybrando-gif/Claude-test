@@ -710,6 +710,7 @@ model DataAsset {
   metrics  MetricDaily[]
   keywords TrackedKeyword[]
   calls    CallRecord[]
+  forms    FormRecord[]
 
   @@unique([kind, externalId, clientId])
   @@index([clientId])
@@ -822,6 +823,27 @@ model CallRecord {
   tags           String[]  @default([])
   /// CallRail's shareable recording player link (staff only).
   recordingUrl   String?
+
+  @@unique([assetId, externalId])
+  @@index([clientId, date])
+  @@index([assetId, date])
+}
+
+/// One form submission (CallRail form tracking), for form logs. Kept 13 months.
+model FormRecord {
+  id           String    @id @default(cuid())
+  assetId      String
+  asset        DataAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  clientId     String
+  externalId   String
+  submittedAt  DateTime
+  date         DateTime  @db.Date
+  name         String?
+  formUrl      String?
+  referrer     String?
+  referringUrl String?
+  firstForm    Boolean   @default(false)
+  leadStatus   String?
 
   @@unique([assetId, externalId])
   @@index([clientId, date])

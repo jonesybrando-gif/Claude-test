@@ -22,7 +22,7 @@ export interface WidgetDraft {
   title?: string;
 }
 
-const KIND_ICON: Record<WidgetKind, typeof Hash> = { kpi: Hash, line: LineChart, bar: BarChart3, table: Table2, pie: PieChart, rankings: ListOrdered, calllog: Phone, text: Type, pacing: Wallet, campaigns: Table2 };
+const KIND_ICON: Record<WidgetKind, typeof Hash> = { kpi: Hash, line: LineChart, bar: BarChart3, table: Table2, pie: PieChart, rankings: ListOrdered, calllog: Phone, formlog: Table2, text: Type, pacing: Wallet, campaigns: Table2 };
 
 const METRIC_KINDS: WidgetKind[] = ["kpi", "line", "bar", "table", "pie"];
 
@@ -34,7 +34,7 @@ export function kindsFor(tab: LibraryTab): WidgetKind[] {
   const metricKinds = hasMetrics ? METRIC_KINDS.filter((k) => hasDims || (k !== "table" && k !== "pie")) : [];
   if (tab === "ads") return [...metricKinds, "pacing", "campaigns"];
   if (tab === "rank") return ["rankings", ...metricKinds];
-  if (tab === "callrail") return [...metricKinds, "calllog"];
+  if (tab === "callrail") return [...metricKinds, "calllog", "formlog"];
   return metricKinds;
 }
 
@@ -89,7 +89,8 @@ export function WidgetLibrary({ linked, templateMode, onAdd, onClose, full }: { 
     if (kind === "table") return `Top rows by the first metric; up to ${max} columns.`;
     if (kind === "pie") return "Share of one metric by a breakdown.";
     if (kind === "rankings") return "Tracked keyword positions and their change.";
-    if (kind === "calllog") return "The most recent calls: caller, location, source, duration, status and recording.";
+    if (kind === "calllog") return "The most recent calls: date, caller, source, phone number, answered, first call, keywords, campaign and recording.";
+    if (kind === "formlog") return "The most recent form submissions: date, name, form URL, referrer and first submission.";
     if (kind === "pacing") return "The budget pacing chart and figures for the current period.";
     if (kind === "campaigns") return "The sortable campaign table for the selected range.";
     return "A heading or note. Supports # headings, - bullets and **bold**.";

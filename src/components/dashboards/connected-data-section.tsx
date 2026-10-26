@@ -20,9 +20,12 @@ const KIND_SOURCE: Record<DataAssetKind, MetricSource> = {
   RANK_PROJECT: "rank",
 };
 
-/** A template's headline numbers: its first row of KPI tiles. */
+/** A template's headline numbers: its first row of KPI tiles, moved to the top. */
 function headlineWidgets(widgets: DashboardWidget[]): DashboardWidget[] {
-  return widgets.filter((w) => w.kind === "kpi" && w.y === 0);
+  const kpis = widgets.filter((w) => w.kind === "kpi");
+  if (!kpis.length) return [];
+  const top = Math.min(...kpis.map((w) => w.y));
+  return kpis.filter((w) => w.y === top).map((w) => ({ ...w, y: 0 }));
 }
 
 /**

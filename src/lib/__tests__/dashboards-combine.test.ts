@@ -19,7 +19,7 @@ describe("resolveTemplateChoices", () => {
   it("stacks several templates under headings without overlaps", () => {
     const t = resolveTemplateChoices(["builtin:callrail-calls", "builtin:ga4-overview", "blank"], DASHBOARD_TEMPLATES, [])!;
     expect(t.name).toBe("Calls (CallRail) + Website traffic (GA4)");
-    const headings = t.widgets.filter((w) => w.kind === "text");
+    const headings = t.widgets.filter((w) => /^s\d+-heading$/.test(w.id));
     expect(headings.map((h) => h.text)).toEqual(["## Calls (CallRail)", "## Website traffic (GA4)"]);
     for (const a of t.widgets) for (const b of t.widgets) expect(overlaps(a, b)).toBe(false);
     // GA4's heading sits below everything from CallRail.

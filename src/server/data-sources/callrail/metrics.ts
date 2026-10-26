@@ -32,6 +32,14 @@ export interface CallRailFormSubmission {
   id?: string;
   submitted_at: string;
   source?: string | null;
+  form_url?: string | null;
+  referrer?: string | null;
+  referring_url?: string | null;
+  first_form?: boolean | null;
+  customer_name?: string | null;
+  formatted_customer_name?: string | null;
+  lead_status?: string | null;
+  value?: string | number | null;
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}/;
@@ -174,6 +182,7 @@ export function callsToRows(calls: CallRailCall[], opts: { timeZone?: string | n
     if (city) dims.push(["city", city]);
     if (when) dims.push(["weekday", when.weekday], ["hour", when.hour]);
     for (const tag of tagNames(c.tags)) dims.push(["tag", tag]);
+    dims.push(["status", answered ? "Answered" : "Missed"]);
     for (const [dim, val] of dims) {
       acc.add(date, "callrail.calls", 1, dim, val);
       acc.add(date, "callrail.answered", answered ? 1 : 0, dim, val);
@@ -189,7 +198,7 @@ export function callsToRows(calls: CallRailCall[], opts: { timeZone?: string | n
 
 export function formsToRows(forms: CallRailFormSubmission[], opts: { timeZone?: string | null; from: IsoDate; to: IsoDate }): MetricRow[] {
   const acc = new Acc();
-  for (const d of eachDay(opts.from, opts.to)) acc.add(d, "callrail.forms", 0);
+  for (const d of eachDay(opts.from, opts.to)) for (const m of ["callrail.forms", "callrail.firstForms", "callrail.formLeads", "callrail.formValue"]) acc.add(d, m, 0);
   const seen = new Set<string>();
   for (const f of forms) {
     if (f.id) {
@@ -198,8 +207,17 @@ export function formsToRows(forms: CallRailFormSubmission[], opts: { timeZone?: 
     }
     const date = localDate(f.submitted_at, opts.timeZone);
     if (!date || date < opts.from || date > opts.to) continue;
+    const source = clean(f.source) || "(unknown)";
+    const first = f.first_form === true;
+    const lead = f.lead_status === "good_lead";
+    const value = valueCents(f.value);
     acc.add(date, "callrail.forms", 1);
-    acc.add(date, "callrail.forms", 1, "source", clean(f.source) || "(unknown)");
+    acc.add(date, "callrail.firstForms", first ? 1 : 0);
+    acc.add(date, "callrail.formLeads", lead ? 1 : 0);
+    acc.add(date, "callrail.formValue", value);
+    acc.add(date, "callrail.forms", 1, "source", source);
+    acc.add(date, "callrail.firstForms", first ? 1 : 0, "source", source);
+    acc.add(date, "callrail.formLeads", lead ? 1 : 0, "source", source);
   }
   return acc.rows();
 }
@@ -261,6 +279,43 @@ export function callsToRecords(calls: CallRailCall[], opts: { timeZone?: string 
       leadStatus: opt(c.lead_status, 40),
       tags: tagNames(c.tags),
       recordingUrl: /^https:\/\/[a-z0-9.-]*callrail\.com\//i.test(rec) ? rec.slice(0, 500) : null,
+    });
+  }
+  return [...out.values()];
+}
+
+/** One form submission as stored for form logs. */
+export interface FormRecordRow {
+  externalId: string;
+  submittedAt: Date;
+  date: IsoDate;
+  name: string | null;
+  formUrl: string | null;
+  referrer: string | null;
+  referringUrl: string | null;
+  firstForm: boolean;
+  leadStatus: string | null;
+}
+
+/** Form submissions in [from, to] (local dates) as form-log records; ones without an id are skipped. */
+export function formsToRecords(forms: CallRailFormSubmission[], opts: { timeZone?: string | null; from: IsoDate; to: IsoDate }): FormRecordRow[] {
+  const out = new Map<string, FormRecordRow>();
+  for (const f of forms) {
+    const id = f.id == null ? "" : String(f.id);
+    if (!id || out.has(id)) continue;
+    const date = localDate(f.submitted_at, opts.timeZone);
+    const t = Date.parse(f.submitted_at);
+    if (!date || date < opts.from || date > opts.to || !Number.isFinite(t)) continue;
+    out.set(id, {
+      externalId: id,
+      submittedAt: new Date(t),
+      date,
+      name: opt(f.formatted_customer_name) ?? opt(f.customer_name),
+      formUrl: landingPageOf(f.form_url) || null,
+      referrer: opt(f.source) ?? opt(f.referrer),
+      referringUrl: opt(f.referring_url, 500),
+      firstForm: f.first_form === true,
+      leadStatus: opt(f.lead_status, 40),
     });
   }
   return [...out.values()];

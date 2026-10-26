@@ -9,6 +9,7 @@ export const KIND_LABEL: Record<WidgetKind, string> = {
   pie: "Pie chart",
   rankings: "Keyword rankings",
   calllog: "Call log",
+  formlog: "Form log",
   text: "Text",
   pacing: "Budget pacing",
   campaigns: "Campaigns table",
@@ -32,6 +33,8 @@ export function widgetTitle(w: Pick<DashboardWidget, "kind" | "title" | "metrics
       return "Keyword rankings";
     case "calllog":
       return "Call log";
+    case "formlog":
+      return "Form submissions";
     case "text":
       return "";
     case "pacing":

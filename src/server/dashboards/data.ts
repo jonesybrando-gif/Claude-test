@@ -1,7 +1,7 @@
 import "server-only";
 import { getClientPerformance, type ClientPerformance } from "../reporting";
 import { metricBreakdown, metricSeries, metricTotals } from "../metrics/query";
-import { callLog, keywordRankTable, type CallLogFn, type KeywordRankTableFn } from "./sources";
+import { callLog, formLog, keywordRankTable, type CallLogFn, type FormLogFn, type KeywordRankTableFn } from "./sources";
 import type { ClientReport } from "../client-report";
 import { comparisonRange, resolveRange, type CompareMode, type DateRange, type RangePreset } from "@/lib/date-ranges";
 import { eachDay, type IsoDate } from "@/lib/pacing/dates";
@@ -49,10 +49,11 @@ export interface ResolverDeps {
   metricBreakdown: typeof metricBreakdown;
   keywordRankTable: KeywordRankTableFn;
   callLog: CallLogFn;
+  formLog: FormLogFn;
   adPerformance: (clientId: string, range: DateRange) => Promise<ClientPerformance>;
 }
 
-export const defaultResolverDeps: ResolverDeps = { metricTotals, metricSeries, metricBreakdown, keywordRankTable, callLog, adPerformance: getClientPerformance };
+export const defaultResolverDeps: ResolverDeps = { metricTotals, metricSeries, metricBreakdown, keywordRankTable, callLog, formLog, adPerformance: getClientPerformance };
 
 /** The ad part of a loaded client report, in the shape the resolver needs. */
 export function adDataFromReport(rep: Pick<ClientReport, "perf" | "cmpPerf" | "client">): AdData | null {
@@ -193,6 +194,16 @@ export async function resolveWidgets(widgets: DashboardWidget[], ctx: ResolveCon
       ).catch(() => FAILED),
     );
   }
+  for (const w of widgets) {
+    if (w.kind !== "formlog") continue;
+    const p = periodOf(w);
+    logs.set(
+      w.id,
+      deps.formLog(ctx.clientId, { from: p.range.from, to: p.range.to, limit: 100 }).then((r): WidgetData =>
+        r.rows.length ? { kind: "formlog", rows: r.rows, total: r.total, timeZone: r.timeZone } : emptyFor("callrail", ctx.linked, "No form submissions in this period."),
+      ).catch(() => FAILED),
+    );
+  }
   await Promise.all(jobs);
 
   // 3. Build each widget.
@@ -227,6 +238,7 @@ async function buildWidget(w: DashboardWidget, p: Period, ctx: ResolveContext, l
     case "rankings":
       return l.rankings!;
     case "calllog":
+    case "formlog":
       return l.calllog!;
     case "table":
     case "pie":

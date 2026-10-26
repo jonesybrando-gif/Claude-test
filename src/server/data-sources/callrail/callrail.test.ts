@@ -87,6 +87,8 @@ describe("call → daily bucket mapping", () => {
     expect(pick(rows, "callrail.missed", d, "source", "Google Ads")).toBe(1);
     expect(pick(rows, "callrail.calls", d, "weekday", "1 Mon")).toBe(4); // Oct 5 2026 is a Monday
     expect(pick(rows, "callrail.calls", d, "hour", "10:00")).toBe(4);
+    expect(pick(rows, "callrail.calls", d, "status", "Answered")).toBe(2);
+    expect(pick(rows, "callrail.calls", d, "status", "Missed")).toBe(2);
   });
 
   it("maps medium, landing page, city, tags and value, and builds call-log records", async () => {
@@ -123,6 +125,22 @@ describe("call → daily bucket mapping", () => {
     expect(pick(rows, "callrail.forms", "2026-10-05")).toBe(2);
     expect(pick(rows, "callrail.forms", "2026-10-05", "source", "Facebook")).toBe(1);
   });
+
+  it("maps form details: first-time, leads, quoted total and form-log records", async () => {
+    const { formsToRecords } = await import("./metrics");
+    const forms = [
+      { id: "f1", submitted_at: "2026-10-05T09:00:00-07:00", source: "Google Organic", first_form: true, lead_status: "good_lead", value: "150", form_url: "https://www.example.com/contact/?x=1", referring_url: "https://www.google.com/", formatted_customer_name: "Jane Doe" },
+      { id: "f2", submitted_at: "2026-10-05T10:00:00-07:00", source: "Direct", first_form: false },
+    ];
+    const opts = { timeZone: "America/Los_Angeles", from: "2026-10-05", to: "2026-10-05" };
+    const rows = formsToRows(forms, opts);
+    expect(pick(rows, "callrail.firstForms", "2026-10-05")).toBe(1);
+    expect(pick(rows, "callrail.formLeads", "2026-10-05")).toBe(1);
+    expect(pick(rows, "callrail.formValue", "2026-10-05")).toBe(15000);
+    const recs = formsToRecords(forms, opts);
+    expect(recs[0]).toMatchObject({ externalId: "f1", name: "Jane Doe", formUrl: "example.com/contact", referrer: "Google Organic", referringUrl: "https://www.google.com/", firstForm: true, leadStatus: "good_lead" });
+    expect(recs[1]).toMatchObject({ firstForm: false, name: null });
+  });
 });
 
 describe("pagination and rate limits", () => {
@@ -144,7 +162,7 @@ describe("pagination and rate limits", () => {
       from: "2026-10-05",
       to: "2026-10-05",
     };
-    const rows = await fetchCallRailMetrics(ctx, { fetch: fn, sleep: noSleep, writeCalls: async () => {} });
+    const rows = await fetchCallRailMetrics(ctx, { fetch: fn, sleep: noSleep, writeCalls: async () => {}, writeForms: async () => {} });
     expect(pick(rows, "callrail.calls", "2026-10-05")).toBe(2);
     expect(pick(rows, "callrail.missed", "2026-10-05")).toBe(1);
     expect(rows.some((r) => r.metric === "callrail.forms")).toBe(false); // forms not enabled → skipped
@@ -195,7 +213,7 @@ describe("pagination and rate limits", () => {
 
   it("never sends the key to a non-CallRail host from a pagination link", async () => {
     const { fn, calls } = fakeFetch([(u) => (u.host === "api.callrail.com" ? json({ has_next_page: true, next_page: "https://evil.example.com/steal", calls: [] }) : json({}))]);
-    await expect(fetchCallRailMetrics({ connection: { externalId: "A" } as DataSourceConnection, asset: { externalId: "C", timezone: null, settings: null } as unknown as DataAsset, secret: KEY, from: "2026-10-01", to: "2026-10-01" }, { fetch: fn, sleep: noSleep, writeCalls: async () => {} })).rejects.toThrow(CallRailError);
+    await expect(fetchCallRailMetrics({ connection: { externalId: "A" } as DataSourceConnection, asset: { externalId: "C", timezone: null, settings: null } as unknown as DataAsset, secret: KEY, from: "2026-10-01", to: "2026-10-01" }, { fetch: fn, sleep: noSleep, writeCalls: async () => {}, writeForms: async () => {} })).rejects.toThrow(CallRailError);
     expect(calls.every((c) => c.url.host === "api.callrail.com")).toBe(true);
   });
 });
