@@ -94,7 +94,6 @@ async function PacingDashboard({ user, initialStatus }: { user: Awaited<ReturnTy
 
   return (
     <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
-      <BudgetRolloverBanner user={user} />
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold">Home</h1>
@@ -114,7 +113,7 @@ async function PacingDashboard({ user, initialStatus }: { user: Awaited<ReturnTy
         </div>
       </div>
 
-      {/* budget rollover banner */}
+      <BudgetRolloverBanner user={user} />
 
       <HomeSummary r={results} />
 

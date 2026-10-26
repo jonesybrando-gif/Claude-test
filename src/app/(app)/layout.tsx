@@ -1,3 +1,4 @@
+import { openAlertIssueCount } from "@/server/alerts";
 import { brandStyle } from "@/lib/brand-color";
 import Link from "next/link";
 import { LogOut } from "lucide-react";
@@ -14,7 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId }, select: { name: true, brandColor: true, logoUrl: true } }),
     prisma.client.findMany({ where: visibleClientsWhere(user), select: { id: true, name: true }, orderBy: { name: "asc" } }),
     // Integrator: swap for openAlertIssueCount() from src/server/alerts.ts once merged.
-    user.role === "CLIENT_USER" ? Promise.resolve(0) : prisma.notification.count({ where: { userId: user.id, readAt: null } }),
+    user.role === "CLIENT_USER" ? Promise.resolve(0) : openAlertIssueCount(user.agencyId, user.id).then((r) => r.issues),
   ]);
   const staff = user.role !== "CLIENT_USER";
   // Order: Home, All clients, Clients, Alerts, Integrations, Settings.

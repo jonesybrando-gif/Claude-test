@@ -1,3 +1,4 @@
+import { withRememberedRange } from "@/server/remembered-range";
 import { prisma } from "@/server/db";
 import { requireAgencyStaff, visibleClientsWhere } from "@/server/access";
 import { getAgencyPerformance } from "@/server/performance";
@@ -31,7 +32,7 @@ const TABLE_KPIS: KpiKey[] = ["spend", "impressions", "clicks", "ctr", "cpc", "c
 
 export default async function PerformancePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireAgencyStaff();
-  const sp = await searchParams;
+  const sp = await withRememberedRange(await searchParams);
   const agency = await prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId }, select: { defaultTimezone: true } });
   const today = todayInTimeZone(agency.defaultTimezone);
   const preset: RangePreset = PRESETS.includes(sp.range as RangePreset) ? (sp.range as RangePreset) : "last_30";
