@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { ImageUp, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { brandStyle, contrastRatio } from "@/lib/brand-color";
 
 const MAX_SIDE = 256;
 const MAX_CHARS = 350_000;
@@ -62,6 +63,11 @@ export function BrandingFields({ values }: { values: BrandingValues }) {
             <Input id="brandColor" name="brandColor" value={v.brandColor} onChange={set("brandColor")} pattern="^#[0-9a-fA-F]{6}$" />
             <input type="color" aria-label="Pick brand color" value={validColor} onChange={set("brandColor")} className="h-9 w-12 cursor-pointer rounded border border-border" />
           </div>
+          {contrastRatio(validColor, "#ffffff") < 3 && (
+            <p className="text-xs text-warning-ink" role="status">
+              This colour is very light, so it is hard to see on a white page (contrast {contrastRatio(validColor, "#ffffff").toFixed(1)}:1; 3:1 or more is recommended). Buttons will use dark text automatically, but thin lines and accents in this colour may be hard to see.
+            </p>
+          )}
         </div>
         <div className="flex flex-col gap-1.5 sm:col-span-2">
           <Label htmlFor="logo-file">Logo</Label>
@@ -108,7 +114,7 @@ export function BrandingFields({ values }: { values: BrandingValues }) {
 
       <figure className="flex flex-col gap-2" aria-label="Preview">
         <figcaption className="text-xs font-medium text-text-3">Preview: shared client report</figcaption>
-        <div className="overflow-hidden rounded-lg border border-border bg-background text-text" style={{ ["--brand" as string]: validColor }}>
+        <div className="overflow-hidden rounded-lg border border-border bg-background text-text" style={brandStyle(validColor)}>
           <div className="h-1.5 bg-brand" />
           <div className="flex items-center justify-between gap-2 border-b border-border bg-surface px-3 py-2">
             <div className="flex min-w-0 items-center gap-2">

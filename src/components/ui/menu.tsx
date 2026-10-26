@@ -57,7 +57,7 @@ export function Menu({ label, icon, sections, variant = "outline", align = "end"
     items[(i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
   };
 
-  const itemClass = "flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-text hover:bg-surface-2 focus:bg-surface-2 focus:outline-none";
+  const itemClass = "ui-focus-ring flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-text hover:bg-selected focus:bg-selected";
   return (
     <div
       ref={ref}

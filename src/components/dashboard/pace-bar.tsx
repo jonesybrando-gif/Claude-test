@@ -21,7 +21,7 @@ export function PaceBar({ consumed, elapsed, expected, status }: { consumed: num
   const clamp = (n: number) => Math.max(0, Math.min(100, n));
   return (
     <div className="flex flex-col gap-1" aria-label={`${formatPct(consumed, 0)} of budget used, ${formatPct(elapsed, 0)} of period elapsed`}>
-      <div className="relative h-2 w-full rounded-full bg-surface-2 ring-1 ring-border ring-inset">
+      <div className="relative h-2 w-full rounded-full bg-track">
         <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${clamp(consumed)}%`, background: FILL[status] }} />
         <div className="absolute -top-1 -bottom-1 w-0.5 rounded bg-text" style={{ left: `calc(${clamp(expected)}% - 1px)` }} aria-hidden />
         {consumed > 100 && <div className="absolute inset-y-0 right-0 w-1 rounded-r-full bg-critical-ink" aria-hidden />}

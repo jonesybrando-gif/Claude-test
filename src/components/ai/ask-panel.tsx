@@ -67,7 +67,7 @@ export function AskPanel({ clientId, query }: { clientId: string; query: Record<
           rows={2}
           maxLength={500}
           placeholder={turns.length ? "Ask a follow-up…" : "e.g. What are the top performing headlines?"}
-          className="w-full resize-y rounded-md border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
+          className="w-full resize-y rounded-md border border-border bg-surface px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
           aria-label="Question for the AI assistant"
         />
         <div className="flex flex-wrap items-center gap-2">

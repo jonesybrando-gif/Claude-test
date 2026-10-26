@@ -79,7 +79,7 @@ export function WidgetSettings({ widget, onApply, onRemove, onClose }: { widget:
       {draft.kind === "text" && (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`x-${widget.id}`}>Text</Label>
-          <textarea id={`x-${widget.id}`} value={draft.text ?? ""} maxLength={5000} rows={7} onChange={(e) => set({ text: e.target.value })} className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40" />
+          <textarea id={`x-${widget.id}`} value={draft.text ?? ""} maxLength={5000} rows={7} onChange={(e) => set({ text: e.target.value })} className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" />
           <p className="text-xs text-text-3"># heading · - bullet · **bold**</p>
         </div>
       )}

@@ -287,7 +287,7 @@ export function DashboardEditor({ dashboardId, name: initialName, widgets: initi
                   <div className="absolute inset-x-0 top-0 flex items-center gap-1 bg-gradient-to-b from-surface via-surface/95 to-transparent px-1.5 pt-1 pb-3 opacity-90 group-hover:opacity-100">
                     <button
                       type="button"
-                      className="flex min-w-0 flex-1 cursor-move touch-none items-center gap-1 rounded px-1 py-0.5 text-left text-xs text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                      className="flex min-w-0 flex-1 cursor-move touch-none items-center gap-1 rounded px-1 py-0.5 text-left text-xs text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                       aria-label={`Move ${title}. Arrow keys move, Shift+arrow keys resize.`}
                       onPointerDown={(e) => onPointerDown(e, w.id, "move")}
                       onKeyDown={(e) => onHandleKey(e, w.id)}

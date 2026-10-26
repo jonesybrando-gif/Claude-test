@@ -1,4 +1,5 @@
 // Plain, white-labelled email templates (agency name and brand color).
+import { inkFor } from "./brand-color";
 
 export interface Brand {
   name: string;
@@ -19,7 +20,7 @@ ${brand.footer ? `<tr><td style="padding:16px 24px;border-top:1px solid #e4e3df;
 }
 
 const button = (brand: Brand, href: string, label: string) =>
-  `<p style="margin:20px 0"><a href="${esc(href)}" style="background:${esc(brand.color)};color:#ffffff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">${esc(label)}</a></p>`;
+  `<p style="margin:20px 0"><a href="${esc(href)}" style="background:${esc(brand.color)};color:${inkFor(brand.color)};padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">${esc(label)}</a></p>`;
 
 export function inviteEmail(brand: Brand, inviter: string, link: string, expiresHours: number) {
   const subject = `${inviter} invited you to ${brand.name}`;

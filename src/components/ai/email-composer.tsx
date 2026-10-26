@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { PRESET_LABEL } from "@/lib/date-ranges";
 
-const textarea = "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
+const textarea = "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring";
 const RANGES = ["last_month", "mtd", "last_7", "last_30", "last_90"] as const;
 
 export function EmailComposer({ clientId, purposes, defaultTo, defaultRange, aiOn }: { clientId: string; purposes: Record<string, string>; defaultTo: string; defaultRange: string; aiOn: boolean }) {

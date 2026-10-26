@@ -12,7 +12,8 @@ export const maxDuration = 60;
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const link = await resolveShareToken(token);
-  if (!link) return NextResponse.json({ error: "This link has expired or been turned off." }, { status: 404 });
+  // A dead link goes to the branded "this link no longer works" page.
+  if (!link) return NextResponse.redirect(new URL(`/r/${token}`, process.env.APP_URL || req.url));
   if (!shareAccessGranted(link, req.cookies.get(shareCookieName(link.id))?.value)) return NextResponse.redirect(new URL(`/r/${token}`, process.env.APP_URL || req.url));
   const report = await loadClientReport(link.clientId, { range: link.range ?? undefined, compare: link.compare ?? undefined });
   const pdf = await renderClientReportPdf(report, await agencyBrand(link.client.agencyId), { internal: false, executiveSummary: await getExecutiveSummary(report, { generate: true }) });
