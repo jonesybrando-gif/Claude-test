@@ -18,11 +18,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     user.role === "CLIENT_USER" ? Promise.resolve(0) : openAlertIssueCount(user.agencyId, user.id).then((r) => r.issues).catch(() => 0),
   ]);
   const staff = user.role !== "CLIENT_USER";
-  // Order: Home, All clients, Clients, Alerts, Integrations, Settings.
+  // Order: Home, Clients, Alerts, Integrations, Settings.
   const nav: NavItem[] = staff
     ? [
         { href: "/dashboard", label: "Home", icon: "home" },
-        { href: "/performance", label: "All clients", icon: "allClients" },
         { href: "/clients", label: "Clients", icon: "clients" },
         { href: "/alerts", label: "Alerts", icon: "alerts", count: unread },
         { href: "/integrations", label: "Integrations", icon: "integrations" },
@@ -35,6 +34,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ? [
         { href: "/clients?new=1", label: "New client", kind: "Action" as const },
         ...nav.map((n) => ({ href: n.href, label: n.label, kind: "Page" as const })),
+        { href: "/clients?view=budgets", label: "Budgets", kind: "Page" as const, hint: "Clients" },
+        { href: "/clients?view=manage", label: "Manage clients", kind: "Page" as const, hint: "Clients" },
         ...(user.role === "AGENCY_ADMIN"
           ? [
               { href: "/settings/team", label: "Team", kind: "Page" as const, hint: "Settings" },

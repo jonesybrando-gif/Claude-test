@@ -18,7 +18,8 @@ import {
 
 export interface PortfolioResults {
   range: DateRange;
-  previousRange: DateRange;
+  /** Null when there is nothing to compare with. */
+  previousRange: DateRange | null;
   byClient: Map<string, ClientResults>;
   /** Currency used for the agency totals: the one most clients report in. */
   currency: string;
@@ -41,7 +42,14 @@ const empty = (): PeriodResults => ({ spendMinor: 0, results: 0 });
  */
 export async function portfolioResults(where: Prisma.ClientWhereInput, today: IsoDate): Promise<PortfolioResults> {
   const range = resolveRange("last_30", today);
-  const previousRange = comparisonRange(range, "previous_period")!;
+  return portfolioResultsFor(where, range, comparisonRange(range, "previous_period")!);
+}
+
+/**
+ * The same figures for any range and comparison range (the Clients table uses
+ * the range picked on the page). With no comparison, `previous` stays at zero.
+ */
+export async function portfolioResultsFor(where: Prisma.ClientWhereInput, range: DateRange, previousRange: DateRange | null): Promise<PortfolioResults> {
   const clients = await prisma.client.findMany({ where, select: { id: true, currency: true, accounts: { select: { id: true, platform: true } } } });
   const accountInfo = new Map(clients.flatMap((c) => c.accounts.map((a) => [a.id, { clientId: c.id, platform: a.platform }] as const)));
   const sum = (r: DateRange) =>
@@ -52,7 +60,7 @@ export async function portfolioResults(where: Prisma.ClientWhereInput, today: Is
           _sum: { costMinor: true, conversions: true, leads: true },
         })
       : Promise.resolve([]);
-  const [cur, prev] = await Promise.all([sum(range), sum(previousRange)]);
+  const [cur, prev] = await Promise.all([sum(range), previousRange ? sum(previousRange) : Promise.resolve([])]);
 
   const byClient = new Map<string, ClientResults>(clients.map((c) => [c.id, { clientId: c.id, currency: c.currency, current: empty(), previous: empty() }]));
   const add = (rows: Awaited<ReturnType<typeof sum>>, key: "current" | "previous") => {
@@ -125,7 +133,7 @@ async function openCriticalByClient(clientIds: string[], now: Date): Promise<Map
 
 /**
  * "Needs attention" reasons for every client in `pacing`, shared by Home and
- * All clients so both pages agree on who needs attention and why.
+ * Clients › Performance so both pages agree on who needs attention and why.
  */
 export async function clientAttention(pacing: ClientPacing[], results: PortfolioResults, now: Date = new Date()): Promise<Map<string, AttentionReason[]>> {
   const alerts = await openCriticalByClient(pacing.map((p) => p.client.id), now);

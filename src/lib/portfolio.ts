@@ -1,5 +1,5 @@
 // Portfolio-level results, change wording and "needs attention" reasons, shared
-// by Home (/dashboard), All clients (/performance) and the daily alert run.
+// by Home (/dashboard), Clients › Performance (/clients) and the daily alert run.
 // Pure: no database access.
 
 import type { PlatformKey } from "./platforms";

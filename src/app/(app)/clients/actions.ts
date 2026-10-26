@@ -49,7 +49,7 @@ function back(notice: { notice?: string; error?: string }, view?: string, keep =
   const q = new URLSearchParams(/^[\w=&%.+-]*$/.test(keep) ? keep : "");
   q.delete("notice");
   q.delete("error");
-  if (view) q.set("view", view);
+  q.set("view", view ?? "manage");
   if (notice.notice) q.set("notice", notice.notice);
   if (notice.error) q.set("error", notice.error);
   revalidatePath("/", "layout");
