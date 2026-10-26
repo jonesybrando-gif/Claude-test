@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Fragment, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { formatKpi, KPI_BY_KEY, kpiValues, type KpiKey } from "@/lib/kpis";
+import { formatKpi, KPI_BY_KEY, kpiChangeWords, kpiValues, type KpiKey } from "@/lib/kpis";
 import { formatPct } from "@/lib/money";
 import type { MetricTotals } from "@/lib/metrics";
 import { Table, TBody, TD, TH, THead, TR } from "../ui/table";
@@ -33,9 +33,9 @@ export function KpiTable({ rows, kpis, currency, firstHeader, showChange }: { ro
       return (av - bv) * sort.dir;
     });
   }, [computed, sort]);
-  const head = (key: KpiKey | "label", label: string, right = true) => (
+  const head = (key: KpiKey | "label", label: string, right = true, full?: string) => (
     <TH className={right ? "text-right" : "pl-5"} aria-sort={sort.key === key ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
-      <button className="inline-flex items-center gap-1 hover:text-text cursor-pointer" onClick={() => setSort((s) => ({ key, dir: s.key === key ? ((-s.dir) as 1 | -1) : key === "label" ? 1 : -1 }))}>
+      <button className="inline-flex items-center gap-1 hover:text-text cursor-pointer" title={full} aria-label={full ? `Sort by ${full}` : undefined} onClick={() => setSort((s) => ({ key, dir: s.key === key ? ((-s.dir) as 1 | -1) : key === "label" ? 1 : -1 }))}>
         {label}
         {sort.key === key && (sort.dir === 1 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
       </button>
@@ -46,7 +46,7 @@ export function KpiTable({ rows, kpis, currency, firstHeader, showChange }: { ro
       <THead>
         <tr>
           {head("label", firstHeader, false)}
-          {kpis.map((k) => <Fragment key={k}>{head(k, KPI_BY_KEY[k].short)}</Fragment>)}
+          {kpis.map((k) => <Fragment key={k}>{head(k, KPI_BY_KEY[k].short, true, KPI_BY_KEY[k].label)}</Fragment>)}
         </tr>
       </THead>
       <TBody>
@@ -63,7 +63,10 @@ export function KpiTable({ rows, kpis, currency, firstHeader, showChange }: { ro
                   {formatKpi(k, v.value, currency, { whole: true })}
                   {showChange?.includes(k) && v.changePct !== null && (
                     <div className={`text-[11px] ${v.tone === "good" ? "text-good-ink" : v.tone === "bad" ? "text-critical-ink" : "text-text-3"}`}>
-                      {Math.abs(v.changePct) < 0.5 ? "0%" : `${v.changePct > 0 ? "+" : "−"}${formatPct(Math.abs(v.changePct), 0)}`}
+                      <span aria-hidden>
+                        {v.verdict === "few" ? "too few to compare" : v.verdict === "same" ? "about the same" : `${v.changePct > 0 ? "+" : "−"}${formatPct(Math.abs(v.changePct), 0)}${v.verdict === "better" ? " · better" : v.verdict === "worse" ? " · worse" : ""}`}
+                      </span>
+                      <span className="sr-only">{kpiChangeWords(v, currency).aria}</span>
                     </div>
                   )}
                 </TD>

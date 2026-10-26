@@ -11,7 +11,7 @@ export type SectionKey = (typeof SECTION_KEYS)[number];
 export const SECTION_LABEL: Record<SectionKey, string> = {
   executive: "Executive summary",
   summary: "Written note",
-  kpis: "KPI scorecards",
+  kpis: "Advertising detail (KPI tiles)",
   trends: "Trend charts",
   pacing: "Budget pacing",
   platforms: "Platform breakdown",

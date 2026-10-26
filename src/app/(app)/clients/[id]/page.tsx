@@ -1,15 +1,19 @@
 import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { CalendarClock, Sparkles, StickyNote, Download, FileSliders, FileText, Link2, ListChecks, Mail, Plug, Settings2, Share2, Wallet } from "lucide-react";
+import { CalendarClock, ChevronRight, Sparkles, StickyNote, Download, Database, FileSliders, FileText, Link2, ListChecks, Mail, Plug, Search, Share2, Wallet } from "lucide-react";
 import { AiSuggestionsCard } from "@/components/ai/suggestions-card";
-import { requireClientView, userCanEditClient } from "@/server/access";
+import { requireClientView, userCanEditClient, visibleClientsWhere } from "@/server/access";
+import { withRememberedRange } from "@/server/remembered-range";
+import { shortRangeLabel, withReportQuery } from "@/lib/client-nav";
+import { ClientSwitcher } from "@/components/client-switcher";
 import { prisma } from "@/server/db";
 import { completeClientReport, loadClientReportHead, type ClientReport } from "@/server/client-report";
-import { PRESET_LABEL } from "@/lib/date-ranges";
+import { rangeLabel } from "@/lib/date-ranges";
+import { ClientAlertsStrip } from "@/components/alerts/client-alerts-strip";
 import { formatDate } from "@/lib/time";
 import { DemoBadge } from "@/components/status-badge";
-import { RangeControls } from "@/components/range-controls";
+import { CompactRangeControls, RangeControls } from "@/components/range-controls";
 import { ExportButtons, exportHref } from "@/components/export-buttons";
 import { Menu } from "@/components/ui/menu";
 import { ClientReportView } from "@/components/reports/client-report-view";
@@ -24,7 +28,8 @@ import { ClientDashboardsTab } from "@/components/dashboards/client-dashboards-t
 import { ClientFacingDashboards } from "@/components/dashboards/dashboard-section";
 import { ConnectedDataSection } from "@/components/dashboards/connected-data-section";
 import { listClientDashboards } from "@/server/dashboards/access";
-import { CampaignsSection, DataFreshness, hiddenMarker, HistorySection, KpiSection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
+import { AdvertisingDetail, CampaignsSection, DataFreshness, hiddenMarker, HistorySection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
+import { AtAGlance } from "@/components/reports/at-a-glance";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +53,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { id } = await params;
-  const sp = await searchParams;
+  // No range in the URL: use the last one chosen (cookie), so the dates stick between pages.
+  const sp = await withRememberedRange(await searchParams);
   const user = await requireClientView(id);
   const staff = user.role !== "CLIENT_USER";
   // Same rule as requireClientEdit, which the template save actions enforce.
@@ -72,66 +78,64 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
     return s ? `${base}?${s}` : base;
   };
   const mark = hiddenMarker(rep, staff);
-  const rangeQs = `range=${preset}&from=${range.from}&to=${range.to}`;
   const exportBase = `/api/reports/clients/${id}`;
 
+  // Sub-pages get the range and tab so their back links return to the same view.
+  const keep = (href: string) => withReportQuery(href, { ...sp, tab: sp.tab ?? "overview" });
+  const switchable = staff ? await prisma.client.findMany({ where: visibleClientsWhere(user), select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
+
   const header = (
-    <div className="flex flex-wrap items-end justify-between gap-3">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
+      <div className="min-w-0 max-md:w-full">
+        {staff && (
+          <nav aria-label="Breadcrumb" className="mb-0.5 hidden md:block">
+            <ol className="flex items-center gap-1 text-xs text-text-3">
+              <li><Link href="/clients" className="hover:text-text hover:underline">Clients</Link></li>
+              <li aria-hidden><ChevronRight className="h-3 w-3" /></li>
+              <li aria-current="page" className="truncate text-text-2">{client.name}</li>
+            </ol>
+          </nav>
+        )}
+        <div className="flex items-center gap-1">
           <h1 className="truncate text-xl font-semibold">{client.name}</h1>
+          {staff && <ClientSwitcher clientId={id} clients={switchable.map((c) => ({ value: c.id, label: c.name }))} />}
           {isDemo && <DemoBadge />}
         </div>
-        <p className="text-sm text-text-2">
-          {PRESET_LABEL[preset]}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
+        <p className="hidden text-sm text-text-2 md:block">
+          {rangeLabel(preset, range)}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
           {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
           {pacing.client.managerName && staff && <> · Manager: {pacing.client.managerName}</>}
         </p>
         <div className="mt-1.5"><DataFreshness rep={rep} staff={staff} setupHref={staff ? tabHref("setup") : undefined} /></div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <RangeControls preset={preset} compare={compareMode} from={range.from} to={range.to} />
+      <div className="flex min-w-0 items-center gap-2 max-md:w-full max-md:justify-between md:flex-wrap">
+        <div className="hidden md:block"><RangeControls preset={preset} compare={compareMode} from={range.from} to={range.to} /></div>
+        <div className="md:hidden"><CompactRangeControls label={shortRangeLabel(range.from, range.to)} preset={preset} compare={compareMode} from={range.from} to={range.to} /></div>
         {staff ? (
-          <>
-            <Menu
-              label="Setup"
-              icon={<Settings2 className="h-4 w-4" aria-hidden />}
-              sections={[
-                {
-                  items: [
-                    { href: `${base}/accounts`, label: "Ad accounts", hint: "Link or unlink advertising accounts", icon: <Plug className="h-4 w-4" /> },
-                    { href: `${base}/campaigns?${rangeQs}`, label: "Campaigns", hint: "Choose which campaigns count", icon: <ListChecks className="h-4 w-4" /> },
-                    { href: `${base}/budgets`, label: "Budgets", hint: "Monthly budgets and pacing rules", icon: <Wallet className="h-4 w-4" /> },
-                    { href: `${base}/report`, label: "Customize report", hint: "KPIs and sections the client sees", icon: <FileSliders className="h-4 w-4" /> },
-                    { href: `${base}/rankings`, label: "Keyword rankings", hint: "Daily Google positions (DataForSEO)", icon: <ListChecks className="h-4 w-4" /> },
-                  ],
-                },
-              ]}
-            />
-            <Menu
-              label="Share report"
-              variant="default"
-              icon={<Share2 className="h-4 w-4" aria-hidden />}
-              sections={[
-                {
-                  heading: "Send",
-                  items: [
-                    { href: `${base}/share`, label: "Share link", hint: "A link the client opens without signing in", icon: <Link2 className="h-4 w-4" /> },
-                    { href: `${base}/email`, label: "Email client", hint: "Draft an update from this report", icon: <Mail className="h-4 w-4" /> },
-                    { href: `${base}/share#schedule`, label: "Schedule email", hint: "Send the PDF automatically each month", icon: <CalendarClock className="h-4 w-4" /> },
-                  ],
-                },
-                {
-                  heading: "Download",
-                  items: [
-                    { href: exportHref(exportBase, sp, "pdf"), label: "PDF", hint: "Client-facing report", icon: <FileText className="h-4 w-4" />, download: true },
-                    { href: exportHref(exportBase, sp, "pdf", "internal=1"), label: "PDF + internal notes", hint: "Includes recommendations; not for the client", icon: <FileText className="h-4 w-4" />, download: true },
-                    { href: exportHref(exportBase, sp, "csv"), label: "CSV", hint: "Every daily row", icon: <Download className="h-4 w-4" />, download: true },
-                  ],
-                },
-              ]}
-            />
-          </>
+          // The one output button: send it, or download it.
+          <Menu
+            label="Share"
+            variant="default"
+            icon={<Share2 className="h-4 w-4" aria-hidden />}
+            sections={[
+              {
+                heading: "Send",
+                items: [
+                  { href: keep(`${base}/share`), label: "Share link", hint: "A link the client opens without signing in", icon: <Link2 className="h-4 w-4" /> },
+                  { href: keep(`${base}/email`), label: "Email client", hint: "Draft an update from this report", icon: <Mail className="h-4 w-4" /> },
+                  { href: keep(`${base}/share#schedule`), label: "Schedule email", hint: "Send the PDF automatically each month", icon: <CalendarClock className="h-4 w-4" /> },
+                ],
+              },
+              {
+                heading: "Download",
+                items: [
+                  { href: exportHref(exportBase, sp, "pdf"), label: "PDF", hint: "Client-facing report", icon: <FileText className="h-4 w-4" />, download: true },
+                  { href: exportHref(exportBase, sp, "pdf", "internal=1"), label: "PDF + internal notes", hint: "Includes recommendations; not for the client", icon: <FileText className="h-4 w-4" />, download: true },
+                  { href: exportHref(exportBase, sp, "csv"), label: "CSV", hint: "Every daily row", icon: <Download className="h-4 w-4" />, download: true },
+                ],
+              },
+            ]}
+          />
         ) : (
           <ExportButtons base={exportBase} query={sp} />
         )}
@@ -158,23 +162,29 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-5">
-      {/* Header, date range and tabs stay in view while scrolling (desktop). */}
-      <div className="-mx-4 -mt-6 flex flex-col gap-3 border-b border-border bg-background/95 px-4 pt-6 backdrop-blur md:sticky md:top-0 md:z-20 md:-mx-8 md:px-8">
+      {/* Header, date range and tabs stay in view while scrolling (desktop); on phones only the tabs stick, under the top bar. */}
+      <div className="max-md:contents md:sticky md:top-0 md:z-20 md:-mx-8 md:-mt-6 md:flex md:flex-col md:gap-3 md:border-b md:border-border md:bg-background/95 md:px-8 md:pt-6 md:backdrop-blur">
         {header}
-        <nav className="-mb-px flex gap-1 overflow-x-auto" aria-label="Client sections">
+        <nav className="sticky top-12 z-20 -mx-4 -mb-px flex gap-1 overflow-x-auto border-b border-border bg-background/95 px-4 backdrop-blur max-md:-mt-3 md:static md:mx-0 md:border-b-0 md:bg-transparent md:px-0 md:backdrop-blur-none" aria-label="Client sections">
           {TABS.map((t) => (
             <Link
               key={t.key}
               href={tabHref(t.key)}
               scroll={false}
               aria-current={tab === t.key ? "page" : undefined}
-              className={`border-b-2 px-3 py-2 text-sm whitespace-nowrap ${tab === t.key ? "border-brand font-medium text-text" : "border-transparent text-text-2 hover:text-text"}`}
+              className={`inline-flex min-h-10 items-center border-b-2 px-3 py-2 text-sm whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/60 ${tab === t.key ? "border-brand font-medium text-text" : "border-transparent text-text-2 hover:text-text"}`}
             >
               {t.label}
             </Link>
           ))}
         </nav>
       </div>
+
+      {tab === "overview" && (
+        <Suspense fallback={null}>
+          <ClientAlertsStrip clientId={id} user={user} />
+        </Suspense>
+      )}
 
       {tab === "overview" && client.accounts.length === 0 && (
         <Suspense fallback={<SectionSkeleton cards={2} tallFirst={false} />}>
@@ -195,7 +205,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           <WithReport report={full}>
             {(rep) => (
               <>
-                <KpiSection rep={rep} marker={mark("kpis")} editable={canEdit} />
+                <AtAGlance rep={rep} />
+                <AdvertisingDetail rep={rep} marker={mark("kpis")} editable={canEdit} />
                 <ConnectedDataSection rep={rep} canEdit={canEdit} query={sp} />
                 <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand hover:underline">Open Insights</Link>} />
                 <NoteSection rep={rep} marker={mark("summary")} />
@@ -267,17 +278,17 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
             <WithReport report={full}>{(rep) => <PlatformSection rep={rep} staff status title="Ad accounts and data" />}</WithReport>
           </Suspense>
+          {/* The one place to configure this client. Sending and downloading live in the Share button. */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              { href: `${base}/accounts`, Icon: Plug, title: "Ad accounts", body: "Link or unlink this client's advertising accounts." },
-              { href: `${base}/campaigns?${rangeQs}`, Icon: ListChecks, title: "Campaigns", body: "Choose which campaigns count in reports and pacing." },
-              { href: "/integrations", Icon: Plug, title: "Data sources", body: "Link CallRail, GA4, Search Console, Business Profile and social to this client." },
-              { href: `${base}/budgets`, Icon: Wallet, title: "Budgets", body: "Monthly budgets, distribution and pacing thresholds." },
-              { href: `${base}/report`, Icon: FileSliders, title: "Customize report", body: "KPIs, sections and the default range the client sees." },
-              { href: `${base}/share`, Icon: Link2, title: "Share links", body: "Links the client can open without signing in." },
-              { href: `${base}/email`, Icon: Mail, title: "Email client", body: "Draft and send an update from this report." },
+              { href: keep(`${base}/accounts`), Icon: Plug, title: "Ad accounts", body: "Link or unlink this client's Google, Meta, Microsoft and other ad accounts." },
+              { href: "/integrations", Icon: Database, title: "Connected data sources", body: "Link CallRail, Google Analytics, Search Console, Business Profile and social pages to this client (on the Integrations page)." },
+              { href: keep(`${base}/campaigns`), Icon: ListChecks, title: "Campaigns included", body: "Choose which campaigns count in reports, pacing and alerts." },
+              { href: keep(`${base}/budgets`), Icon: Wallet, title: "Budgets", body: "Monthly budgets, how they're split and when pacing warns you." },
+              { href: keep(`${base}/report`), Icon: FileSliders, title: "Report layout & goal", body: "The client's goal, the figures and sections they see, and the default date range." },
+              { href: keep(`${base}/rankings`), Icon: Search, title: "Keyword rankings", body: "Daily Google positions for the client's keywords." },
             ].map(({ href, Icon, title, body }) => (
-              <Link key={title} href={href} className="flex flex-col gap-1 rounded-xl border border-border bg-surface px-5 py-4 hover:bg-surface-2">
+              <Link key={title} href={href} className="flex min-h-10 flex-col gap-1 rounded-xl border border-border bg-surface px-5 py-4 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60">
                 <span className="flex items-center gap-2 text-sm font-semibold"><Icon className="h-4 w-4 text-text-2" aria-hidden /> {title}</span>
                 <span className="text-xs text-text-3">{body}</span>
               </Link>

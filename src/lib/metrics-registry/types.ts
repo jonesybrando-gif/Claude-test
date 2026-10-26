@@ -31,6 +31,8 @@ export interface MetricDef {
   /** Is an increase good, bad or neither? Drives change colours. Lower position = better for rankings. */
   better: "up" | "down" | "neutral";
   description: string;
+  /** One-line plain-English definition (the ⓘ text). Filled from ./plain.ts by ./index.ts when omitted. */
+  plain?: string;
   /** Dimensions this metric is stored with, for tables/breakdowns (e.g. ["channel","page"]). */
   dimensions?: string[];
 }

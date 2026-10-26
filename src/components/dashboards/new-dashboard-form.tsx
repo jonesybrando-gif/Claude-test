@@ -26,7 +26,7 @@ export function NewDashboardForm({ action, options, showVisibility, submitLabel 
   const names = picked.map((v) => options.find((o) => o.value === v)?.name).filter(Boolean) as string[];
   const [visible, setVisible] = useState(true);
   const card = (value: string, title: string, body: string, icon: React.ReactNode, needs: TemplateOption["needs"] = []) => (
-    <label key={value} className={cn("relative flex cursor-pointer flex-col gap-1 rounded-xl border bg-surface px-4 py-3 hover:bg-surface-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand/40", isOn(value) ? "border-brand ring-1 ring-brand" : "border-border")}>
+    <label key={value} className={cn("relative flex cursor-pointer flex-col gap-1 rounded-xl border bg-surface px-4 py-3 hover:bg-surface-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus-ring", isOn(value) ? "border-brand ring-1 ring-brand" : "border-border")}>
       <input type="checkbox" name={value === "blank" ? undefined : "template"} value={value} checked={isOn(value)} onChange={() => toggle(value)} className="sr-only" />
       <span className="flex items-center gap-2 text-sm font-semibold">
         {icon} {title}

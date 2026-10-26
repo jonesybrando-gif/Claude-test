@@ -17,7 +17,16 @@ export interface ActionInput {
   phase: "NOT_STARTED" | "ACTIVE" | "ENDED";
   stale: boolean;
   disconnected: boolean;
+  /**
+   * The client's cost per result is high (≥1.3× its previous period or the
+   * agency median, with enough results to judge). Underspend advice then says
+   * to fix efficiency before spending more.
+   */
+  costPerResultHigh?: boolean;
 }
+
+/** Required daily spend above this multiple of the recent daily rate is "far below plan". */
+export const FAR_BELOW_MULTIPLE = 3;
 
 export interface Action {
   severity: ActionSeverity;
@@ -80,14 +89,9 @@ export function recommendAction(a: ActionInput): Action {
     case "UNDERSPENDING":
     case "SLIGHTLY_UNDER": {
       const severity: ActionSeverity = status === "UNDERSPENDING" ? "critical" : "warning";
-      return {
-        severity,
-        headline: `Projected to underspend by ${money(a.projectedVarianceMinor, a.currency)}`,
-        detail:
-          days > 0
-            ? `Increase average daily spend from ≈${money(a.currentDailyRateMinor, a.currency)} to ≈${money(req, a.currency)} to reach the monthly budget.${why}${staleNote}`
-            : `No planned days remain in this period.${staleNote}`,
-      };
+      const headline = `Projected to underspend by ${money(a.projectedVarianceMinor, a.currency)}`;
+      if (days <= 0) return { severity, headline, detail: `No planned days remain in this period.${staleNote}` };
+      return { severity, headline, detail: `${underspendAdvice(a.currentDailyRateMinor, req, a.currency, !!a.costPerResultHigh)}${why}${staleNote}` };
     }
     case "ON_TARGET":
       return { severity: a.stale ? "warning" : "ok", headline: "On target", detail: `No action required.${staleNote}` };
@@ -96,4 +100,20 @@ export function recommendAction(a: ActionInput): Action {
     case "NOT_STARTED":
       return { severity: "info", headline: "No spend planned yet", detail: `Planned spend starts later in the period.${staleNote}` };
   }
+}
+
+/**
+ * What to say about an underspending line. Never pure arithmetic: a huge jump
+ * in daily spend usually means the budget itself is out of date, and spending
+ * more is only good advice when results are coming in at a reasonable cost.
+ */
+export function underspendAdvice(currentDailyMinor: number, requiredDailyMinor: number, currency: string, costPerResultHigh: boolean): string {
+  const now = money(currentDailyMinor, currency);
+  const need = money(requiredDailyMinor, currency);
+  const farBelow = requiredDailyMinor > currentDailyMinor * FAR_BELOW_MULTIPLE;
+  const plan = farBelow
+    ? `Spending is far below plan (≈${now}/day vs ≈${need} needed). Check whether this budget is still right before raising spend.`
+    : `Increase average daily spend from ≈${now} to ≈${need} to reach the monthly budget.`;
+  if (!costPerResultHigh) return plan;
+  return `Underspending, but cost per result is high — improve that before spending more. ${farBelow ? plan : `Reaching the budget would take ≈${need}/day (now ≈${now}).`}`;
 }

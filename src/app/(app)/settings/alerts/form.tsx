@@ -5,7 +5,7 @@ import { saveAlertSettings, saveSlackWebhook } from "./actions";
 import { useFormSubmit } from "@/components/use-form-submit";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
-import type { AlertSettings } from "@/lib/alerts";
+import { PERFORMANCE_ALERT_RULES, type AlertSettings } from "@/lib/alerts";
 
 export function AlertSettingsForm({ s }: { s: AlertSettings }) {
   const [state, action, pending] = useActionState(saveAlertSettings, undefined);
@@ -28,7 +28,20 @@ export function AlertSettingsForm({ s }: { s: AlertSettings }) {
         {field("stoppedMinDaily", "…for accounts that averaged at least ($/day)", (s.stoppedMinDailyMinor / 100).toFixed(2), "Accounts that normally spend less are ignored.")}
         {field("campaignNoSpendDays", "Enabled campaign not spending (days)", s.campaignNoSpendDays, "For enabled campaigns that spent in the two weeks before.")}
       </div>
-      <p className="text-xs text-text-3">Overspending and underspending alerts follow the pacing thresholds under “Pacing &amp; branding”: only the outer bands (not “slightly”) raise alerts.</p>
+      <fieldset className="flex flex-col gap-3">
+        <legend className="mb-1 text-sm font-medium">Performance alerts</legend>
+        {PERFORMANCE_ALERT_RULES.map((r) => (
+          <label key={r.setting} className="flex items-start gap-3 text-sm">
+            <input type="checkbox" name={r.setting} defaultChecked={!!s[r.setting]} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--brand)]" />
+            <span>
+              <span className="block font-medium">{r.title}</span>
+              <span className="block text-xs text-text-3">{r.description}</span>
+            </span>
+          </label>
+        ))}
+        <p className="text-xs text-text-3">Results are conversions as each ad platform reports them, counted once. A single client can mute any alert type from its Overview page.</p>
+      </fieldset>
+      <p className="text-xs text-text-3">Overspending and underspending alerts follow the pacing thresholds under “Pacing &amp; branding”: only the outer bands (not “slightly”) raise alerts, and only after 3 complete days in the month and when the forecast is off by more than $100 or 5% of the budget, whichever is larger.</p>
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save alert settings"}</Button>
         {state?.ok && <p className="text-sm text-good-ink" role="status">{state.ok}</p>}

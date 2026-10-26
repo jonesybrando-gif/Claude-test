@@ -6,6 +6,7 @@ import { requireAdmin, requireClientEdit } from "./access";
 import { prisma } from "./db";
 import { getClientTemplate, resetClientTemplate, saveTemplate } from "./report-templates";
 import { parseKpiOrder, SECTION_KEYS, templateFromForm, withKpis, type SectionKey } from "@/lib/report-template";
+import { isClientGoal } from "@/lib/results";
 
 export type TemplateFormState = { ok?: string; errors?: string[] } | undefined;
 
@@ -68,4 +69,23 @@ export async function saveClientKpisAction(clientId: string, kpis: unknown): Pro
   revalidatePath(`/clients/${clientId}`, "layout");
   revalidatePath("/r/[token]", "page");
   return { ok: true };
+}
+
+export type GoalFormState = { ok?: string; error?: string } | undefined;
+
+/**
+ * Sets what the client wants from advertising (Client.goal), which decides the
+ * Results figure on the report. An empty value means "let Marketing Nexus
+ * decide" (null: guessed from the data). Same permission check as the template.
+ */
+export async function saveClientGoalAction(clientId: string, _prev: GoalFormState, form: FormData): Promise<GoalFormState> {
+  const user = await requireClientEdit(clientId);
+  const raw = String(form.get("goal") ?? "");
+  if (raw !== "" && !isClientGoal(raw)) return { error: "Choose one of the options." };
+  const client = await prisma.client.findUniqueOrThrow({ where: { id: clientId }, select: { agencyId: true } });
+  if (client.agencyId !== user.agencyId) return { error: "Client not found." };
+  await prisma.client.update({ where: { id: clientId }, data: { goal: raw === "" ? null : raw } });
+  revalidatePath(`/clients/${clientId}`, "layout");
+  revalidatePath("/r/[token]", "page");
+  return { ok: raw === "" ? "Saved. Marketing Nexus will choose from the data." : "Saved. The report now counts results for this goal." };
 }

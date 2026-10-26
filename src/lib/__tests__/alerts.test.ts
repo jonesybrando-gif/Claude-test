@@ -45,8 +45,8 @@ const run = (rows: PacingRowInput[] = [], accounts: AccountInput[] = [], campaig
 describe("pacing alerts", () => {
   it("raises overspending and underspending as critical, keyed by budget period", () => {
     const a = run([row({ status: "OVERSPENDING", projectedVarianceMinor: 124900 })]);
-    expect(a.map((x) => [x.kind, x.severity, x.dedupeKey])).toEqual([["OVERSPENDING", "critical", "OVERSPENDING:b1:2026-10-01"]]);
-    expect(run([row({ status: "UNDERSPENDING" })])[0].kind).toBe("UNDERSPENDING");
+    expect(a.map((x) => [x.kind, x.severity, x.dedupeKey])).toEqual([["OVERSPENDING", "critical", "PACING_OVER:b1:2026-10-01"]]);
+    expect(run([row({ status: "UNDERSPENDING", projectedVarianceMinor: -100000 })])[0].dedupeKey).toBe("PACING_UNDER:b1:2026-10-01");
   });
 
   it("does not alert on slight deviations or on target", () => {
@@ -61,7 +61,7 @@ describe("pacing alerts", () => {
   });
 
   it("warns when a forecast will miss the budget though pacing to date is fine", () => {
-    const a = run([row({ status: "ON_TARGET", forecastStatus: "UNDERSPENDING" })]);
+    const a = run([row({ status: "ON_TARGET", forecastStatus: "UNDERSPENDING", projectedVarianceMinor: -100000 })]);
     expect(a.map((x) => [x.kind, x.severity])).toEqual([["UNDERSPENDING", "warning"]]);
   });
 
@@ -149,11 +149,87 @@ describe("not-connected lines", () => {
 describe("alert titles", () => {
   it("all read \"<what happened> · <line, account or campaign>\"", () => {
     const titles = [
-      ...run([row({ status: "UNDERSPENDING" })]).map((a) => a.title),
+      ...run([row({ status: "UNDERSPENDING", projectedVarianceMinor: -100000 })]).map((a) => a.title),
       ...run([], [account({ status: "DISCONNECTED" })]).map((a) => a.title),
       ...run([], [account({ lastSuccessfulSyncAt: new Date(NOW.getTime() - 30 * 3600_000) })]).map((a) => a.title),
     ];
     expect(titles.length).toBeGreaterThan(2);
     for (const t of titles) expect(t).toMatch(/^[A-Z][^·]* · .+$/);
+  });
+});
+
+describe("pacing alerts don't flap (H4)", () => {
+  it("over and projected-overrun share one key per line, so a change updates the same alert", () => {
+    const over = run([row({ status: "OVERSPENDING", projectedVarianceMinor: 124900 })])[0];
+    const proj = run([row({ status: "SLIGHTLY_OVER", projectedVarianceMinor: 40000 })])[0];
+    expect(over.dedupeKey).toBe(proj.dedupeKey);
+  });
+  it("waits for 3 complete days of data", () => {
+    expect(run([row({ status: "OVERSPENDING", projectedVarianceMinor: 124900, elapsedDays: 2 })])).toEqual([]);
+    expect(run([row({ status: "OVERSPENDING", projectedVarianceMinor: 124900, elapsedDays: 3 })])).toHaveLength(1);
+  });
+  it("ignores forecasts within max($100, 5% of budget)", () => {
+    // $5,000 budget: 5% = $250
+    expect(run([row({ status: "UNDERSPENDING", projectedVarianceMinor: -24000 })])).toEqual([]);
+    // $1,000 budget: $100 floor
+    expect(run([row({ status: "UNDERSPENDING", budgetMinor: 100000, projectedVarianceMinor: -9000 })])).toEqual([]);
+    expect(run([row({ status: "UNDERSPENDING", budgetMinor: 100000, projectedVarianceMinor: -11000 })])).toHaveLength(1);
+  });
+  it("suppresses underspend while the line's account has stopped spending", () => {
+    const stoppedAcc = account({ daily: daily("2026-09-20", D, 10000, { "2026-10-15": 0, "2026-10-16": 0 }) });
+    const under = row({ status: "UNDERSPENDING", projectedVarianceMinor: -100000 }, { accountIds: ["acc1"] });
+    const kinds = run([under], [stoppedAcc]).map((a) => a.kind);
+    expect(kinds).toContain("SPEND_STOPPED");
+    expect(kinds).not.toContain("UNDERSPENDING");
+    // a line on another account still alerts
+    expect(run([{ ...under, accountIds: ["acc2"] }], [stoppedAcc]).map((a) => a.kind)).toContain("UNDERSPENDING");
+  });
+});
+
+describe("muted alert types", () => {
+  it("are never raised for that client", () => {
+    const over = row({ status: "OVERSPENDING", projectedVarianceMinor: 124900 });
+    expect(evaluateAlerts({ rows: [over], accounts: [], campaigns: [], settings: DEFAULT_ALERT_SETTINGS, now: NOW, muted: { c1: ["OVERSPENDING"] } })).toEqual([]);
+    expect(evaluateAlerts({ rows: [over], accounts: [], campaigns: [], settings: DEFAULT_ALERT_SETTINGS, now: NOW, muted: { c2: ["OVERSPENDING"] } })).toHaveLength(1);
+  });
+});
+
+describe("performance alerts", () => {
+  // Spend $100/day throughout; results per day vary by test.
+  const perf = (prevPerDay: number, curPerDay: number, o: Partial<AccountInput> = {}) =>
+    // Windows end 3 days before the last complete day (late-counted results), so the switch is on Oct 7.
+    account({ dailyResults: { ...daily("2026-09-20", "2026-10-06", prevPerDay), ...daily("2026-10-07", D, curPerDay) }, ...o });
+  const kinds = (a: AccountInput, settings = DEFAULT_ALERT_SETTINGS) => run([], [a], [], settings).map((x) => x.kind);
+
+  it("raises a cost-per-result spike when each result costs ≥40% more with ≥10 results in both weeks", () => {
+    // 3/day before (21/week) → 2/day now (14/week): cost per result +50%
+    const a = run([], [perf(3, 2)]);
+    expect(a.map((x) => x.kind)).toEqual(["CPA_SPIKE"]);
+    expect(a[0].dedupeKey).toBe("CPA_SPIKE:c1");
+    expect(a[0].title).toMatch(/^Cost per result up 50% · last 7 days$/);
+  });
+  it("needs at least 10 results in each week", () => {
+    expect(kinds(perf(1, 0.6))).toEqual([]); // 7 vs 4.2 results
+  });
+  it("raises a results drop of ≥40% when the earlier week had ≥20", () => {
+    expect(kinds(perf(4, 2))).toEqual(["CPA_SPIKE", "RESULTS_DROP"]);
+    expect(kinds(perf(4, 3))).toEqual([]); // −25%
+  });
+  it("raises tracking-zero when an account spends with no conversions after converting before", () => {
+    const a = account({ dailyResults: { ...daily("2026-09-20", "2026-10-10", 2), ...daily("2026-10-11", D, 0) } });
+    const out = run([], [a]);
+    expect(out.map((x) => x.kind)).toEqual(["TRACKING_ZERO"]); // the results drop it causes is not repeated
+    expect(out[0].severity).toBe("critical");
+  });
+  it("tracking-zero needs $100 of spend and ≥25 prior results", () => {
+    const quiet = { ...daily("2026-09-20", "2026-10-10", 2), ...daily("2026-10-11", D, 0) };
+    expect(kinds(account({ dailyResults: quiet, daily: daily("2026-09-20", D, 3000) }))).toEqual([]); // $90 in 3 days
+    expect(kinds(account({ dailyResults: { ...daily("2026-09-20", "2026-10-10", 1), ...daily("2026-10-11", D, 0) } }))).toEqual([]); // ~13 prior
+  });
+  it("can be turned off in settings", () => {
+    expect(kinds(perf(4, 2), { ...DEFAULT_ALERT_SETTINGS, cpaSpikeAlerts: 0, resultsDropAlerts: 0 })).toEqual([]);
+  });
+  it("skips accounts without results data", () => {
+    expect(kinds(account())).toEqual([]);
   });
 });

@@ -6,6 +6,7 @@ import { isKpiKey, KPI_BY_KEY, KPIS, type KpiKey } from "@/lib/kpis";
 import { DIMENSIONS, METRIC_BY_KEY, metricsForSource, type MetricSource } from "@/lib/metrics-registry";
 import type { MetricFormat } from "@/lib/metrics-registry/types";
 import { pctChange } from "@/lib/metrics";
+import { changeVerdict, type Verdict } from "@/lib/change";
 import { formatMoney, formatMoneyCompact, formatNumber, formatPct } from "@/lib/money";
 
 export interface MetricInfo {
@@ -16,17 +17,19 @@ export interface MetricInfo {
   format: MetricFormat;
   better: "up" | "down" | "neutral";
   description: string;
+  /** One-line plain definition (the ⓘ text). */
+  plain: string;
 }
 
 export const SOURCE_LABEL: Record<MetricSource, string> = {
   ads: "Ads",
-  ga4: "GA4",
-  gsc: "Search Console",
-  gbp: "Business Profile",
+  ga4: "Website (Google Analytics)",
+  gsc: "Google Search",
+  gbp: "Google Business Profile",
   callrail: "CallRail",
-  facebook: "Facebook",
+  facebook: "Facebook page",
   instagram: "Instagram",
-  rank: "Rankings",
+  rank: "Google rankings",
 };
 
 /** Order of sources in the widget library. */
@@ -50,11 +53,11 @@ export function metricInfo(key: string): MetricInfo | null {
   const ad = adKpiKey(key);
   if (ad) {
     const d = KPI_BY_KEY[ad];
-    return { key, source: "ads", label: d.label, short: d.short, format: KIND_TO_FORMAT[d.kind], better: d.better, description: d.description };
+    return { key, source: "ads", label: d.label, short: d.short, format: KIND_TO_FORMAT[d.kind], better: d.better, description: d.description, plain: d.plain };
   }
   const m = METRIC_BY_KEY[key];
   if (!m) return null;
-  return { key, source: m.source, label: m.label, short: m.short ?? m.label, format: m.format, better: m.better, description: m.description };
+  return { key, source: m.source, label: m.label, short: m.short ?? m.label, format: m.format, better: m.better, description: m.description, plain: m.plain };
 }
 
 export const isKnownMetric = (key: string): boolean => metricInfo(key) !== null;
@@ -84,12 +87,22 @@ export function dimensionLabel(source: MetricSource | null, dimension: string): 
 
 export type Tone = "good" | "bad" | "neutral";
 
-/** Change vs the comparison period and whether it is good news. */
-export function changeOf(value: number | null, previous: number | null, better: MetricInfo["better"]): { changePct: number | null; tone: Tone | null } {
+/**
+ * Change vs the comparison period and whether it is good news, with the same
+ * rules as the report tiles (src/lib/change.ts): under 5% is "about the
+ * same", counts below 10 in either period are "too few to compare", and
+ * neutral metrics get no verdict.
+ */
+export function changeOf(
+  value: number | null,
+  previous: number | null,
+  better: MetricInfo["better"],
+  opts: { format?: MetricFormat; sample?: { current: number; previous: number } | null } = {},
+): { changePct: number | null; tone: Tone | null; verdict: Verdict | null } {
   const changePct = value !== null && previous !== null ? pctChange(value, previous) : null;
-  if (changePct === null) return { changePct, tone: null };
-  if (better === "neutral" || Math.abs(changePct) < 0.5) return { changePct, tone: "neutral" };
-  return { changePct, tone: (changePct > 0) === (better === "up") ? "good" : "bad" };
+  const sample = opts.sample ?? (opts.format === "count" && value !== null && previous !== null ? { current: value, previous } : null);
+  const { verdict, tone } = changeVerdict({ changePct, better, sample });
+  return { changePct, tone, verdict };
 }
 
 function formatDuration(seconds: number): string {

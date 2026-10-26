@@ -9,9 +9,21 @@
   --border: #e4e3df;
   --text: #0b0b0b;
   --text-2: #52514e;
-  --text-3: #7a7974;
+  /* --text-3 contrast (WCAG): 5.42:1 on --surface #fff, 5.01:1 on --background
+     #f6f6f4, 5.28:1 on --surface-2. (Was #7a7974: 4.36 / 4.03, below 4.5.) */
+  --text-3: #6b6a65;
   --brand: #4f46e5;
+  /* Set per agency with inkFor() from src/lib/brand-color.ts (black or white). */
   --brand-ink: #ffffff;
+
+  /* Selection and keyboard focus. --selected follows the agency brand as a
+     ~12% tint; selected items also get a brand edge (.ui-selected) so the state
+     never relies on the faint tint alone. --focus-ring is fixed (not the brand,
+     which may be light): 6.6:1 on #fff, 6.1:1 on #f6f6f4. */
+  --selected: color-mix(in srgb, var(--brand) 12%, var(--surface));
+  --focus-ring: #1c5cab;
+  /* Empty part of progress / pace bars: 1.4:1 against white so the bar's extent is visible. */
+  --track: #d9d8d3;
 
   /* Charts (validated reference palette) */
   --series-actual: #2a78d6;
@@ -45,7 +57,12 @@
     --border: #2f2f2d;
     --text: #f0efec;
     --text-2: #c3c2b7;
+    /* --text-3: 5.51:1 on --surface #1a1a19, 5.93:1 on --background #121211, 5.16:1 on --surface-2. */
     --text-3: #92918a;
+    --selected: color-mix(in srgb, var(--brand) 24%, var(--surface));
+    /* 8.3:1 on #1a1a19, 8.9:1 on #121211 */
+    --focus-ring: #86b6ef;
+    --track: #3a3a37;
     --series-actual: #3987e5;
     --series-projected: #d95926;
     --series-planned: #92918a;
@@ -71,6 +88,9 @@
   --text: #f0efec;
   --text-2: #c3c2b7;
   --text-3: #92918a;
+  --selected: color-mix(in srgb, var(--brand) 24%, var(--surface));
+  --focus-ring: #86b6ef;
+  --track: #3a3a37;
   --series-actual: #3987e5;
   --series-projected: #d95926;
   --series-planned: #92918a;
@@ -97,6 +117,9 @@
   --color-text-3: var(--text-3);
   --color-brand: var(--brand);
   --color-brand-ink: var(--brand-ink);
+  --color-selected: var(--selected);
+  --color-focus-ring: var(--focus-ring);
+  --color-track: var(--track);
   --color-good: var(--good);
   --color-warning: var(--warning);
   --color-serious: var(--serious);
@@ -122,4 +145,23 @@ body {
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Visible keyboard focus everywhere unless a component draws its own. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* The current / highlighted item in a list, menu, tab set or nav. */
+.ui-selected {
+  background: var(--selected);
+  box-shadow: inset 3px 0 0 var(--brand);
+  color: var(--text);
+}
+
+/* Focus ring for elements that sit flush in a list (menus, comboboxes), drawn inside the box. */
+.ui-focus-ring:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }

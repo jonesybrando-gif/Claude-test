@@ -167,13 +167,18 @@ export function table(doc: Doc, columns: Column[], rows: string[][], opts: { fon
   const header = () => {
     if (opts.noHeader) return;
     const y = doc.y;
-    doc.rect(left, y, total, fs + 10).fill(C.surface2);
+    // Full column names may wrap onto two lines rather than being cut off.
+    doc.font("Helvetica-Bold").fontSize(fs - 0.5);
+    const textH = Math.max(fs, ...columns.map((c, i) => Math.min(doc.heightOfString(pdfText(c.header), { width: widths[i] - pad * 2 }), (fs + 2) * 2)));
+    const h = textH + 10;
+    doc.rect(left, y, total, h).fill(C.surface2);
     let x = left;
     columns.forEach((c, i) => {
-      doc.font("Helvetica-Bold").fontSize(fs - 0.5).fillColor(C.text2).text(pdfText(c.header), x + pad, y + 5, { width: widths[i] - pad * 2, align: c.align ?? "left", lineBreak: false, ellipsis: true });
+      doc.font("Helvetica-Bold").fontSize(fs - 0.5).fillColor(C.text2).text(pdfText(c.header), x + pad, y + 5, { width: widths[i] - pad * 2, height: textH, align: c.align ?? "left", ellipsis: true });
       x += widths[i];
     });
-    doc.y = y + fs + 10;
+    doc.x = left;
+    doc.y = y + h;
   };
   ensureSpace(doc, (fs + 10) * 2 + 4);
   header();

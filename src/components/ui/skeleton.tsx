@@ -7,7 +7,7 @@ import { cn } from "./cn";
 
 /** A grey placeholder block shown while a section loads. */
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-md bg-border/60", className)} aria-hidden />;
+  return <div className={cn("animate-pulse rounded-md bg-border/60 motion-reduce:animate-none", className)} aria-hidden />;
 }
 
 /** Announces loading once to screen readers; wrap a group of skeletons in it. */

@@ -4,6 +4,7 @@ import { syncDueAccounts } from "@/server/sync/sync-account";
 import { syncDueDataAssets } from "@/server/data-sources/sync";
 import { runAllAlerts } from "@/server/alerts";
 import { sendDueScheduledReports } from "@/server/scheduled-reports";
+import { rollForwardBudgets } from "@/server/budget-rollover";
 
 // Scheduled entry point. Call hourly with  Authorization: Bearer $CRON_SECRET
 // (Vercel Cron sends this header automatically when CRON_SECRET is set).
@@ -16,6 +17,13 @@ const DATA_SYNC_BUDGET_MS = 200_000;
 async function run(req: NextRequest) {
   if (!cronAuthorized(req.headers.get("authorization"))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const started = Date.now();
+  // First, so a new month's repeating budgets exist before pacing and alerts run.
+  let budgetRollover: unknown;
+  try {
+    budgetRollover = await rollForwardBudgets();
+  } catch (e) {
+    budgetRollover = { error: (e as Error).message };
+  }
   const results = await syncDueAccounts();
   const count = (s: string) => results.filter((r) => r.status === s).length;
   let alerts: unknown;
@@ -41,6 +49,7 @@ async function run(req: NextRequest) {
     dataSources = { error: (e as Error).message };
   }
   return NextResponse.json({
+    budgetRollover,
     scheduledReports,
     dataSources,
     synced: results.length,

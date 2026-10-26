@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowDownRight, ArrowUpRight, Minus, PlayCircle, Plug } from "lucide-react";
+import { PlayCircle, Plug } from "lucide-react";
 import { formatMetric } from "@/lib/dashboards/metrics";
 import { widgetTitle } from "@/lib/dashboards/describe";
 import type { DashboardWidget } from "@/lib/dashboards/types";
 import type { CallLogRow, FormLogRow, WidgetData } from "@/lib/dashboards/widget-data";
-import { formatPct } from "@/lib/money";
+import { changeWords } from "@/lib/change";
+import { InfoTip } from "@/components/ui/info-tip";
+import { ChangeLine } from "@/components/kpi/kpi-card";
 import { SeriesChart } from "@/components/charts/series-chart";
 import { BreakdownBarChart, MetricPieChart } from "@/components/charts/breakdown-charts";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -15,7 +17,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/components/ui/cn";
 import { TextContent } from "./text-content";
 
-const TONE = { good: "text-good-ink", bad: "text-critical-ink", neutral: "text-text-2" } as const;
 
 /** Server-rendered ad sections (budget pacing, campaign table) reused as widgets. */
 export interface AdSlots {
@@ -233,21 +234,21 @@ function FormLog({ rows, total, timeZone }: { rows: FormLogRow[]; total: number;
 }
 
 function KpiWidget({ title, data, currency, fillCls }: { title: string; data: Extract<WidgetData, { kind: "kpi" }>; currency: string; fillCls: string }) {
-  const Icon = data.changePct === null || Math.abs(data.changePct) < 0.5 ? Minus : data.changePct > 0 ? ArrowUpRight : ArrowDownRight;
-  const tone = TONE[data.tone ?? "neutral"];
+  // Same wording as the report tiles: "Up 8% from 120 · better", "About the same as 120", "Too few to compare".
+  const verdict = data.verdict ?? (data.tone === "good" ? "better" : data.tone === "bad" ? "worse" : data.metric.better === "neutral" ? "neutral" : "same");
+  const words = changeWords(verdict, data.changePct, formatMetric(data.metric, data.previous, currency), data.metric.label);
   return (
-    <section aria-label={title} title={data.metric.description} className={cn("flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-surface px-4 py-3", fillCls)}>
-      <h3 className="truncate text-xs leading-tight text-text-3">{title}</h3>
+    <section aria-label={title} className={cn("flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-surface px-4 py-3", fillCls)}>
+      <h3 className="flex min-w-0 items-center gap-1 text-xs leading-tight text-text-3">
+        <span className="truncate">{title}</span>
+        <InfoTip label={data.metric.label} text={data.metric.plain ?? data.metric.description} />
+      </h3>
       <p className="truncate text-xl font-semibold tabular">{formatMetric(data.metric, data.value, currency)}</p>
-      <p className="flex items-center gap-1 text-xs tabular">
+      <p className="flex min-w-0 items-center gap-1 text-xs tabular">
         {data.changePct === null ? (
           <span className="text-text-3">{data.value === null ? "not reported" : data.hasComparison ? "no comparison data" : "no comparison"}</span>
         ) : (
-          <>
-            <Icon className={`h-3.5 w-3.5 ${tone}`} aria-hidden />
-            <span className={tone}>{formatPct(Math.abs(data.changePct))}</span>
-            <span className="truncate text-text-3">vs {formatMetric(data.metric, data.previous, currency)}</span>
-          </>
+          <ChangeLine tone={data.tone} changePct={data.changePct} text={words.text} aria={words.aria} />
         )}
       </p>
       <FluidSparkline values={data.spark} />

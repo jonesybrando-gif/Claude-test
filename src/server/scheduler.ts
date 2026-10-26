@@ -3,6 +3,7 @@ import { syncDueAccounts } from "./sync/sync-account";
 import { syncDueDataAssets } from "./data-sources/sync";
 import { runAllAlerts } from "./alerts";
 import { sendDueScheduledReports } from "./scheduled-reports";
+import { rollForwardBudgets } from "./budget-rollover";
 
 // Built-in hourly job for hosts that keep the app running (Railway, Render,
 // a VPS). Does the same work as GET /api/cron/sync, so no external scheduler
@@ -17,6 +18,13 @@ async function tick() {
   if (running) return; // the previous run is still going
   running = true;
   const started = Date.now();
+  // First, so a new month's repeating budgets exist before pacing and alerts run.
+  try {
+    const rolled = await rollForwardBudgets();
+    if (rolled.created) console.log(`[scheduler] repeated ${rolled.created} budget(s) into the new month for ${rolled.clients} client(s)`);
+  } catch (e) {
+    console.error("[scheduler] budget roll-forward failed", e);
+  }
   try {
     const results = await syncDueAccounts();
     const failed = results.filter((r) => r.status === "FAILED").length;

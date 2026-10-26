@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { clientBackHref } from "@/lib/client-nav";
 import { ChevronLeft } from "lucide-react";
 import type { Platform } from "@prisma/client";
 import { prisma } from "@/server/db";
@@ -29,9 +30,10 @@ const STATUS: Record<string, { label: string; variant: "good" | "warning" | "cri
   PENDING_APPROVAL: { label: "Waiting on platform approval", variant: "warning" },
 };
 
-export default async function ClientAccountsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ linked?: string; replaced?: string }> }) {
+export default async function ClientAccountsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ linked?: string; replaced?: string } & Record<string, string | undefined>> }) {
   const { id } = await params;
   const sp = await searchParams;
+  const back = clientBackHref(id, sp, "setup");
   const user = await requireClientEdit(id);
   const admin = user.role === "AGENCY_ADMIN";
   const [client, accounts, connections] = await Promise.all([
@@ -44,7 +46,7 @@ export default async function ClientAccountsPage({ params, searchParams }: { par
   return (
     <div className="mx-auto flex max-w-[1000px] flex-col gap-5">
       <div>
-        <Link href={`/clients/${id}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
+        <Link href={back} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
         <h1 className="mt-1 text-xl font-semibold">Ad accounts</h1>
         <p className="text-sm text-text-2">Each platform links to one of {client.name}&apos;s ad accounts. Marketing Nexus only reads reporting data; it never changes campaigns or budgets.</p>
       </div>

@@ -78,7 +78,7 @@ export function DashboardMenu({ id, name, clientId, order, canTemplate, afterDel
     run(() => reorderDashboardsAction(clientId, next), () => { setMode(null); router.refresh(); });
   };
 
-  const item = "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-text hover:bg-surface-2 focus:bg-surface-2 focus:outline-none disabled:opacity-50 cursor-pointer";
+  const item = "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm ui-focus-ring text-text hover:bg-selected focus:bg-selected disabled:opacity-50 cursor-pointer";
   return (
     <div ref={ref} className="relative">
       <Button type="button" variant="outline" size="sm" aria-haspopup="menu" aria-expanded={mode === "menu"} onClick={() => { setMode(mode ? null : "menu"); setError(null); setText(name); }}>

@@ -5,6 +5,10 @@ import { getClientPerformance } from "./reporting";
 import { getClientTemplate } from "./report-templates";
 import { comparisonRange, resolveRange, type CompareMode, type RangePreset } from "@/lib/date-ranges";
 import { addDays, dateToIso, isoToDate, maxDate, minDate, monthBounds, todayInTimeZone } from "@/lib/pacing/dates";
+import { linkedSources } from "./dashboards/sources";
+import { isPaidCallSource } from "@/lib/call-sources";
+import { resolveGoal, resultsFor, stillCounting, type Results } from "@/lib/results";
+import type { DateRange } from "@/lib/date-ranges";
 
 const PRESETS: RangePreset[] = ["mtd", "last_month", "last_7", "last_30", "last_90", "custom"];
 const COMPARE: CompareMode[] = ["previous_period", "previous_month", "none"];
@@ -59,7 +63,7 @@ async function loadReportDetail(base: ReportBase, now: Date) {
     return d;
   });
   const month = monthBounds(today);
-  const [history, perf, cmpPerf, noteRows] = await Promise.all([
+  const [history, perf, cmpPerf, noteRows, callsFromAds] = await Promise.all([
     Promise.all(historyDates.map((d) => loadPacing({ id: clientId }, now, d).then((r) => r[0]))),
     getClientPerformance(clientId, range),
     cmpRange ? getClientPerformance(clientId, cmpRange) : Promise.resolve(null),
@@ -68,9 +72,37 @@ async function loadReportDetail(base: ReportBase, now: Date) {
       where: { clientId, date: { gte: isoToDate(minDate(range.from, month.start)), lte: isoToDate(maxDate(range.to, month.end)) } },
       orderBy: [{ date: "asc" }, { createdAt: "asc" }],
     }),
+    loadCallsFromAds(clientId, range, cmpRange),
   ]);
   const notes: ChartNoteInfo[] = noteRows.map((n) => ({ id: n.id, date: dateToIso(n.date), text: n.text, clientVisible: n.clientVisible, authorId: n.authorId, taggedUserId: n.taggedUserId }));
-  return { history, perf, cmpPerf, notes };
+  return { history, perf, cmpPerf, notes, callsFromAds };
+}
+
+/** Calls whose CallRail source or medium is a paid ad, in a range. */
+async function paidCalls(clientId: string, r: DateRange): Promise<number> {
+  const rows = await prisma.callRecord.groupBy({
+    by: ["source", "medium"],
+    where: { clientId, date: { gte: isoToDate(r.from), lte: isoToDate(r.to) } },
+    _count: { _all: true },
+  });
+  return rows.filter((x) => isPaidCallSource(x.source, x.medium)).reduce((n, x) => n + x._count._all, 0);
+}
+
+/**
+ * "Calls from ads (CallRail)", a supporting figure next to Results when
+ * CallRail is linked. Never added into Results: ad platforms usually count
+ * the same calls. Null when CallRail isn't linked (or the lookup fails: it
+ * must never break the report).
+ */
+async function loadCallsFromAds(clientId: string, range: DateRange, cmpRange: DateRange | null): Promise<{ current: number; previous: number | null } | null> {
+  try {
+    if (!(await linkedSources(clientId)).includes("callrail")) return null;
+    const [current, previous] = await Promise.all([paidCalls(clientId, range), cmpRange ? paidCalls(clientId, cmpRange) : Promise.resolve(null)]);
+    return { current, previous };
+  } catch (e) {
+    console.error("Calls from ads: lookup failed", e);
+    return null;
+  }
 }
 
 /**
@@ -103,3 +135,19 @@ export async function completeClientReport(head: ClientReportHead, now: Date): P
 }
 
 export type ClientReport = Awaited<ReturnType<typeof loadClientReport>>;
+
+/**
+ * The report's Results (see src/lib/results.ts) for the range and the
+ * comparison, counted per ad account so nothing is counted twice. The goal is
+ * the client's, or guessed from both periods.
+ */
+export function reportResults(rep: Pick<ClientReport, "client" | "perf" | "cmpPerf" | "range" | "today">): { current: Results; previous: Results | null; stillCounting: boolean } {
+  const lines = (p: ClientReport["perf"]) => {
+    const l = rep.client.accounts.map((a) => p.byAccount[a.id]).filter((x) => !!x);
+    return l.length ? l : [p.totals];
+  };
+  const cur = lines(rep.perf);
+  const prev = rep.cmpPerf ? lines(rep.cmpPerf) : null;
+  const g = resolveGoal(rep.client.goal, cur, prev);
+  return { current: resultsFor(g.goal, cur, g.guessed), previous: prev ? resultsFor(g.goal, prev, g.guessed) : null, stillCounting: stillCounting(rep.range.to, rep.today) };
+}

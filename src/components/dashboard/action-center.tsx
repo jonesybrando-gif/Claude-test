@@ -3,6 +3,8 @@ import { AlertOctagon, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import type { PacingRow } from "@/server/pacing-service";
 import type { ActionSeverity } from "@/lib/action-center";
 import { PLATFORM_LABEL } from "@/lib/platforms";
+import { displayPacingStatus } from "@/lib/pacing/display-status";
+import { STATUS_SEVERITY } from "@/lib/pacing/status";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 
 const ICON: Record<ActionSeverity, { Icon: typeof Info; cls: string; label: string }> = {
@@ -13,10 +15,16 @@ const ICON: Record<ActionSeverity, { Icon: typeof Info; cls: string; label: stri
 };
 const ORDER: Record<ActionSeverity, number> = { critical: 0, warning: 1, info: 2, ok: 3 };
 
+/** Urgency within a severity: the worse of pacing to date and the month-end forecast. */
+const urgency = (r: PacingRow) => (r.disconnected ? 10 : 0) + (r.result ? STATUS_SEVERITY[displayPacingStatus(r.result).status] : 0);
+
 export function ActionCenter({ rows, limit = 8 }: { rows: PacingRow[]; limit?: number }) {
   // Lines with no ad account linked have nothing to act on today; the dashboard banner covers them.
   const sorted = rows.filter((r) => !r.notConnected).sort(
-    (a, b) => ORDER[a.action.severity] - ORDER[b.action.severity] || Math.abs(b.result?.projectedVarianceMinor ?? 0) - Math.abs(a.result?.projectedVarianceMinor ?? 0),
+    (a, b) =>
+      ORDER[a.action.severity] - ORDER[b.action.severity] ||
+      urgency(b) - urgency(a) ||
+      Math.abs(b.result?.projectedVarianceMinor ?? 0) - Math.abs(a.result?.projectedVarianceMinor ?? 0),
   );
   const actionable = sorted.filter((r) => r.action.severity !== "ok");
   const okCount = sorted.length - actionable.length;
@@ -41,6 +49,7 @@ export function ActionCenter({ rows, limit = 8 }: { rows: PacingRow[]; limit?: n
                   <span className="text-text-3"> · {r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ")}</span>
                 </p>
                 <p className="text-sm text-text">{r.action.headline}</p>
+                {r.result && displayPacingStatus(r.result).forecastNote && <p className="text-xs text-text-2">{displayPacingStatus(r.result).forecastNote}</p>}
                 <p className="text-xs text-text-2">{r.action.detail}</p>
               </div>
             </Link>

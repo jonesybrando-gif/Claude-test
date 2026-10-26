@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { clientBackHref } from "@/lib/client-nav";
 import { ChevronLeft } from "lucide-react";
 import { prisma } from "@/server/db";
 import { requireClientEdit } from "@/server/access";
@@ -44,6 +45,48 @@ function shortUrl(u: string) {
 
 function RankTable({ rows, clientId, showDevice }: { rows: KeywordRankRow[]; clientId: string; showDevice: boolean }) {
   return (
+    <>
+    {/* Phones: one card per keyword instead of a nine-column table. */}
+    <ul className="flex flex-col gap-2 md:hidden" aria-label="Keyword positions">
+      {rows.map((r, i) => {
+        const firstOfKeyword = rows.findIndex((x) => x.keyword === r.keyword) === i;
+        const features = r.serpFeatures.filter((f) => !SKIP_FEATURES.has(f));
+        return (
+          <li key={r.keywordId} className="rounded-lg border border-border p-3">
+            <div className="flex items-start justify-between gap-2">
+              <p className="min-w-0 text-sm">
+                <span className="font-medium">{r.keyword}</span>
+                {showDevice && <Badge variant="neutral" className="ml-2">{r.device}</Badge>}
+                {!r.checkedOn && <span className="block text-xs text-text-3">waiting for first check</span>}
+              </p>
+              <p className="shrink-0 text-right text-lg font-semibold tabular">
+                <span className="sr-only">Position </span>
+                {r.position ?? (r.checkedOn ? <span className="text-sm font-normal text-text-3">&gt;100</span> : "—")}
+                {r.newlyRanked && <Badge variant="good" className="ml-1">new</Badge>}
+              </p>
+            </div>
+            <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+              <div><dt className="text-text-3">7 days</dt><dd className="font-medium tabular"><Change v={r.change7} /></dd></div>
+              <div><dt className="text-text-3">30 days</dt><dd className="font-medium tabular"><Change v={r.change30} /></dd></div>
+              <div><dt className="text-text-3">Best</dt><dd className="font-medium tabular">{r.best ?? "—"}</dd></div>
+            </dl>
+            {r.url && <p className="mt-2 truncate text-xs"><a href={r.url} target="_blank" rel="noreferrer noopener" className="text-brand hover:underline" title={r.url}>{shortUrl(r.url)}</a></p>}
+            {features.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {features.slice(0, 4).map((f) => <Badge key={f} variant="neutral">{FEATURE_LABEL[f] ?? f.replace(/_/g, " ")}</Badge>)}
+                {features.length > 4 && <span className="text-xs text-text-3">+{features.length - 4}</span>}
+              </div>
+            )}
+            {firstOfKeyword && (
+              <div className="mt-2 flex justify-end">
+                <ActionButton action={removeKeyword.bind(null, clientId, r.keyword)} label="Remove" variant="ghost" title="Stop tracking and delete this keyword's history" />
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+    <div className="hidden md:block">
     <Table>
       <THead>
         <TR>
@@ -91,11 +134,14 @@ function RankTable({ rows, clientId, showDevice }: { rows: KeywordRankRow[]; cli
         })}
       </TBody>
     </Table>
+    </div>
+    </>
   );
 }
 
-export default async function RankingsPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function RankingsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { id } = await params;
+  const back = clientBackHref(id, await searchParams, "setup");
   const user = await requireClientEdit(id);
   const [client, connection, asset] = await Promise.all([
     prisma.client.findUniqueOrThrow({ where: { id }, select: { name: true } }),
@@ -115,7 +161,7 @@ export default async function RankingsPage({ params }: { params: Promise<{ id: s
   return (
     <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
       <div>
-        <Link href={`/clients/${id}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
+        <Link href={back} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
         <h1 className="mt-1 text-xl font-semibold">Keyword rankings</h1>
         <p className="text-sm text-text-2">
           Exact Google organic positions for {client.name}&apos;s keywords, checked once a day (top 100 results) through DataForSEO.

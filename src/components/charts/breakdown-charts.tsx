@@ -3,6 +3,8 @@
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from "recharts";
 import { formatMetric, type MetricInfo } from "@/lib/dashboards/metrics";
 import { formatPct } from "@/lib/money";
+import { summarizeBreakdown } from "@/lib/chart-summary";
+import { ChartSummary, ChartTable } from "./chart-table";
 
 // Breakdown charts (share by a dimension) in the same visual language as the
 // trend and pacing charts. Both fill their parent's height.
@@ -40,9 +42,12 @@ export function MetricPieChart({ rows, metric, currency = "USD" }: { rows: Break
     );
   }
 
+  const fmt = (v: number | null) => formatMetric(metric, v, currency);
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 sm:flex-row sm:items-center">
-      <div className="h-40 min-h-0 sm:h-full sm:min-w-0 sm:flex-1">
+    <div className="relative flex h-full min-h-0 flex-col">
+    <ChartSummary text={summarizeBreakdown(metric.label, slices, (v) => fmt(v), { share: true })} className="mb-1 line-clamp-2" />
+    <div className="flex min-h-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="h-40 min-h-0 sm:h-full sm:min-w-0 sm:flex-1" aria-hidden>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Tooltip content={<Tip />} />
@@ -62,6 +67,14 @@ export function MetricPieChart({ rows, metric, currency = "USD" }: { rows: Break
         ))}
       </ul>
     </div>
+    <ChartTable
+      overlay
+      className="mt-1 shrink-0"
+      caption={`Share of ${metric.label.toLowerCase()}`}
+      columns={["Name", metric.label, "Share"]}
+      rows={slices.map((s) => [s.label, fmt(s.value), formatPct((s.value / total) * 100, 1)])}
+    />
+    </div>
   );
 }
 
@@ -80,8 +93,11 @@ export function BreakdownBarChart({ rows, metric, currency = "USD" }: { rows: Br
     );
   }
 
+  const fmt = (v: number | null) => formatMetric(metric, v, currency);
   return (
-    <div className="h-full min-h-0">
+    <div className="relative flex h-full min-h-0 flex-col">
+    <ChartSummary text={summarizeBreakdown(metric.label, metric.format === "position" ? data.map((d) => ({ ...d, value: d.value === null ? null : -d.value })) : data, (v) => fmt(Math.abs(v)))} className="mb-1 line-clamp-2" />
+    <div className="min-h-0 flex-1" aria-hidden>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} layout="vertical" margin={{ top: 0, right: 12, bottom: 0, left: 0 }} barCategoryGap="25%">
           <XAxis type="number" hide reversed={metric.format === "position"} />
@@ -90,6 +106,8 @@ export function BreakdownBarChart({ rows, metric, currency = "USD" }: { rows: Br
           <Bar dataKey="value" fill="var(--series-actual)" radius={[0, 3, 3, 0]} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
+    </div>
+    <ChartTable overlay className="mt-1 shrink-0" caption={metric.label} columns={["Name", metric.label]} rows={rows.map((r) => [r.label, fmt(r.values[metric.key] ?? null)])} />
     </div>
   );
 }

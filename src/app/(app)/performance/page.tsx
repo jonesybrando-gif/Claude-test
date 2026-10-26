@@ -1,3 +1,4 @@
+import { withRememberedRange } from "@/server/remembered-range";
 import { prisma } from "@/server/db";
 import { requireAgencyStaff, visibleClientsWhere } from "@/server/access";
 import { getAgencyPerformance } from "@/server/performance";
@@ -17,17 +18,21 @@ import { ChevronLeft } from "lucide-react";
 import { loadPacing } from "@/server/pacing-service";
 import { derive, emptyTotals, pctChange } from "@/lib/metrics";
 import { ClientPicker } from "./client-picker";
+import { clientAttention, portfolioResults } from "@/server/portfolio";
+import { attentionWeight, describeChange } from "@/lib/portfolio";
+import { displayPacingStatus } from "@/lib/pacing/display-status";
+import { formatMoney, formatNumber } from "@/lib/money";
 import { PortfolioTable, type PortfolioRow } from "./portfolio-table";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Performance" };
+export const metadata = { title: "All clients" };
 
 const PRESETS: RangePreset[] = ["mtd", "last_month", "last_7", "last_30", "last_90", "custom"];
 const TABLE_KPIS: KpiKey[] = ["spend", "impressions", "clicks", "ctr", "cpc", "conversions", "conversionRate", "costPerConversion", "leads", "costPerLead", "roas"];
 
 export default async function PerformancePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireAgencyStaff();
-  const sp = await searchParams;
+  const sp = await withRememberedRange(await searchParams);
   const agency = await prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId }, select: { defaultTimezone: true } });
   const today = todayInTimeZone(agency.defaultTimezone);
   const preset: RangePreset = PRESETS.includes(sp.range as RangePreset) ? (sp.range as RangePreset) : "last_30";
@@ -51,15 +56,26 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
 
   if (!chosen) {
     // Portfolio: every client with spend, results, pacing and a trend.
-    const [cur, prev, pacing] = await Promise.all([
+    const [cur, prev, pacing, results] = await Promise.all([
       getAgencyPerformance(visible, range),
       cmpRange ? getAgencyPerformance(visible, cmpRange) : Promise.resolve(null),
       loadPacing(visible),
+      portfolioResults(visible, today),
     ]);
+    // Same "needs attention" reasons as Home (always the last 30 complete days).
+    const reasons = await clientAttention(pacing, results);
     const prevBy = new Map(prev?.byClient.map((c) => [c.clientId, c.totals]) ?? []);
     const pacingBy = new Map(pacing.map((p) => [p.client.id, p]));
     const labelsBy = new Map(pickable.map((c) => [c.id, c.labels]));
     const change = (a: number, b: number | undefined) => (b === undefined ? null : pctChange(a, b));
+    const cpaChange = (now: { costMinor: number; conversions: number }, before: { costMinor: number; conversions: number } | undefined, currency: string) =>
+      describeChange({
+        current: now.conversions > 0 ? now.costMinor / now.conversions : null,
+        previous: before && before.conversions > 0 ? before.costMinor / before.conversions : null,
+        better: "down",
+        format: (n) => formatMoney(n, currency),
+        counts: before ? { current: now.conversions, previous: before.conversions } : undefined,
+      });
     const rows: PortfolioRow[] = cur.byClient.map((c) => {
       const p = pacingBy.get(c.clientId);
       const live = p?.accounts.filter((a) => !a.isDemo || a.lastSuccessfulSyncAt) ?? [];
@@ -79,21 +95,41 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
         conversions: c.totals.conversions,
         conversionsChangePct: change(c.totals.conversions, before?.conversions),
         costPerConversionMinor: derive(c.totals).costPerConversionMinor,
-        pacing: !p || (p.rows.length > 0 && connected.length === 0) || p.accounts.length === 0 ? "NOT_CONNECTED" : p.connectedTotal ? p.connectedTotal.status : "NO_BUDGET",
-        attention: connected.some((r) => r.attention),
+        costPerConversionChange: cmpRange ? cpaChange(c.totals, before, p?.client.currency ?? "USD") : null,
+        reasons: reasons.get(c.clientId) ?? [],
+        attentionWeight: attentionWeight(reasons.get(c.clientId) ?? []),
+        pacing: !p || (p.rows.length > 0 && connected.length === 0) || p.accounts.length === 0 ? "NOT_CONNECTED" : p.connectedTotal ? displayPacingStatus(p.connectedTotal).status : "NO_BUDGET",
+        attention: (reasons.get(c.clientId) ?? []).length > 0,
         dailySpend: c.dailySpend,
         lastSyncAt: syncs[0] ?? null,
         stale: live.some((a) => a.stale),
         isDemo: c.isDemo,
       };
     });
+    // Totals row: never adds amounts across currencies.
+    const mainCurrency = results.currency;
+    const inMain = rows.filter((r) => r.currency === mainCurrency);
+    const sumBy = (xs: { costMinor: number; conversions: number }[]) => xs.reduce((t, x) => ({ costMinor: t.costMinor + x.costMinor, conversions: t.conversions + x.conversions }), { costMinor: 0, conversions: 0 });
+    const curT = sumBy(cur.byClient.filter((c) => (pacingBy.get(c.clientId)?.client.currency ?? "USD") === mainCurrency).map((c) => c.totals));
+    const prevT = prev ? sumBy(prev.byClient.filter((c) => (pacingBy.get(c.clientId)?.client.currency ?? "USD") === mainCurrency).map((c) => c.totals)) : undefined;
+    const totals = {
+      label: inMain.length < rows.length ? `All ${mainCurrency} clients (${inMain.length})` : `All clients (${rows.length})`,
+      currency: mainCurrency,
+      spend: formatMoney(curT.costMinor, mainCurrency, { whole: true }),
+      spendChange: prevT ? describeChange({ current: curT.costMinor, previous: prevT.costMinor, better: "neutral", format: (n) => formatMoney(n, mainCurrency, { whole: true }) }) : null,
+      conversions: formatNumber(curT.conversions, 0),
+      conversionsChange: prevT ? describeChange({ current: curT.conversions, previous: prevT.conversions, better: "up", format: (n) => formatNumber(n, 0), counts: { current: curT.conversions, previous: prevT.conversions } }) : null,
+      cpa: curT.conversions > 0 ? formatMoney(curT.costMinor / curT.conversions, mainCurrency) : "—",
+      cpaChange: prevT ? cpaChange(curT, prevT, mainCurrency) : null,
+      attention: rows.filter((r) => r.attention).length,
+    };
     return (
       <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold">Performance</h1>
+            <h1 className="text-xl font-semibold">All clients</h1>
             <p className="text-sm text-text-2">
-              All clients · {PRESET_LABEL[preset]}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
+              {PRESET_LABEL[preset]}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
               {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
             </p>
           </div>
@@ -110,7 +146,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
           {pickable.length === 0 ? (
             <CardContent className="text-sm text-text-3">No clients yet. <Link href="/clients" className="text-brand hover:underline">Add your first client</Link>.</CardContent>
           ) : (
-            <PortfolioTable rows={rows} labels={labels} rangeQuery={rangeQuery} periodLabel={PRESET_LABEL[preset]} />
+            <PortfolioTable rows={rows} totals={totals} labels={labels} rangeQuery={rangeQuery} periodLabel={PRESET_LABEL[preset]} initialAttention={sp.attention === "1"} />
           )}
         </Card>
       </div>
@@ -130,7 +166,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
     <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <Link href={`/performance?${rangeQuery}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" aria-hidden /> Portfolio</Link>
+          <Link href={`/performance?${rangeQuery}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" aria-hidden /> All clients</Link>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold">Performance · {chosenName}</h1>
             {isDemo && <DemoBadge />}

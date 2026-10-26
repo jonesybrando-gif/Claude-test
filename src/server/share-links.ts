@@ -45,6 +45,21 @@ export async function resolveShareToken(token: string, now: Date = new Date()) {
   return link;
 }
 
+/**
+ * For a token that no longer opens a report: the agency it belonged to, so the
+ * "link expired" page can be branded. Null for unknown tokens (and live ones).
+ */
+export async function deadShareLinkAgency(token: string, now: Date = new Date()) {
+  if (!TOKEN_RE.test(token)) return null;
+  const link = await prisma.reportShareLink.findUnique({
+    where: { tokenHash: hash(token) },
+    select: { revokedAt: true, expiresAt: true, client: { select: { archivedAt: true, agency: { select: { name: true, brandColor: true, logoUrl: true } } } } },
+  });
+  if (!link) return null;
+  const dead = !!link.revokedAt || !!link.client.archivedAt || (!!link.expiresAt && link.expiresAt <= now);
+  return dead ? link.client.agency : null;
+}
+
 export async function recordShareView(id: string) {
   await prisma.reportShareLink.update({ where: { id }, data: { viewCount: { increment: 1 }, lastViewedAt: new Date() } });
 }

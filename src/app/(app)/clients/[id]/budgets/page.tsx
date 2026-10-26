@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { clientBackHref } from "@/lib/client-nav";
 import { ChevronLeft } from "lucide-react";
 import { prisma } from "@/server/db";
 import { requireClientEdit } from "@/server/access";
@@ -7,14 +8,19 @@ import { formatMoney } from "@/lib/money";
 import { formatDate } from "@/lib/time";
 import { PLATFORM_LABEL } from "@/lib/platforms";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DeleteBudgetButton, NewBudgetForm, ReviseBudgetForm } from "./forms";
+import { DeleteBudgetButton, NewBudgetForm, RepeatToggle, ReviseBudgetForm } from "./forms";
+import { loadPacing } from "@/server/pacing-service";
+import { isWholeMonth } from "@/lib/budget-rollover";
+import { PaceBar } from "@/components/dashboard/pace-bar";
+import type { PacingRow } from "@/server/pacing-service";
 
 export const dynamic = "force-dynamic";
 
 const DIST_LABEL = { EVEN: "Even", BUSINESS_DAYS: "Business days", WEEKEND_WEIGHTED: "Weekend-weighted", CUSTOM_WEEKDAY: "Custom weekday", CUSTOM_DAILY: "Custom daily" } as const;
 
-export default async function BudgetsPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function BudgetsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { id } = await params;
+  const back = clientBackHref(id, await searchParams, "setup");
   await requireClientEdit(id);
   const client = await prisma.client.findUniqueOrThrow({
     where: { id },
@@ -22,6 +28,10 @@ export default async function BudgetsPage({ params }: { params: Promise<{ id: st
   });
   const today = todayInTimeZone(client.timezone);
   const month = monthBounds(today);
+  // Pacing for the current period (this also carries repeating budgets into a new month first).
+  const [pacing] = await loadPacing({ id }).catch(() => []);
+  const resultByBudget = new Map<string, NonNullable<PacingRow["result"]>>();
+  for (const r of [...(pacing?.rows ?? []), ...(pacing?.subRows ?? [])]) if (r.result) resultByBudget.set(r.key, r.result);
   const budgets = await prisma.budget.findMany({
     where: { clientId: id, periodEnd: { gte: isoToDate(addDays(month.start, -62)) } },
     include: { revisions: { orderBy: { effectiveDate: "asc" }, include: { createdBy: { select: { name: true } } } }, account: true, campaign: true },
@@ -33,7 +43,7 @@ export default async function BudgetsPage({ params }: { params: Promise<{ id: st
   return (
     <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
       <div>
-        <Link href={`/clients/${id}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
+        <Link href={back} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
         <h1 className="mt-1 text-xl font-semibold">Budgets</h1>
         <p className="text-sm text-text-2">Budgets entered here drive pacing only. They never change budgets inside Google, Meta or Microsoft.</p>
       </div>
@@ -75,6 +85,8 @@ export default async function BudgetsPage({ params }: { params: Promise<{ id: st
               </div>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
+              {active && resultByBudget.has(b.id) && <BudgetProgress result={resultByBudget.get(b.id)!} currency={b.currency} endLabel={isWholeMonth(start, end) ? "month-end" : formatDate(end)} />}
+              <RepeatToggle clientId={id} budgetId={b.id} repeats={b.repeatsMonthly} wholeMonth={isWholeMonth(start, end)} />
               <ol className="flex flex-col gap-1 text-xs text-text-2">
                 {b.revisions.map((r, i) => (
                   <li key={r.id} className="tabular">
@@ -90,6 +102,25 @@ export default async function BudgetsPage({ params }: { params: Promise<{ id: st
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+/** Spent so far, what's left, and a labelled month-end estimate for the current period. */
+function BudgetProgress({ result: r, currency, endLabel }: { result: NonNullable<PacingRow["result"]>; currency: string; endLabel: string }) {
+  const consumed = r.budgetMinor > 0 ? (r.actualToDateMinor / r.budgetMinor) * 100 : 0;
+  const expected = r.budgetMinor > 0 ? (r.expectedToDateMinor / r.budgetMinor) * 100 : 0;
+  const left = Math.max(0, r.budgetMinor - r.actualToDateMinor);
+  const over = r.actualToDateMinor - r.budgetMinor;
+  return (
+    <div className="flex max-w-xl flex-col gap-1.5">
+      <PaceBar consumed={consumed} elapsed={r.pctPeriodElapsed} expected={expected} status={r.status} />
+      <p className="text-sm text-text-2 tabular">
+        Spent <span className="font-medium text-text">{formatMoney(r.actualToDateMinor, currency)}</span>
+        {over > 0 ? <> · <span className="text-critical-ink">{formatMoney(over, currency)} over budget</span></> : <> · {formatMoney(left, currency)} left</>}
+        {r.phase === "ACTIVE" && <> · about {formatMoney(r.projectedMinor, currency)} by {endLabel} (estimate)</>}
+        {r.phase === "NOT_STARTED" && <> · no spend data for this period yet</>}
+      </p>
     </div>
   );
 }

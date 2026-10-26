@@ -2,8 +2,9 @@ import "server-only";
 import type { ClientReport } from "../client-report";
 import { buildAiContext, type AiContextInput } from "@/lib/ai-context";
 import { PLATFORM_LABEL } from "@/lib/platforms";
-import { PRESET_LABEL } from "@/lib/date-ranges";
+import { rangeLabel } from "@/lib/date-ranges";
 import { formatDate } from "@/lib/time";
+import { stillCounting } from "@/lib/results";
 
 /** The grounding text for one client's report, as the page and PDF show it. */
 export function contextForReport(rep: ClientReport): string {
@@ -20,7 +21,7 @@ export function contextInput(rep: ClientReport): AiContextInput {
     clientName: client.name,
     currency: client.currency,
     isDemo: client.accounts.some((a) => a.isDemo),
-    rangeLabel: PRESET_LABEL[rep.preset],
+    rangeLabel: rangeLabel(rep.preset, rep.range),
     range: rep.range,
     comparison: rep.cmpRange,
     kpis: template.kpis,
@@ -34,7 +35,7 @@ export function contextInput(rep: ClientReport): AiContextInput {
           : meta?.stale
             ? `stale: last synced ${meta.lastSuccessfulSyncAt ? formatDate(meta.lastSuccessfulSyncAt.slice(0, 10)) : "never"}`
             : null;
-      return { platform: PLATFORM_LABEL[a.platform], name: a.name, totals: perf.byAccount[a.id] ?? null, spendVerified: a.spendIsVerified, dataNote };
+      return { platform: PLATFORM_LABEL[a.platform], name: a.name, totals: perf.byAccount[a.id] ?? null, previousTotals: cmpPerf?.byAccount[a.id] ?? null, spendVerified: a.spendIsVerified, dataNote };
     }),
     campaigns: client.accounts.flatMap((a) =>
       a.campaigns
@@ -67,5 +68,8 @@ export function contextInput(rep: ClientReport): AiContextInput {
       ? { month: formatDate(past.period.start, { month: "long", year: "numeric" }), budgetMinor: past.total.budgetMinor, spentMinor: past.total.actualToDateMinor, status: past.total.status }
       : null,
     notes: [...new Set([...pacing.rows, ...pacing.subRows].flatMap((r) => r.warnings))],
+    goal: client.goal,
+    today: rep.today,
+    stillCounting: stillCounting(rep.range.to, rep.today),
   };
 }

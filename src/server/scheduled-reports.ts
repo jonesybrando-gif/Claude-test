@@ -5,7 +5,7 @@ import { getExecutiveSummary } from "./exec-summary";
 import { renderClientReportPdf } from "./pdf/reports";
 import { agencyBrand } from "./pdf/brand";
 import { emailConfigured, sendEmail } from "./email";
-import { PRESET_LABEL } from "@/lib/date-ranges";
+import { rangeLabel } from "@/lib/date-ranges";
 import { summaryAsHtml, summaryAsText } from "@/lib/exec-summary";
 import { scheduledReportEmail } from "@/lib/email-templates";
 import { formatDate } from "@/lib/time";
@@ -98,11 +98,11 @@ export async function sendScheduledReport(clientId: string, range: ScheduleRange
   const brand = await agencyBrand(client.agencyId);
   const summary = await getExecutiveSummary(rep, { generate: true, now });
   const pdf = await renderClientReportPdf(rep, brand, { internal: false, executiveSummary: summary, generatedAt: now });
-  const period = `${PRESET_LABEL[rep.preset]} (${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })})`;
+  const period = `${rangeLabel(rep.preset, rep.range)} (${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })})`;
   const heading = `${rep.client.name}: performance summary, ${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })}`;
   const email = scheduledReportEmail(
     { name: brand.name, color: brand.color, footer: brand.footer },
-    { clientName: rep.client.name, title: rep.template.title, period, summaryText: summaryAsText(summary, heading), summaryHtml: summaryAsHtml(summary, heading) },
+    { clientName: rep.client.name, title: rep.template.title, period, summaryText: summaryAsText(summary, heading, { clientFacing: true }), summaryHtml: summaryAsHtml(summary, heading, { clientFacing: true }) },
   );
   const filename = `${slug(rep.client.name)}-report-${rep.range.from}-to-${rep.range.to}.pdf`;
   const out = { sent: 0, failed: 0, notConfigured: 0 };

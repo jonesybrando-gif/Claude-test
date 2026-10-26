@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { Download } from "lucide-react";
 import { prisma } from "@/server/db";
 import { loadClientReport } from "@/server/client-report";
 import { cookies } from "next/headers";
-import { recordShareView, resolveShareToken, shareAccessGranted, shareCookieName } from "@/server/share-links";
+import { deadShareLinkAgency, recordShareView, resolveShareToken, shareAccessGranted, shareCookieName } from "@/server/share-links";
+import { brandStyle } from "@/lib/brand-color";
+import { ExpiredShareLink } from "./expired";
 import { SharePasswordForm } from "./password-form";
-import { PRESET_LABEL } from "@/lib/date-ranges";
+import { rangeLabel } from "@/lib/date-ranges";
 import { formatDate } from "@/lib/time";
 import { buttonVariants } from "@/components/ui/button";
 import { DemoBadge } from "@/components/status-badge";
@@ -31,11 +32,11 @@ export default async function SharedReportPage({ params, searchParams }: { param
   const { token } = await params;
   const sp = await searchParams;
   const link = await resolveShareToken(token);
-  if (!link) notFound();
+  if (!link) return <ExpiredShareLink agency={await deadShareLinkAgency(token)} />;
   if (!shareAccessGranted(link, (await cookies()).get(shareCookieName(link.id))?.value)) {
     const agency = await prisma.agency.findUniqueOrThrow({ where: { id: link.client.agencyId }, select: { name: true, brandColor: true } });
     return (
-      <div className="min-h-screen" style={{ ["--brand" as string]: agency.brandColor }}>
+      <div className="min-h-screen" style={brandStyle(agency.brandColor)}>
         <div className="h-1.5 bg-brand" />
         <main className="mx-auto flex max-w-sm flex-col gap-4 px-4 py-16">
           <p className="text-sm font-semibold">{agency.name}</p>
@@ -53,7 +54,7 @@ export default async function SharedReportPage({ params, searchParams }: { param
   const isDemo = client.accounts.some((a) => a.isDemo);
 
   return (
-    <div className="min-h-screen" style={{ ["--brand" as string]: agency.brandColor }}>
+    <div className="min-h-screen" style={brandStyle(agency.brandColor)}>
       <div className="h-1.5 bg-brand" />
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6">
@@ -77,7 +78,7 @@ export default async function SharedReportPage({ params, searchParams }: { param
               {isDemo && <DemoBadge />}
             </div>
             <p className="text-sm text-text-2">
-              {template.title} · {PRESET_LABEL[preset]}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
+              {template.title} · {rangeLabel(preset, range)}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
               {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
             </p>
             <div className="mt-1.5"><DataFreshness rep={rep} staff={false} /></div>

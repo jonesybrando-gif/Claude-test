@@ -6,7 +6,9 @@ import type { DailyMetrics } from "@/server/reporting";
 import { dailyKpiValue, formatKpi, KPI_BY_KEY, type KpiKey } from "@/lib/kpis";
 import { formatMoneyCompact, formatNumber, formatPct } from "@/lib/money";
 import { formatDate } from "@/lib/time";
-import { cn } from "../ui/cn";
+import { addInto, emptyTotals } from "@/lib/metrics";
+import { isAdditiveMetric, summarizeSeries } from "@/lib/chart-summary";
+import { ChartSummary, ChartTable, MetricToggle } from "./chart-table";
 
 const DEFAULT_METRICS: KpiKey[] = ["spend", "conversions", "leads", "costPerLead", "clicks", "impressions", "conversionRate"];
 
@@ -26,6 +28,18 @@ export function TrendChart({ current, comparison, currency = "USD", metrics = DE
     previous: comparison?.[i] ? dailyKpiValue(comparison[i], m.key) : null,
     previousDate: comparison?.[i]?.date ?? null,
   }));
+  // Whole-period values from summed totals, so rates (cost per lead…) are exact, not averages of days.
+  const periodValue = (rows: DailyMetrics[]) => m.value(rows.reduce((t, d) => addInto(t, d), emptyTotals()));
+  const summary = summarizeSeries({
+    label: m.label,
+    dates: data.map((d) => d.date),
+    values: data.map((d) => d.current),
+    previous: comparison ? data.map((d) => d.previous) : null,
+    period: { current: periodValue(current), previous: comparison?.length ? periodValue(comparison) : null },
+    additive: isAdditiveMetric(m.key),
+    count: m.kind === "count",
+    format: (v) => fmt(v),
+  });
 
   function Tip({ active, payload }: TooltipProps<number, string>) {
     if (!active || !payload?.length) return null;
@@ -41,26 +55,15 @@ export function TrendChart({ current, comparison, currency = "USD", metrics = DE
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap gap-1" role="tablist" aria-label="Metric">
-        {metrics.map((k) => (
-          <button
-            key={k}
-            role="tab"
-            aria-selected={m.key === k}
-            onClick={() => setMetric(k)}
-            className={cn("rounded-md px-2.5 py-1 text-xs cursor-pointer", m.key === k ? "bg-surface-2 font-medium text-text ring-1 ring-border" : "text-text-2 hover:text-text")}
-          >
-            {KPI_BY_KEY[k].label}
-          </button>
-        ))}
-      </div>
+      <MetricToggle className="mb-3" options={metrics.map((k) => ({ key: k, label: KPI_BY_KEY[k].label }))} value={m.key} onChange={setMetric} />
+      <ChartSummary text={summary} />
       {comparison && (
         <div className="mb-2 flex gap-4 text-xs text-text-2">
           <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded bg-[var(--series-actual)]" /> Selected period</span>
           <span className="flex items-center gap-1.5"><span className="h-0 w-4 border-t-2 border-dashed border-[var(--series-planned)]" /> Comparison period</span>
         </div>
       )}
-      <div className="h-56">
+      <div className="h-56" aria-hidden>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="var(--grid)" vertical={false} />
@@ -76,6 +79,11 @@ export function TrendChart({ current, comparison, currency = "USD", metrics = DE
         </ResponsiveContainer>
       </div>
       {(m.key === "conversions" || m.key === "conversionRate" || m.key === "costPerConversion") && <p className="mt-2 text-xs text-text-3">Conversions are platform-reported; each platform defines and attributes them differently.</p>}
+      <ChartTable
+        caption={`${m.label} by day`}
+        columns={comparison ? ["Date", m.label, "Comparison date", "Comparison"] : ["Date", m.label]}
+        rows={data.map((d) => (comparison ? [formatDate(d.date), fmt(d.current), d.previousDate ? formatDate(d.previousDate) : "—", fmt(d.previous)] : [formatDate(d.date), fmt(d.current)]))}
+      />
     </div>
   );
 }

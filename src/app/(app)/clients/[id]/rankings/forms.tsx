@@ -75,7 +75,7 @@ export function AddKeywordsForm({ clientId, tracked }: { clientId: string; track
         id="rank-keywords"
         name="keywords"
         rows={5}
-        className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+        className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
         placeholder={"dentist near me\nemergency dentist carlsbad"}
         onChange={(e) => setCount(parseKeywordList(e.target.value).length)}
         required

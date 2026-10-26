@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { clientBackHref } from "@/lib/client-nav";
 import { ChevronLeft } from "lucide-react";
 import { prisma } from "@/server/db";
 import { requireClientEdit } from "@/server/access";
@@ -16,7 +17,7 @@ import { ActionButton } from "@/components/action-button";
 
 export const dynamic = "force-dynamic";
 
-export default async function ClientCampaignsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ notice?: string; error?: string; range?: string; from?: string; to?: string }> }) {
+export default async function ClientCampaignsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ notice?: string; error?: string; range?: string; from?: string; to?: string } & Record<string, string | undefined>> }) {
   const { id } = await params;
   const sp = await searchParams;
   const user = await requireClientEdit(id);
@@ -63,7 +64,7 @@ export default async function ClientCampaignsPage({ params, searchParams }: { pa
   return (
     <div className="mx-auto flex max-w-[1000px] flex-col gap-5">
       <div>
-        <Link href={`/clients/${id}?${rangeQuery}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
+        <Link href={clientBackHref(id, { ...sp, range: preset }, "setup")} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
         <h1 className="mt-1 text-xl font-semibold">Campaigns</h1>
         <p className="text-sm text-text-2">
           Choose which campaigns count for {client.name}. A removed campaign is left out of the dashboard, reports, share links, exports, budget pacing and alerts. Nothing changes in the ad account, and its data keeps syncing, so you can add it back at any time.

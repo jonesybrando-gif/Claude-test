@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { clientBackHref } from "@/lib/client-nav";
 import type { Metadata } from "next";
 import { ChevronLeft } from "lucide-react";
 import { requireClientEdit } from "@/server/access";
@@ -14,8 +15,9 @@ import { NewDashboardForm, type TemplateOption } from "@/components/dashboards/n
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "New dashboard" };
 
-export default async function NewDashboardPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function NewDashboardPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { id } = await params;
+  const back = clientBackHref(id, { ...(await searchParams), tab: "dashboards" });
   const user = await requireClientEdit(id);
   const [client, agencyTemplates, linked] = await Promise.all([
     prisma.client.findUniqueOrThrow({ where: { id }, select: { name: true } }),
@@ -38,7 +40,7 @@ export default async function NewDashboardPage({ params }: { params: Promise<{ i
   return (
     <div className="mx-auto flex max-w-[1100px] flex-col gap-5">
       <div>
-        <Link href={`/clients/${id}?tab=dashboards`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
+        <Link href={back} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
         <h1 className="mt-1 text-xl font-semibold">New dashboard</h1>
         <p className="text-sm text-text-2">A custom view of {client.name}&apos;s data. Start blank or from a template; you can change everything afterwards.</p>
       </div>
