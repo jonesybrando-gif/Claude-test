@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { clientBackHref } from "@/lib/client-nav";
 import { ChevronLeft } from "lucide-react";
 import { prisma } from "@/server/db";
 import { requireClientEdit } from "@/server/access";
@@ -13,8 +14,9 @@ export const dynamic = "force-dynamic";
 
 const DIST_LABEL = { EVEN: "Even", BUSINESS_DAYS: "Business days", WEEKEND_WEIGHTED: "Weekend-weighted", CUSTOM_WEEKDAY: "Custom weekday", CUSTOM_DAILY: "Custom daily" } as const;
 
-export default async function BudgetsPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function BudgetsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { id } = await params;
+  const back = clientBackHref(id, await searchParams, "setup");
   await requireClientEdit(id);
   const client = await prisma.client.findUniqueOrThrow({
     where: { id },
@@ -33,7 +35,7 @@ export default async function BudgetsPage({ params }: { params: Promise<{ id: st
   return (
     <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
       <div>
-        <Link href={`/clients/${id}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
+        <Link href={back} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
         <h1 className="mt-1 text-xl font-semibold">Budgets</h1>
         <p className="text-sm text-text-2">Budgets entered here drive pacing only. They never change budgets inside Google, Meta or Microsoft.</p>
       </div>

@@ -27,6 +27,25 @@ export default async function EmailLogPage() {
           One-time links are removed from stored copies.
         </CardDescription>
       </CardHeader>
+      {/* Phones: one card per email instead of a five-column table. */}
+      <ul className="flex flex-col gap-2 px-3 md:hidden" aria-label="Emails">
+        {messages.map((m) => (
+          <li key={m.id} className="rounded-lg border border-border p-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-text-2">{m.createdAt.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · {m.kind.replace("_", " ")}</span>
+              <Badge variant={STATUS[m.status].variant}>{STATUS[m.status].label}</Badge>
+            </div>
+            <p className="mt-1 break-all text-text-2">To {m.to}</p>
+            <details className="mt-1">
+              <summary className="cursor-pointer font-medium">{m.subject}</summary>
+              <pre className="mt-2 whitespace-pre-wrap text-xs text-text-2">{m.text}</pre>
+            </details>
+            {m.error && <p className="mt-1 text-xs text-critical-ink">{m.error}</p>}
+          </li>
+        ))}
+        {messages.length === 0 && <li className="px-2 py-8 text-center text-sm text-text-3">No emails yet.</li>}
+      </ul>
+      <div className="hidden md:block">
       <Table>
         <THead><tr><TH className="pl-5">When</TH><TH>To</TH><TH>Subject</TH><TH>Type</TH><TH className="pr-5">Status</TH></tr></THead>
         <TBody>
@@ -47,6 +66,7 @@ export default async function EmailLogPage() {
           {messages.length === 0 && <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-text-3">No emails yet.</td></tr>}
         </TBody>
       </Table>
+      </div>
       <div className="h-3" />
     </Card>
   );

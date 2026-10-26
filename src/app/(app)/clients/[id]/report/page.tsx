@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { clientBackHref } from "@/lib/client-nav";
 import { ChevronLeft } from "lucide-react";
 import { prisma } from "@/server/db";
 import { requireClientEdit } from "@/server/access";
@@ -15,9 +16,11 @@ import { draftSummaryAction } from "@/server/ai/actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function ClientReportBuilderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ reset?: string }> }) {
+export default async function ClientReportBuilderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ reset?: string } & Record<string, string | undefined>> }) {
   const { id } = await params;
-  const { reset } = await searchParams;
+  const q = await searchParams;
+  const { reset } = q;
+  const back = clientBackHref(id, q, "setup");
   const user = await requireClientEdit(id);
   const client = await prisma.client.findUniqueOrThrow({ where: { id }, select: { name: true } });
   const [{ template, custom }, rep] = await Promise.all([getClientTemplate(user.agencyId, id), loadClientReport(id, {})]);
@@ -33,7 +36,7 @@ export default async function ClientReportBuilderPage({ params, searchParams }: 
     <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <Link href={`/clients/${id}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
+          <Link href={back} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
           <h1 className="mt-1 text-xl font-semibold">Customize report</h1>
           <p className="text-sm text-text-2">
             Choose what {client.name}&apos;s report shows. This drives the client page and the PDF report. CSV exports always contain every daily row.

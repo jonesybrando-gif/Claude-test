@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { clientBackHref } from "@/lib/client-nav";
 import { ChevronLeft, ExternalLink, Lock } from "lucide-react";
 import { prisma } from "@/server/db";
 import { requireClientEdit } from "@/server/access";
@@ -20,8 +21,9 @@ export const dynamic = "force-dynamic";
 
 const RANGES = ["mtd", "last_month", "last_7", "last_30", "last_90"] as const;
 
-export default async function ShareLinksPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ShareLinksPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { id } = await params;
+  const back = clientBackHref(id, await searchParams);
   const user = await requireClientEdit(id);
   const [client, { template }, links, schedule] = await Promise.all([
     prisma.client.findUniqueOrThrow({ where: { id }, select: { name: true, timezone: true, users: { where: { deactivatedAt: null }, select: { email: true } } } }),
@@ -35,7 +37,7 @@ export default async function ShareLinksPage({ params }: { params: Promise<{ id:
   return (
     <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
       <div>
-        <Link href={`/clients/${id}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
+        <Link href={back} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
         <h1 className="mt-1 text-xl font-semibold">Share {client.name}&apos;s report</h1>
         <p className="text-sm text-text-2">
           Anyone with a link can view this client&apos;s report in their browser and download the PDF, without signing in. They see the client-facing version
