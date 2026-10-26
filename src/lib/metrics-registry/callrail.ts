@@ -7,7 +7,7 @@
 // CallRecord.
 import type { DimensionDef, MetricDef } from "./types";
 
-const ALL_DIMS = ["source", "medium", "campaign", "keyword", "landingPage", "city", "tag", "weekday", "hour"];
+const ALL_DIMS = ["source", "medium", "campaign", "keyword", "landingPage", "city", "tag", "weekday", "hour", "status"];
 
 export const metrics: MetricDef[] = [
   { key: "callrail.calls", source: "callrail", label: "Calls", format: "count", aggregation: "sum", better: "up", description: "Tracked phone calls (CallRail).", dimensions: ALL_DIMS },
@@ -23,7 +23,10 @@ export const metrics: MetricDef[] = [
   { key: "callrail.durationSeconds", source: "callrail", label: "Total talk time", short: "Talk time", format: "duration", aggregation: "sum", better: "neutral", description: "Total duration of answered calls.", dimensions: ALL_DIMS },
   { key: "callrail.avgDuration", source: "callrail", label: "Avg call duration", short: "Avg duration", format: "duration", aggregation: "weighted", ratioOf: { numerator: "callrail.durationSeconds", denominator: "callrail.answered" }, better: "neutral", description: "Average duration of answered calls.", dimensions: ALL_DIMS },
   { key: "callrail.value", source: "callrail", label: "Lead value", short: "Value", format: "money", aggregation: "sum", better: "up", description: "Value assigned to calls in CallRail.", dimensions: ALL_DIMS },
-  { key: "callrail.forms", source: "callrail", label: "Form submissions", short: "Forms", format: "count", aggregation: "sum", better: "up", description: "Form submissions tracked by CallRail form tracking (when enabled).", dimensions: ["source"] },
+  { key: "callrail.forms", source: "callrail", label: "Form submissions", short: "Submissions", format: "count", aggregation: "sum", better: "up", description: "Form submissions tracked by CallRail form tracking (when enabled).", dimensions: ["source"] },
+  { key: "callrail.firstForms", source: "callrail", label: "First-time submissions", short: "First-time", format: "count", aggregation: "sum", better: "up", description: "Form submissions from people submitting for the first time.", dimensions: ["source"] },
+  { key: "callrail.formLeads", source: "callrail", label: "Form leads", short: "Leads", format: "count", aggregation: "sum", better: "up", description: "Form submissions marked as a good lead in CallRail.", dimensions: ["source"] },
+  { key: "callrail.formValue", source: "callrail", label: "Quoted total (forms)", short: "Quoted", format: "money", aggregation: "sum", better: "up", description: "Value assigned to form submissions in CallRail." },
 ];
 
 export const dimensions: DimensionDef[] = [
@@ -36,4 +39,5 @@ export const dimensions: DimensionDef[] = [
   { key: "callrail.tag", source: "callrail", dimension: "tag", label: "Tag" },
   { key: "callrail.weekday", source: "callrail", dimension: "weekday", label: "Day of week", ordered: true },
   { key: "callrail.hour", source: "callrail", dimension: "hour", label: "Hour of day", ordered: true },
+  { key: "callrail.status", source: "callrail", dimension: "status", label: "Answered vs missed" },
 ];

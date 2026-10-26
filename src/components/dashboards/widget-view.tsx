@@ -6,7 +6,7 @@ import { ArrowDownRight, ArrowUpRight, Minus, PlayCircle, Plug } from "lucide-re
 import { formatMetric } from "@/lib/dashboards/metrics";
 import { widgetTitle } from "@/lib/dashboards/describe";
 import type { DashboardWidget } from "@/lib/dashboards/types";
-import type { CallLogRow, WidgetData } from "@/lib/dashboards/widget-data";
+import type { CallLogRow, FormLogRow, WidgetData } from "@/lib/dashboards/widget-data";
 import { formatPct } from "@/lib/money";
 import { SeriesChart } from "@/components/charts/series-chart";
 import { BreakdownBarChart, MetricPieChart } from "@/components/charts/breakdown-charts";
@@ -52,7 +52,7 @@ export function WidgetView({ widget, data, currency, slots, staff = false, fill 
           <h3 className="truncate text-sm font-semibold" title={title}>{title}</h3>
         </header>
       )}
-      <div className={cn("min-h-0 flex-1 px-4 pb-3", !title && "pt-3", (widget.kind === "table" || widget.kind === "rankings" || widget.kind === "calllog") && "overflow-auto px-0", widget.kind === "text" && "overflow-auto")}>
+      <div className={cn("min-h-0 flex-1 px-4 pb-3", !title && "pt-3", (widget.kind === "table" || widget.kind === "rankings" || widget.kind === "calllog" || widget.kind === "formlog") && "overflow-auto px-0", widget.kind === "text" && "overflow-auto")}>
         <WidgetBody widget={widget} data={data} currency={currency} staff={staff} />
       </div>
     </section>
@@ -119,19 +119,15 @@ function WidgetBody({ widget, data, currency, staff }: { widget: DashboardWidget
       );
     case "calllog":
       return <CallLog rows={data.rows} total={data.total} timeZone={data.timeZone} />;
+    case "formlog":
+      return <FormLog rows={data.rows} total={data.total} timeZone={data.timeZone} />;
     default:
       return null;
   }
 }
 
-const STATUS: Record<CallLogRow["status"], { label: string; cls: string }> = {
-  answered: { label: "Answered", cls: "bg-good-bg text-good-ink" },
-  missed: { label: "Missed", cls: "bg-critical-bg text-critical-ink" },
-  voicemail: { label: "Voicemail", cls: "bg-warning-bg text-warning-ink" },
-};
-
 function callTime(iso: string, timeZone: string | null): string {
-  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" };
   try {
     return new Intl.DateTimeFormat("en-US", { ...opts, ...(timeZone ? { timeZone } : {}) }).format(new Date(iso));
   } catch {
@@ -139,14 +135,23 @@ function callTime(iso: string, timeZone: string | null): string {
   }
 }
 
-function duration(sec: number): string {
-  if (!sec) return "—";
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return m ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`;
+/** "+15125550100" → "(512) 555-0100"; anything else as stored. */
+function phone(n: string | null): string {
+  if (!n) return "—";
+  const d = n.replace(/\D/g, "");
+  const us = d.length === 11 && d.startsWith("1") ? d.slice(1) : d;
+  return us.length === 10 ? `(${us.slice(0, 3)}) ${us.slice(3, 6)}-${us.slice(6)}` : n;
 }
 
-/** Recent calls, newest first (CallRail). */
+function YesNo({ yes }: { yes: boolean }) {
+  return <span className={cn("rounded px-1.5 py-0.5 text-[11px] font-medium", yes ? "bg-good-bg text-good-ink" : "bg-critical-bg text-critical-ink")}>{yes ? "Yes" : "No"}</span>;
+}
+
+function LogFooter({ shown, total, noun }: { shown: number; total: number; noun: string }) {
+  return <p className="px-4 pt-2 text-xs text-text-3">Showing {shown.toLocaleString("en-US")} of {total.toLocaleString("en-US")} {noun}{total > shown ? " (latest first)" : ""}.</p>;
+}
+
+/** Recent calls, newest first, in the same columns as AgencyAnalytics' CallRail call table. */
 function CallLog({ rows, total, timeZone }: { rows: CallLogRow[]; total: number; timeZone: string | null }) {
   const withRecordings = rows.some((r) => r.recordingUrl);
   return (
@@ -155,47 +160,74 @@ function CallLog({ rows, total, timeZone }: { rows: CallLogRow[]; total: number;
         <THead>
           <tr>
             <TH className="pl-4">Date</TH>
-            <TH>Caller</TH>
+            <TH>Name</TH>
             <TH>Source</TH>
-            <TH className="text-right">Duration</TH>
-            <TH className={cn(!withRecordings && "pr-4")}>Status</TH>
-            {withRecordings && <TH className="pr-4"><span className="sr-only">Recording</span></TH>}
+            <TH>Phone number</TH>
+            <TH>Answered</TH>
+            <TH>First call</TH>
+            <TH>Keywords</TH>
+            <TH className={cn(!withRecordings && "pr-4")}>Campaign</TH>
+            {withRecordings && <TH className="pr-4">Recording</TH>}
           </tr>
         </THead>
         <TBody>
           {rows.map((r) => (
             <TR key={r.id}>
               <TD className="pl-4 whitespace-nowrap text-text-2">{callTime(r.startedAt, timeZone)}</TD>
-              <TD className="max-w-56">
-                <span className="block truncate font-medium" title={r.callerName ?? undefined}>{r.callerName || r.callerNumber || "Unknown caller"}</span>
-                <span className="block truncate text-xs text-text-3">{[r.callerName ? r.callerNumber : null, r.location].filter(Boolean).join(" · ") || "\u00a0"}</span>
-              </TD>
-              <TD className="max-w-60">
-                <span className="block truncate" title={r.source ?? undefined}>{r.source || "—"}</span>
-                <span className="block truncate text-xs text-text-3" title={[r.campaign, r.keyword].filter(Boolean).join(" · ")}>{[r.campaign, r.keyword].filter(Boolean).join(" · ") || "\u00a0"}</span>
-              </TD>
-              <TD className="text-right tabular whitespace-nowrap">{duration(r.durationSec)}</TD>
-              <TD className={cn(!withRecordings && "pr-4")}>
-                <span className="flex flex-wrap items-center gap-1">
-                  <span className={cn("rounded px-1.5 py-0.5 text-[11px] font-medium", STATUS[r.status].cls)}>{STATUS[r.status].label}</span>
-                  {r.firstCall && <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] text-text-2">First-time</span>}
-                  {r.lead && <span className="rounded bg-brand/10 px-1.5 py-0.5 text-[11px] font-medium text-brand">Lead</span>}
-                </span>
-              </TD>
+              <TD className="max-w-48 truncate font-medium" title={r.callerName ?? undefined}>{r.callerName || "Unknown caller"}{r.status === "voicemail" && <span className="ml-1.5 text-xs font-normal text-text-3">voicemail</span>}</TD>
+              <TD className="max-w-44 truncate" title={r.source ?? undefined}>{r.source || "—"}</TD>
+              <TD className="whitespace-nowrap tabular">{phone(r.callerNumber)}</TD>
+              <TD><YesNo yes={r.status === "answered"} /></TD>
+              <TD><YesNo yes={r.firstCall} /></TD>
+              <TD className="max-w-44 truncate text-text-2" title={r.keyword ?? undefined}>{r.keyword || "—"}</TD>
+              <TD className={cn("max-w-44 truncate text-text-2", !withRecordings && "pr-4")} title={r.campaign ?? undefined}>{r.campaign || "—"}</TD>
               {withRecordings && (
                 <TD className="pr-4">
-                  {r.recordingUrl && (
+                  {r.recordingUrl ? (
                     <a href={r.recordingUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline">
                       <PlayCircle className="h-3.5 w-3.5" aria-hidden /> Listen
                     </a>
-                  )}
+                  ) : <span className="text-text-3">—</span>}
                 </TD>
               )}
             </TR>
           ))}
         </TBody>
       </Table>
-      {total > rows.length && <p className="px-4 pt-2 text-xs text-text-3">Showing the latest {rows.length} of {total.toLocaleString("en-US")} calls in this period.</p>}
+      <LogFooter shown={rows.length} total={total} noun="calls" />
+    </div>
+  );
+}
+
+/** Recent form submissions, in the same columns as AgencyAnalytics' CallRail forms table. */
+function FormLog({ rows, total, timeZone }: { rows: FormLogRow[]; total: number; timeZone: string | null }) {
+  return (
+    <div className="flex flex-col">
+      <Table>
+        <THead>
+          <tr>
+            <TH className="pl-4">Date</TH>
+            <TH>Name</TH>
+            <TH>Form URL</TH>
+            <TH>Referrer</TH>
+            <TH>Referring URL</TH>
+            <TH className="pr-4">First submission</TH>
+          </tr>
+        </THead>
+        <TBody>
+          {rows.map((r) => (
+            <TR key={r.id}>
+              <TD className="pl-4 whitespace-nowrap text-text-2">{callTime(r.submittedAt, timeZone)}</TD>
+              <TD className="max-w-48 truncate font-medium" title={r.name ?? undefined}>{r.name || "—"}</TD>
+              <TD className="max-w-56 truncate text-text-2" title={r.formUrl ?? undefined}>{r.formUrl || "—"}</TD>
+              <TD className="max-w-44 truncate" title={r.referrer ?? undefined}>{r.referrer || "—"}</TD>
+              <TD className="max-w-56 truncate text-text-2" title={r.referringUrl ?? undefined}>{r.referringUrl ? r.referringUrl.replace(/^https?:\/\/(www\.)?/, "") : "—"}</TD>
+              <TD className="pr-4"><YesNo yes={r.firstForm} /></TD>
+            </TR>
+          ))}
+        </TBody>
+      </Table>
+      <LogFooter shown={rows.length} total={total} noun="submissions" />
     </div>
   );
 }
