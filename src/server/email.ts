@@ -8,7 +8,7 @@ export interface OutgoingEmail {
   subject: string;
   text: string;
   html?: string;
-  kind: "invite" | "password_reset" | "alert" | "daily_summary" | "client_email" | "scheduled_report" | "note_mention";
+  kind: "invite" | "password_reset" | "alert" | "daily_summary" | "client_email" | "scheduled_report" | "note_mention" | "lead";
   /** Replies go here instead of EMAIL_FROM (e.g. the account manager). */
   replyTo?: string;
   /**
