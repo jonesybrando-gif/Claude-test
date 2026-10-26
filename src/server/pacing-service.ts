@@ -11,6 +11,7 @@ import { recommendAction, type Action } from "@/lib/action-center";
 import { isNotConnected } from "@/lib/pacing/connection";
 import { formatDate } from "@/lib/time";
 import type { PlatformKey } from "@/lib/platforms";
+import { rollForwardBudgets } from "./budget-rollover";
 
 /** An account whose last successful sync is older than this is shown as stale. */
 export const STALE_AFTER_MS = 26 * 60 * 60 * 1000;
@@ -367,6 +368,15 @@ export async function loadPacing(where: Prisma.ClientWhereInput, now: Date = new
   const clients = await prisma.client.findMany({ where, include: clientInclude, orderBy: { name: "asc" } });
   if (clients.length === 0) return [];
   const ids = clients.map((c) => c.id);
+  // Lazily carry repeating budgets into a new month (normally the hourly job
+  // already has). Cheap when there is nothing to do; never blocks pacing.
+  if (!periodDate) {
+    try {
+      await rollForwardBudgets(now, { clientIds: ids });
+    } catch (e) {
+      console.error("[pacing] budget roll-forward failed", e);
+    }
+  }
   const budgets = await prisma.budget.findMany({
     where: budgetWhere(clients, now, periodDate),
     include: { revisions: { orderBy: { effectiveDate: "asc" } } },

@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { createBudget, deleteBudget, reviseBudget, type FormState } from "./actions";
+import { createBudget, deleteBudget, reviseBudget, setBudgetRepeats, type FormState } from "./actions";
+import { isWholeMonth } from "@/lib/budget-rollover";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { useFormSubmit } from "@/components/use-form-submit";
@@ -23,6 +24,8 @@ export function NewBudgetForm({ clientId, accounts, campaigns, defaultStart, def
   const form = useFormSubmit(action, state?.ok && state);
   const [scope, setScope] = useState<"CLIENT" | "ACCOUNT" | "CAMPAIGN">("ACCOUNT");
   const [distribution, setDistribution] = useState("EVEN");
+  const [period, setPeriod] = useState({ start: defaultStart, end: defaultEnd });
+  const wholeMonth = /^\d{4}-\d{2}-\d{2}$/.test(period.start) && /^\d{4}-\d{2}-\d{2}$/.test(period.end) && isWholeMonth(period.start, period.end);
   const targets = scope === "ACCOUNT" ? accounts : scope === "CAMPAIGN" ? campaigns : [];
   return (
     <form {...form} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -48,11 +51,11 @@ export function NewBudgetForm({ clientId, accounts, campaigns, defaultStart, def
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="periodStart">Period start</Label>
-        <Input id="periodStart" name="periodStart" type="date" defaultValue={defaultStart} required />
+        <Input id="periodStart" name="periodStart" type="date" defaultValue={defaultStart} onChange={(e) => setPeriod((p) => ({ ...p, start: e.target.value }))} required />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="periodEnd">Period end</Label>
-        <Input id="periodEnd" name="periodEnd" type="date" defaultValue={defaultEnd} required />
+        <Input id="periodEnd" name="periodEnd" type="date" defaultValue={defaultEnd} onChange={(e) => setPeriod((p) => ({ ...p, end: e.target.value }))} required />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="distribution">Daily distribution</Label>
@@ -82,6 +85,17 @@ export function NewBudgetForm({ clientId, accounts, campaigns, defaultStart, def
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="pauseEnd">Planned pause to</Label>
         <Input id="pauseEnd" name="pauseEnd" type="date" />
+      </div>
+      <div className="flex flex-col gap-1 sm:col-span-2 lg:col-span-4">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="repeatsMonthly" defaultChecked disabled={!wholeMonth} className="h-4 w-4 accent-[var(--brand)]" />
+          Repeats every month
+        </label>
+        <p className="text-xs text-text-2">
+          {wholeMonth
+            ? "On the 1st of each month we create next month's budget with the same amount and settings. You can change or stop it any time."
+            : "Only budgets that cover a whole calendar month (the 1st to the last day) can repeat. This one will end on its end date."}
+        </p>
       </div>
       <div className="flex items-end gap-3 sm:col-span-2 lg:col-span-4">
         <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Add budget"}</Button>
@@ -125,6 +139,19 @@ export function DeleteBudgetButton({ clientId, budgetId }: { clientId: string; b
     >
       <input type="hidden" name="budgetId" value={budgetId} />
       <Button type="submit" variant="ghost" size="sm" className="text-critical-ink">Delete</Button>
+    </form>
+  );
+}
+
+/** "Repeats monthly" on a budget card, with a one-click toggle. */
+export function RepeatToggle({ clientId, budgetId, repeats, wholeMonth }: { clientId: string; budgetId: string; repeats: boolean; wholeMonth: boolean }) {
+  if (!wholeMonth) return <span className="text-xs text-text-2">One-off period (does not repeat)</span>;
+  return (
+    <form action={setBudgetRepeats.bind(null, clientId)} className="flex flex-wrap items-center gap-2 text-xs">
+      <input type="hidden" name="budgetId" value={budgetId} />
+      <input type="hidden" name="repeats" value={repeats ? "0" : "1"} />
+      <span className={repeats ? "font-medium text-text" : "text-text-2"}>{repeats ? "Repeats monthly" : "Does not repeat"}</span>
+      <Button type="submit" variant="ghost" size="sm">{repeats ? "Stop repeating" : "Repeat every month"}</Button>
     </form>
   );
 }

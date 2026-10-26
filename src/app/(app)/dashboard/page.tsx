@@ -15,6 +15,7 @@ import { DemoBadge, StatusBadge } from "@/components/status-badge";
 import { ExportButtons } from "@/components/export-buttons";
 import { buttonVariants } from "@/components/ui/button";
 import { SetupChecklist } from "@/components/setup-checklist";
+import { BudgetRolloverBanner } from "@/components/dashboard/budget-rollover-banner";
 import { setupChecklist } from "@/server/first-run";
 import { PageSkeleton } from "@/components/ui/skeleton";
 
@@ -69,6 +70,7 @@ async function PacingDashboard({ user, initialStatus }: { user: Awaited<ReturnTy
 
   return (
     <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
+      <BudgetRolloverBanner user={user} />
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold">Budget pacing</h1>

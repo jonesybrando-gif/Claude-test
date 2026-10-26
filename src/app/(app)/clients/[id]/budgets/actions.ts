@@ -7,6 +7,7 @@ import { requireClientEdit } from "@/server/access";
 import { validateNewBudget, validateRevision } from "@/lib/budget-validation";
 import { parseMoneyToMinor } from "@/lib/money";
 import { dateToIso, isoToDate } from "@/lib/pacing/dates";
+import { isWholeMonth } from "@/lib/budget-rollover";
 
 export type FormState = { ok?: string; errors?: string[] } | undefined;
 
@@ -23,6 +24,7 @@ const createSchema = z.object({
   forecastModel: z.enum(["STRAIGHT_LINE", "TRAILING_7_DAY"]),
   pauseStart: z.string().optional(),
   pauseEnd: z.string().optional(),
+  repeatsMonthly: z.string().optional(),
 });
 
 export async function createBudget(clientId: string, _prev: FormState, form: FormData): Promise<FormState> {
@@ -81,6 +83,8 @@ export async function createBudget(clientId: string, _prev: FormState, form: For
       weekendWeight,
       forecastModel: f.forecastModel,
       pauses,
+      // Repeating only makes sense for a whole calendar month.
+      repeatsMonthly: f.repeatsMonthly === "on" && isWholeMonth(f.periodStart, f.periodEnd),
       revisions: { create: [{ amountMinor: BigInt(amountMinor), effectiveDate: isoToDate(f.periodStart), note: "Initial budget", createdById: user.id }] },
     },
   });
@@ -120,4 +124,16 @@ export async function deleteBudget(clientId: string, form: FormData): Promise<vo
   await prisma.budget.deleteMany({ where: { id: budgetId, clientId } });
   revalidatePath(`/clients/${clientId}`, "layout");
   revalidatePath("/dashboard");
+}
+
+/** Turns "Repeats every month" on or off for a whole-month budget. */
+export async function setBudgetRepeats(clientId: string, form: FormData): Promise<void> {
+  await requireClientEdit(clientId);
+  const budgetId = String(form.get("budgetId"));
+  const repeats = form.get("repeats") === "1";
+  const budget = await prisma.budget.findFirst({ where: { id: budgetId, clientId } });
+  if (!budget) return;
+  if (repeats && !isWholeMonth(dateToIso(budget.periodStart), dateToIso(budget.periodEnd))) return;
+  await prisma.budget.update({ where: { id: budget.id }, data: { repeatsMonthly: repeats } });
+  revalidatePath(`/clients/${clientId}/budgets`);
 }
