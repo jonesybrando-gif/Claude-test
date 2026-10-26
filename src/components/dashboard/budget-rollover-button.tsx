@@ -23,6 +23,7 @@ export function BudgetRolloverButton({ from, to, clients }: { from: string; to: 
     <div className="flex flex-wrap items-center gap-3">
       <Button
         type="button"
+        className="h-auto min-h-9 max-w-full whitespace-normal py-2 text-left"
         disabled={pending}
         onClick={() =>
           start(async () => {

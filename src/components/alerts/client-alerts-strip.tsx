@@ -56,7 +56,7 @@ export async function ClientAlertsStrip({ clientId, user }: { clientId: string; 
               return (
                 <li key={issue.key} className="flex flex-wrap items-start gap-3 py-2.5">
                   <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${issue.severity === "critical" ? "text-critical-ink" : "text-warning-ink"}`} aria-label={issue.severity === "critical" ? "Critical" : "Warning"} />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-60">
                     <p className="text-sm font-medium">{single ? issue.alerts[0].message : issue.title}</p>
                     {detail && <p className="text-xs text-text-2">{detail}</p>}
                   </div>
