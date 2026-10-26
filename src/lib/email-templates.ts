@@ -56,17 +56,23 @@ export function alertEmail(brand: Brand, alerts: AlertLine[], link: string) {
   return { subject, text, html };
 }
 
-export function dailySummaryEmail(brand: Brand, dateLabel: string, needAction: AlertLine[], onTarget: number, link: string) {
+export function dailySummaryEmail(brand: Brand, dateLabel: string, needAction: AlertLine[], onTarget: number, link: string, staleOnTarget: AlertLine[] = []) {
   const subject = needAction.length ? `${dateLabel}: ${needAction.length} account${needAction.length === 1 ? "" : "s"} need attention` : `${dateLabel}: all accounts on track`;
+  const staleText = staleOnTarget.length ? `\n\nOn target, but check the data first:\n${staleOnTarget.map((a) => `- ${a.client}: ${a.detail}`).join("\n")}` : "";
   const text =
     (needAction.length ? needAction.map((a) => `[${SEV[a.severity]}] ${a.client}: ${a.title}\n  ${a.detail}`).join("\n\n") : "Every budget line is on track.") +
+    staleText +
     `\n\n${onTarget} line${onTarget === 1 ? "" : "s"} on target.\nDashboard: ${link}`;
+  const staleHtml = staleOnTarget.length
+    ? `<p style="margin:16px 0 6px"><strong>On target, but check the data first</strong></p>${staleOnTarget.map((a) => `<p style="margin:0 0 8px">${esc(a.client)}<br><span style="color:#52514e;font-size:13px">${esc(a.detail)}</span></p>`).join("")}`
+    : "";
   const html = layout(
     brand,
     `Daily pacing summary · ${dateLabel}`,
     (needAction.length
       ? needAction.map((a) => `<p style="margin:0 0 12px"><strong>${SEV[a.severity]} · ${esc(a.client)}</strong><br>${esc(a.title)}<br><span style="color:#52514e;font-size:13px">${esc(a.detail)}</span></p>`).join("")
       : "<p>Every budget line is on track.</p>") +
+      staleHtml +
       `<p style="color:#52514e;font-size:13px">${onTarget} line${onTarget === 1 ? "" : "s"} on target.</p>${button(brand, link, "Open dashboard")}`,
   );
   return { subject, text, html };

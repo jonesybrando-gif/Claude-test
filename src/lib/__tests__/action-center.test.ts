@@ -82,3 +82,25 @@ describe("forecast-driven recommendations", () => {
     expect(a.detail).not.toContain("current daily rate");
   });
 });
+
+describe("underspend advice is not pure arithmetic (H6)", () => {
+  const under = { ...base, status: "UNDERSPENDING" as const, projectedVarianceMinor: -1_000_000 };
+  it("a huge jump in daily spend asks to check the budget first", () => {
+    const a = recommendAction({ ...under, currentDailyRateMinor: 500, requiredDailyMinor: 153_200 });
+    expect(a.detail).toContain("Spending is far below plan (≈$5/day vs ≈$1,532 needed). Check whether this budget is still right before raising spend.");
+    expect(a.detail).not.toContain("Increase average daily spend");
+  });
+  it("up to 3× the current rate is ordinary advice", () => {
+    const a = recommendAction({ ...under, currentDailyRateMinor: 10000, requiredDailyMinor: 30000 });
+    expect(a.detail).toContain("Increase average daily spend from ≈$100 to ≈$300");
+  });
+  it("a high cost per result says to fix efficiency before spending more", () => {
+    const a = recommendAction({ ...under, currentDailyRateMinor: 10000, requiredDailyMinor: 15000, costPerResultHigh: true });
+    expect(a.detail.startsWith("Underspending, but cost per result is high — improve that before spending more.")).toBe(true);
+    expect(a.detail).not.toContain("Increase average daily spend");
+  });
+  it("overspend advice is unaffected by cost per result", () => {
+    const a = recommendAction({ ...base, status: "OVERSPENDING", projectedVarianceMinor: 50000, requiredDailyMinor: 10000, costPerResultHigh: true });
+    expect(a.detail).toContain("Reduce average daily spend");
+  });
+});
