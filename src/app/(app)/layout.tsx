@@ -1,3 +1,4 @@
+import { brandStyle } from "@/lib/brand-color";
 import Link from "next/link";
 import { LogOut } from "lucide-react";
 import { requireUser } from "@/server/auth";
@@ -78,7 +79,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   );
 
   return (
-    <div className="min-h-screen md:flex" style={{ ["--brand" as string]: agency.brandColor }}>
+    <div className="min-h-screen md:flex" style={brandStyle(agency.brandColor)}>
       <MobileShell brand={brand} search={staff ? <CommandPalette items={paletteItems} variant="icon" /> : undefined} nav={nav} account={account} />
       <aside className="hidden border-r border-border bg-surface md:sticky md:top-0 md:flex md:h-screen md:w-60 md:shrink-0 md:flex-col">
         <div className="flex items-center gap-2 px-4 py-4">{brand}</div>
