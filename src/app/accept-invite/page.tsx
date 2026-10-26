@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { peekAuthToken } from "@/server/auth-tokens";
 import { AuthCard } from "@/components/auth/auth-card";
 import { SetPasswordForm } from "@/components/auth/set-password-form";
@@ -10,7 +11,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
   if (!t) {
     return (
       <AuthCard title="This link can't be used" description="It may have expired or already been used.">
-        <p className="text-sm text-text-2">Ask your agency administrator to send a new invitation.</p>
+        <p className="text-sm text-text-2">Invitation links work once and expire after a while. If you already set your password, sign in. Otherwise, ask whoever invited you to send a new invitation.</p>
+        <p className="mt-4 text-sm"><Link href="/login" className="font-medium underline">Go to sign in</Link></p>
       </AuthCard>
     );
   }

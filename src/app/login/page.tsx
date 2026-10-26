@@ -5,6 +5,7 @@ import { BrandMark } from "@/components/brand-mark";
 
 // Rendered per request so SHOW_DEMO_LOGINS can be toggled without a rebuild.
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Sign in" };
 
 export default function LoginPage() {
   const showDemo = process.env.NODE_ENV !== "production" || process.env.SHOW_DEMO_LOGINS === "1";
@@ -14,7 +15,7 @@ export default function LoginPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg"><BrandMark className="h-7 w-7" />{site.appName}</CardTitle>
-            <CardDescription>Sign in to your agency workspace</CardDescription>
+            <CardDescription>Sign in to view your reports and dashboards.</CardDescription>
           </CardHeader>
           <CardContent>
             <LoginForm />
