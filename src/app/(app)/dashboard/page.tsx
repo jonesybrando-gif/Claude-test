@@ -136,7 +136,7 @@ async function Home({ user }: { user: Awaited<ReturnType<typeof requireAgencySta
 
       <HomeSummary r={mtd} vs={vs} attention={attention.length} critical={critical} total={clients.length} />
 
-      <div className="grid items-start gap-6 lg:grid-cols-2">
+      <div className="grid items-start gap-6 lg:grid-cols-2 [&>*]:min-w-0">
         <NeedsAttention clients={attention} total={clients.length} />
         <BudgetHealth
           d={{

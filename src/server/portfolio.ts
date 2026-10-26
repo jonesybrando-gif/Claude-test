@@ -161,7 +161,17 @@ export async function clientAttention(pacing: ClientPacing[], results: Portfolio
         currency: p.client.currency,
         openCriticalAlerts: alerts.get(p.client.id)?.critical ?? 0,
         openOtherAlerts: alerts.get(p.client.id)?.other ?? 0,
-        lines: p.rows.filter((r) => !r.notConnected && r.result).map((r) => ({ phase: r.result!.phase, budgetMinor: r.result!.budgetMinor, projectedVarianceMinor: r.result!.projectedVarianceMinor, currency: r.currency })),
+        lines: p.rows
+          .filter((r) => !r.notConnected && r.result)
+          .map((r) => ({
+            phase: r.result!.phase,
+            budgetMinor: r.result!.budgetMinor,
+            projectedVarianceMinor: r.result!.projectedVarianceMinor,
+            currency: r.currency,
+            status: r.result!.status,
+            forecastStatus: r.result!.forecastStatus,
+            actualToDateMinor: r.result!.actualToDateMinor,
+          })),
         results: results.byClient.get(p.client.id) ?? null,
         oldestSyncHours: oldest ? (now.getTime() - new Date(oldest).getTime()) / 3_600_000 : null,
         disconnected: live.some((a) => a.status === "DISCONNECTED" || a.status === "NEEDS_REAUTH"),

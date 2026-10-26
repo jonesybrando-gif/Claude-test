@@ -53,7 +53,7 @@ export function NeedsAttention({ clients, total, limit = 5 }: { clients: Attenti
                 <span className="sr-only">{c.tier === "critical" ? "Critical" : "Watch"}:</span>
                 <Link href={`/clients/${c.id}`} className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-text">{c.name}</span>
-                  <span className="block truncate text-[13px] text-text-2">
+                  <span className="block text-[13px] text-text-2">
                     {top.label}
                     {c.reasons.length > 1 && <span className="text-text-3"> · +{c.reasons.length - 1} more</span>}
                   </span>

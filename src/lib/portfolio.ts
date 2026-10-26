@@ -146,7 +146,17 @@ export interface AttentionInput {
   /** Other open critical-severity alerts (an underspend, a cost spike…): Watch, not Critical. */
   openOtherAlerts?: number;
   /** Connected, budgeted lines in their current period. */
-  lines: { phase: "NOT_STARTED" | "ACTIVE" | "ENDED"; budgetMinor: number; projectedVarianceMinor: number; currency: string }[];
+  lines: {
+    phase: "NOT_STARTED" | "ACTIVE" | "ENDED";
+    budgetMinor: number;
+    projectedVarianceMinor: number;
+    currency: string;
+    /** Pacing so far and month-end forecast states; "OVERSPENDING" in either makes an overrun Critical. */
+    status?: string;
+    forecastStatus?: string;
+    /** Spent so far; at or above the budget means it is used up (Critical). */
+    actualToDateMinor?: number;
+  }[];
   results: ClientResults | null;
   /** Hours since the oldest live account last synced; null when none is linked. */
   oldestSyncHours: number | null;
@@ -171,7 +181,12 @@ export function attentionReasons(i: AttentionInput): AttentionReason[] {
   const active = i.lines.filter((l) => l.phase === "ACTIVE" && forecastOffBudget(l.budgetMinor, l.projectedVarianceMinor));
   const over = active.filter((l) => l.projectedVarianceMinor > 0);
   const under = active.filter((l) => l.projectedVarianceMinor < 0);
-  if (over.length) out.push({ kind: "over", label: `Forecast ${money(over.reduce((s, l) => s + l.projectedVarianceMinor, 0), over[0].currency)} over budget`, tone: "critical" });
+  if (over.length) {
+    // Critical only when a line is clearly overspending or has used up its budget; "a bit over" is Watch.
+    const serious = over.some((l) => l.status === "OVERSPENDING" || l.forecastStatus === "OVERSPENDING" || (l.actualToDateMinor ?? 0) >= l.budgetMinor);
+    const amount = money(over.reduce((s, l) => s + l.projectedVarianceMinor, 0), over[0].currency);
+    out.push(serious ? { kind: "over", label: `Forecast ${amount} over budget`, tone: "critical" } : { kind: "over", label: `A bit over budget · forecast +${amount}`, tone: "warning" });
+  }
   if (under.length) out.push({ kind: "under", label: `Forecast ${money(under.reduce((s, l) => s + l.projectedVarianceMinor, 0), under[0].currency)} under budget`, tone: "warning" });
   const r = i.results;
   if (r && r.current.results >= MIN_RESULTS_TO_COMPARE && r.previous.results >= MIN_RESULTS_TO_COMPARE) {
@@ -192,11 +207,11 @@ export function attentionReasons(i: AttentionInput): AttentionReason[] {
 }
 
 /** Alert types that make a client Critical; every other alert is Watch. */
-export const CRITICAL_ALERT_TYPES = ["ACCOUNT_DISCONNECTED", "SYNC_FAILED", "TRACKING_ZERO", "SPEND_STOPPED", "OVERSPENDING", "PROJECTED_OVERRUN"] as const;
+export const CRITICAL_ALERT_TYPES = ["ACCOUNT_DISCONNECTED", "SYNC_FAILED", "TRACKING_ZERO", "SPEND_STOPPED", "OVERSPENDING"] as const;
 
 /**
  * Critical: a lost connection, broken tracking, spend stopped, or a budget
- * forecast to run over (or already used up). Watch: smaller budget misses,
+ * that is overspending or already used up. Watch: "a bit over", underspend,
  * performance drops and old data. Null when nothing needs attention.
  */
 export function attentionTier(reasons: AttentionReason[]): "critical" | "watch" | null {
