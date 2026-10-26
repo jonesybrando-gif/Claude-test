@@ -1,60 +1,63 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormSubmit } from "@/components/use-form-submit";
 import { requestEarlyAccess } from "./actions";
+import { track } from "./track";
 
-export function EarlyAccessForm() {
+/** One field and one button. `position` names where on the page the form sits, for tracking. */
+export function EarlyAccessForm({ position, tone = "light", note }: { position: string; tone?: "light" | "dark"; note?: string }) {
   const [state, action, pending] = useActionState(requestEarlyAccess, undefined);
   const form = useFormSubmit(action, state?.ok);
+  const started = useRef(false);
+  const id = `ea-${position}`;
+  // Campaign parameters from the landing URL, read after hydration so server and client markup match.
+  const [utm, setUtm] = useState("");
+  useEffect(() => setUtm(new URLSearchParams(window.location.search).toString().slice(0, 500)), []);
+
+  useEffect(() => {
+    if (state?.ok) track("signup_complete", { position });
+  }, [state?.ok, position]);
 
   if (state?.ok) {
     return (
-      <div className="mn-form-done" role="status">
-        <p className="mn-form-done-title">Request received.</p>
-        <p>We&apos;ll reply by email to set up your agency and connect your first ad accounts.</p>
+      <div className={`mn-done mn-done-${tone}`} role="status">
+        <p className="mn-done-title">You&apos;re on the list.</p>
+        <p>We&apos;ll email you to book a short setup call. On the call we connect your first client&apos;s accounts together, so you leave with real answers, not an empty dashboard.</p>
       </div>
     );
   }
 
+
   return (
-    <form {...form} className="mn-form" noValidate={false}>
-      <div className="mn-field">
-        <label htmlFor="ea-name">Your name</label>
-        <input id="ea-name" name="name" autoComplete="name" required maxLength={120} />
-      </div>
-      <div className="mn-field">
-        <label htmlFor="ea-email">Work email</label>
-        <input id="ea-email" name="email" type="email" autoComplete="email" required maxLength={200} />
-      </div>
-      <div className="mn-field">
-        <label htmlFor="ea-agency">Agency or company</label>
-        <input id="ea-agency" name="agency" autoComplete="organization" required maxLength={160} />
-      </div>
-      <fieldset className="mn-field mn-choices">
-        <legend>Client ad accounts you manage</legend>
-        <div>
-          {["1-10", "11-30", "31-100", "100+"].map((v, i) => (
-            <label key={v} className="mn-choice">
-              <input type="radio" name="accounts" value={v} required defaultChecked={i === 1} />
-              <span>{v.replace("-", "–")}</span>
-            </label>
-          ))}
+    <div className={`mn-signup mn-signup-${tone}`}>
+      <form {...form} className="mn-inline-form">
+        <label htmlFor={id} className="mn-sr">Work email</label>
+        <input
+          id={id}
+          name="email"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          placeholder="you@agency.com"
+          required
+          maxLength={200}
+          onFocus={() => {
+            if (!started.current) track("signup_start", { position });
+            started.current = true;
+          }}
+        />
+        <input type="hidden" name="position" value={position} />
+        <input type="hidden" name="utm" value={utm} />
+        <div aria-hidden className="mn-hp">
+          <label htmlFor={`${id}-website`}>Website</label>
+          <input id={`${id}-website`} name="website" tabIndex={-1} autoComplete="off" />
         </div>
-      </fieldset>
-      <div className="mn-field mn-field-wide">
-        <label htmlFor="ea-note">What do you report on today? <span className="mn-optional">Optional</span></label>
-        <textarea id="ea-note" name="note" rows={3} maxLength={1000} placeholder="e.g. Google Ads and Meta for 20 home-service clients, monthly reports in Looker Studio" />
-      </div>
-      {/* Honeypot, hidden from people and screen readers. */}
-      <div aria-hidden className="mn-hp">
-        <label htmlFor="ea-website">Website</label>
-        <input id="ea-website" name="website" tabIndex={-1} autoComplete="off" />
-      </div>
-      {state?.error && <p className="mn-form-error" role="alert">{state.error}</p>}
-      <button type="submit" className="mn-btn mn-btn-primary mn-field-wide" disabled={pending}>
-        {pending ? "Sending request…" : "Request early access"}
-      </button>
-    </form>
+        <button type="submit" className="mn-btn mn-btn-primary" disabled={pending} onClick={() => track("cta_primary_click", { position })}>
+          {pending ? "Sending…" : "Get early access"}
+        </button>
+      </form>
+      {state?.error ? <p className="mn-form-error" role="alert">{state.error}</p> : note ? <p className="mn-form-note">{note}</p> : null}
+    </div>
   );
 }

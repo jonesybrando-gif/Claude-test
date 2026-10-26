@@ -1,23 +1,33 @@
-import "@fontsource-variable/bricolage-grotesque";
+import "@fontsource-variable/inter-tight";
 import "./landing.css";
 import Link from "next/link";
+import Script from "next/script";
 import { BrandMark } from "@/components/brand-mark";
 import { appLink, site } from "@/lib/site";
+
+// Google Tag Manager for conversion tracking (see ./track.ts). Only loads when configured.
+const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID;
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="mn">
+      {GTM_ID && /^GTM-[A-Z0-9]+$/.test(GTM_ID) && (
+        <Script id="gtm" strategy="afterInteractive">
+          {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${GTM_ID}');`}
+        </Script>
+      )}
       <a href="#main" className="mn-skip">Skip to content</a>
       <header className="mn-header">
         <div className="mn-wrap mn-header-inner">
           <Link href="/" className="mn-logo"><BrandMark className="mn-logo-mark" />{site.appName}</Link>
           <nav aria-label="Site" className="mn-nav">
-            <a href="#how-it-works" className="mn-nav-link">How it works</a>
-            <a href="#sources" className="mn-nav-link">Data sources</a>
-            <a href="#security" className="mn-nav-link">Security</a>
-            <a href={appLink("/login")} className="mn-nav-signin">Sign in</a>
-            <a href="#request-access" className="mn-btn mn-btn-primary mn-btn-sm">Request access</a>
+            <a href="#product" className="mn-nav-link">Product</a>
+            <a href="#how" className="mn-nav-link">How it works</a>
+            <a href="#why" className="mn-nav-link">Why us</a>
+            <a href="#faq" className="mn-nav-link">FAQ</a>
           </nav>
+          <a href={appLink("/login")} className="mn-nav-signin">Sign in</a>
+          <a href="#start" className="mn-btn mn-btn-primary mn-btn-sm">Get early access</a>
         </div>
       </header>
       <main id="main">{children}</main>

@@ -6,10 +6,20 @@ import { PLATFORM_LABEL } from "@/lib/platforms";
 import { rangeLabel } from "@/lib/date-ranges";
 import { formatDate } from "@/lib/time";
 import { stillCounting } from "@/lib/results";
+import { webContextFor } from "./web-context";
 
 /** The grounding text for one client's report, as the page and PDF show it. */
 export function contextForReport(rep: ClientReport): string {
   return buildAiContext(contextInput(rep));
+}
+
+/**
+ * The grounding text the AI features use: the report plus the client's website,
+ * organic search and keyword-rank data for the same period, when connected.
+ */
+export async function aiContextForReport(rep: ClientReport): Promise<string> {
+  const web = await webContextFor(rep.client.id, rep.client.currency, rep.range, rep.cmpRange).catch(() => null);
+  return buildAiContext({ ...contextInput(rep), web });
 }
 
 export function contextInput(rep: ClientReport): AiContextInput {

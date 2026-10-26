@@ -1,55 +1,61 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth";
 import { appLink, site } from "@/lib/site";
-import { PacingBoard } from "./pacing-board";
+import { AiDemo } from "./ai-demo";
 import { EarlyAccessForm } from "./early-access-form";
+import { PacingBoard } from "./pacing-board";
+import { ProductTour } from "./product-tour";
 
 export const dynamic = "force-dynamic";
 
 const DESCRIPTION =
-  "Budget pacing, alerts and client reporting for agencies running Google Ads, Meta, Microsoft Advertising and Local Services Ads. See every client's month-end spend while there's still time to fix it.";
+  "Marketing Nexus brings paid ads, Google Analytics 4, Search Console and keyword rankings together, then uses AI to explain what changed, why it matters and what to do next.";
 
 export const metadata: Metadata = {
-  title: { absolute: `${site.appName}: ad budget pacing and client reporting for agencies` },
+  title: { absolute: `${site.appName}: all your marketing data, with answers you can act on` },
   description: DESCRIPTION,
-  alternates: { canonical: "https://marketingnexus.us/" },
+  alternates: { canonical: "https://www.marketingnexus.us/" },
   openGraph: {
-    title: `${site.appName}: know which clients will overspend before the month ends`,
+    title: "All your marketing data. Finally, answers you can act on.",
     description: DESCRIPTION,
-    url: "https://marketingnexus.us/",
+    url: "https://www.marketingnexus.us/",
     siteName: site.appName,
     type: "website",
   },
 };
 
-const MONTH = [
-  {
-    when: "On the 1st",
-    title: "Budgets carry over on their own",
-    body: "Set a client's monthly budget once and it repeats. Late in the month, one click copies everything into next month, so nobody rebuilds a spreadsheet.",
-  },
-  {
-    when: "Every morning",
-    title: "A pacing check before your first call",
-    body: "Spend from every platform is pulled overnight. A daily summary by email or Slack lists who's ahead, who's behind and what each account needs per day to land on budget.",
-  },
-  {
-    when: "When something breaks",
-    title: "Alerts that catch it in days, not weeks",
-    body: "Cost per result spikes, results drop, or conversion tracking goes quiet. You hear about it with the numbers attached, and can mute what doesn't matter for a client.",
-  },
-  {
-    when: "At month end",
-    title: "Reports go out without the Friday scramble",
-    body: "Each client gets a branded report by private link or PDF, on a schedule you set, with a plain-language summary and what you're doing next.",
-  },
-];
+const SOURCES = ["Google Ads", "Local Services Ads", "Meta Ads", "Google Analytics 4", "Search Console", "Keyword rankings", "CallRail"];
 
-const SOURCES: { group: string; items: string[] }[] = [
-  { group: "Advertising", items: ["Google Ads", "Meta Ads", "Microsoft Advertising", "Google Local Services Ads"] },
-  { group: "Website and local", items: ["Google Analytics 4", "Search Console", "Google Business Profile", "CallRail calls", "Keyword rankings"] },
+const FAQ: { q: string; a: React.ReactNode }[] = [
+  {
+    q: "What does the AI actually do?",
+    a: "It reads one client's figures across every connected source for the period you're looking at: ad results, website visits and goals, organic search and keyword rankings. It writes what the data shows, what may explain it, and what to do next, citing the numbers it used. It works only from that client's data, and nothing reaches a client until you've reviewed it.",
+  },
+  {
+    q: "Which data sources can I connect?",
+    a: "Google Ads, Google Local Services Ads, Meta Ads, Google Analytics 4, Google Search Console, keyword rank tracking (with your DataForSEO account) and CallRail. Some Google and Meta connections are still completing those platforms' app reviews, so we set them up with you during early access. Microsoft Advertising is next.",
+  },
+  {
+    q: "How fresh is the data?",
+    a: "Marketing Nexus checks every connected source every hour, and keyword positions update daily. Google and Meta can take a day or two to finish counting recent conversions, so the most recent days are marked as still counting.",
+  },
+  {
+    q: "Does it change anything in my accounts?",
+    a: "No. Marketing Nexus only reads reporting data. It never creates, changes or pauses campaigns, ads, budgets or website settings, and you can disconnect any source at any time.",
+  },
+  {
+    q: "How does budget pacing work?",
+    a: "Set each client's monthly budget once; it repeats every month. Marketing Nexus compares spend with budget every hour, forecasts where the month will land, shows the daily spend that lands on budget, and alerts you when a client drifts over or under.",
+  },
+  {
+    q: "Can my clients see their results?",
+    a: "Yes. Send branded reports weekly or monthly by private link or PDF, or give each client a login to their own dashboard.",
+  },
+  {
+    q: "What does it cost?",
+    a: "Marketing Nexus is in early access while we onboard agencies one at a time. We'll walk you through pricing on your setup call, before you commit to anything.",
+  },
 ];
 
 export default async function HomePage() {
@@ -58,132 +64,213 @@ export default async function HomePage() {
 
   return (
     <>
-      <section className="mn-hero mn-wrap">
-        <div className="mn-hero-copy">
-          <h1>Know which clients will overspend while there&apos;s still time to fix it.</h1>
-          <p className="mn-lede">
-            {site.appName} puts every client&apos;s Google, Meta, Microsoft and Local Services spend on one board, forecasts where each month will land,
-            and turns the numbers into reports clients actually read.
-          </p>
-          <div className="mn-actions">
-            <a href="#request-access" className="mn-btn mn-btn-primary">Request early access</a>
-            <a href="#how-it-works" className="mn-btn mn-btn-quiet">See how a month runs</a>
-          </div>
-          <p className="mn-hero-note">Read-only access to your ad accounts. Nothing in your campaigns is ever changed.</p>
-        </div>
-        <PacingBoard />
+      <section className="mn-hero mn-wrap" aria-labelledby="hero-title">
+        <h1 id="hero-title">All your marketing data. Finally, answers you can act on.</h1>
+        <p className="mn-lede">
+          {site.appName} brings your paid ads, Google Analytics 4, Search Console and keyword rankings together, then uses AI to explain what changed,
+          why it matters and exactly what to do next.
+        </p>
+        <EarlyAccessForm position="hero" note="Early access. We'll set up your first client with you on a short call." />
       </section>
 
-      <section className="mn-band" aria-labelledby="pain">
-        <div className="mn-wrap mn-band-inner">
-          <h2 id="pain">Most agencies find out about a blown budget on the 31st.</h2>
-          <p>
-            By then the money is spent and the client call is awkward. Pacing lives in four ad platforms and a spreadsheet that&apos;s stale by noon.
-            {" "}{site.appName} checks every account every day and tells you which ones need a change while a change still matters.
-          </p>
-        </div>
+      <section className="mn-wrap mn-demo-wrap" aria-label="Try it: ask about a sample client">
+        <AiDemo />
       </section>
 
-      <section id="how-it-works" className="mn-section mn-wrap" aria-labelledby="month-title">
-        <h2 id="month-title" className="mn-h2">How a month runs in {site.appName}</h2>
-        <ol className="mn-month">
-          {MONTH.map((m) => (
-            <li key={m.when}>
-              <p className="mn-when">{m.when}</p>
-              <h3>{m.title}</h3>
-              <p>{m.body}</p>
+      <section className="mn-wrap mn-sources" aria-label="Data sources">
+        <p>Answers from every source a client is judged on</p>
+        <ul>
+          {SOURCES.map((s) => (
+            <li key={s}>{s}</li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="mn-dark" aria-labelledby="problem-title">
+        <div className="mn-wrap mn-dark-inner">
+          <h2 id="problem-title">Your data lives in five places. The answers live in none of them.</h2>
+          <ul className="mn-pains">
+            <li>
+              <strong>Every channel tells half the story.</strong>
+              <span>Ads look fine, organic is down, and nothing shows how the two connect.</span>
             </li>
-          ))}
-        </ol>
-      </section>
-
-      <section id="sources" className="mn-section mn-wrap mn-split" aria-labelledby="sources-title">
-        <div>
-          <h2 id="sources-title" className="mn-h2">Every number a local business gets judged on, in one place</h2>
-          <p className="mn-body">
-            Ad spend and results sit next to website traffic, search rankings, Business Profile activity and tracked phone calls.
-            Results are counted once per account, and calls from ads are shown alongside conversions, never added on top, so a client never sees a number inflated twice.
-          </p>
-        </div>
-        <div className="mn-sources">
-          {SOURCES.map((g) => (
-            <div key={g.group}>
-              <h3>{g.group}</h3>
-              <ul>
-                {g.items.map((i) => <li key={i}>{i}</li>)}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mn-section mn-wrap mn-split mn-split-flip" aria-labelledby="reports-title">
-        <div>
-          <h2 id="reports-title" className="mn-h2">Reports in your name, written for business owners</h2>
-          <ul className="mn-points">
-            <li><strong>Your brand.</strong> Your agency name, logo and color on every report and client dashboard.</li>
-            <li><strong>Plain language.</strong> Each report leads with what happened, what it cost per lead, call or sale, and what you&apos;re doing next.</li>
-            <li><strong>Drafts, not guesses.</strong> AI drafts the summary and the client email from the report&apos;s own figures. It never invents a number, and you review everything before it&apos;s sent.</li>
-            <li><strong>Client logins.</strong> Give a client their own dashboard, or send a private link that needs no account.</li>
+            <li>
+              <strong>Dashboards show what. Clients ask why.</strong>
+              <span>Every &ldquo;why did leads drop?&rdquo; starts an hour of digging.</span>
+            </li>
+            <li>
+              <strong>Budget problems surface on the 31st.</strong>
+              <span>By then the money is spent and the call is awkward.</span>
+            </li>
+            <li>
+              <strong>Reports eat the week.</strong>
+              <span>Time spent assembling numbers is time not spent improving them.</span>
+            </li>
           </ul>
         </div>
-        <figure className="mn-report" aria-label="Example client report summary, sample data">
-          <div className="mn-report-head">
-            <span className="mn-report-agency">Your agency</span>
-            <span>October report for Summit Heating &amp; Air</span>
-            <span className="mn-board-sample">Sample data</span>
+      </section>
+
+      <section id="product" className="mn-wrap mn-feature" aria-labelledby="f1">
+        <div className="mn-feature-copy">
+          <p className="mn-kicker">Cross-channel intelligence</p>
+          <h2 id="f1" className="mn-h2">See how paid, organic and your website affect each other.</h2>
+          <p className="mn-body">
+            When leads drop, {site.appName} checks every channel at once: whether paid traffic changed, whether organic clicks fell, which rankings moved and whether
+            the website still converts. You get one answer instead of five dashboards.
+          </p>
+          <ul className="mn-checks">
+            <li>Spot problems in the channel that caused them, not the one that reported them</li>
+            <li>Find where paid search can cover an organic gap, and where it&apos;s wasted</li>
+            <li>Never double-count: ad conversions and website goals are kept apart</li>
+          </ul>
+        </div>
+        <figure className="mn-shot mn-channels" aria-label="One client's channels side by side. Sample data.">
+          <div className="mn-shot-head">
+            <span>Harbor Dental, October so far</span>
+            <span className="mn-sample">Sample data</span>
           </div>
-          <div className="mn-report-stats">
-            <div><span>Leads</span><strong>142</strong><em>up 18% on September</em></div>
-            <div><span>Cost per lead</span><strong>$41.20</strong><em>down $6.10</em></div>
-            <div><span>Calls from ads</span><strong>97</strong><em>from CallRail</em></div>
+          <div className="mn-channel-grid">
+            <div className="mn-channel"><span className="mn-src src-ads">Paid</span><strong>118</strong><span>leads</span><em className="tone-down">-10%</em></div>
+            <div className="mn-channel"><span className="mn-src src-sc">Organic</span><strong>1,702</strong><span>search clicks</span><em className="tone-down">-26%</em></div>
+            <div className="mn-channel"><span className="mn-src src-rank">Rankings</span><strong>11 of 24</strong><span>in the top 10</span><em className="tone-down">-3</em></div>
+            <div className="mn-channel"><span className="mn-src src-ga">Website</span><strong>152</strong><span>goals completed</span><em className="tone-down">-19%</em></div>
           </div>
-          <div className="mn-report-next">
-            <p className="mn-report-label">What we&apos;re doing next</p>
-            <p>Moving budget from the furnace-repair campaign to AC tune-ups, which brought in leads at half the cost this month.</p>
+          <div className="mn-connect">
+            <span className="mn-insight-kind">What connects them</span>
+            <p>Organic search lost 19 website goals after two rankings slipped on Oct 12. Paid search lost 17. Fixing the rankings is the bigger opportunity.</p>
           </div>
         </figure>
       </section>
 
-      <section id="security" className="mn-section mn-wrap" aria-labelledby="security-title">
-        <div className="mn-trust">
-          <h2 id="security-title" className="mn-h2">Read-only, by design</h2>
-          <div className="mn-trust-grid">
-            <p>
-              When an ad account is connected, {site.appName} asks Google, Meta or Microsoft for read-only access to that account&apos;s reporting data.
-              It never creates, changes or pauses campaigns, ads or budgets.
-            </p>
-            <p>
-              The data is used only to produce reports for your agency and the client the account belongs to. It is never sold or used for advertising,
-              and access can be removed at any time. The <Link href="/privacy">privacy policy</Link> explains exactly what is collected and how to have it deleted.
-            </p>
+      <section className="mn-wrap mn-feature mn-feature-flip" aria-labelledby="f2">
+        <div className="mn-feature-copy">
+          <p className="mn-kicker">SEO and keyword rankings</p>
+          <h2 id="f2" className="mn-h2">Know when rankings move, and what it costs in leads.</h2>
+          <p className="mn-body">
+            Daily keyword positions sit beside Search Console clicks and the website goals they bring in, so a ranking drop shows up as lost leads, not just a
+            number on a rank report.
+          </p>
+          <ul className="mn-checks">
+            <li>Daily rank tracking for the keywords that matter to each client</li>
+            <li>Search Console queries and pages, with clicks, impressions and position</li>
+            <li>Organic visits and goals from Google Analytics 4, by channel and page</li>
+          </ul>
+        </div>
+        <figure className="mn-shot" aria-label="Keyword rankings for one client. Sample data.">
+          <div className="mn-shot-head">
+            <span>Keyword rankings, last 30 days</span>
+            <span className="mn-sample">Sample data</span>
+          </div>
+          <table className="mn-rank">
+            <thead>
+              <tr>
+                <th scope="col">Keyword</th>
+                <th scope="col">Position</th>
+                <th scope="col">Change</th>
+                <th scope="col">Clicks</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>emergency dentist</td><td>6</td><td className="tone-down">▼ 4</td><td>212</td></tr>
+              <tr><td>dentist near me</td><td>9</td><td className="tone-down">▼ 6</td><td>148</td></tr>
+              <tr><td>teeth whitening harbor city</td><td>2</td><td className="tone-up">▲ 3</td><td>96</td></tr>
+              <tr><td>dental implants cost</td><td>4</td><td className="tone-up">▲ 1</td><td>74</td></tr>
+              <tr><td>invisalign harbor city</td><td>11</td><td className="tone-flat">—</td><td>31</td></tr>
+            </tbody>
+          </table>
+        </figure>
+      </section>
+
+      <section className="mn-wrap mn-feature" aria-labelledby="f3">
+        <div className="mn-feature-copy">
+          <p className="mn-kicker">Budget pacing</p>
+          <h2 id="f3" className="mn-h2">Fix the budget on the 9th, not the 31st.</h2>
+          <p className="mn-body">
+            Spend is checked against every client&apos;s budget every hour. You see where the month will land, the daily spend that lands on budget, and an alert
+            when a client drifts.
+          </p>
+          <ul className="mn-checks">
+            <li>Month-end forecast for every client and campaign budget</li>
+            <li>The exact daily spend that lands on budget</li>
+            <li>Alerts for overspend, underspend, spend spikes and stalled campaigns</li>
+          </ul>
+        </div>
+        <PacingBoard />
+      </section>
+
+      <section id="how" className="mn-wrap mn-section" aria-labelledby="tour-title">
+        <h2 id="tour-title" className="mn-h2 mn-center">From data to decisions in four steps.</h2>
+        <ProductTour />
+      </section>
+
+      <section id="why" className="mn-wrap mn-section" aria-labelledby="why-title">
+        <h2 id="why-title" className="mn-h2">Why agencies choose {site.appName}</h2>
+        <div className="mn-why">
+          <div>
+            <h3>Answers, not more dashboards</h3>
+            <p>Every insight says what happened, what may explain it and what to do, with the figures behind it.</p>
+          </div>
+          <div>
+            <h3>Paid and organic in one view</h3>
+            <p>See how ads, rankings, search and the website move together for each client.</p>
+          </div>
+          <div>
+            <h3>No more budget surprises</h3>
+            <p>Hourly pacing, month-end forecasts and alerts keep every client on plan.</p>
+          </div>
+          <div>
+            <h3>Reports clients understand</h3>
+            <p>Branded, plain-English reports and client logins, sent on your schedule.</p>
+          </div>
+          <div>
+            <h3>Hands off your accounts</h3>
+            <p>{site.appName} only reads data. It never changes a campaign, budget or website setting.</p>
+          </div>
+          <div>
+            <h3>Built by agency operators</h3>
+            <p>Designed by people who have run paid media and SEO for many clients, around the work agencies do every week.</p>
           </div>
         </div>
       </section>
 
-      <section className="mn-section mn-wrap" aria-labelledby="built-title">
-        <div className="mn-founder">
-          <h2 id="built-title">Built by people who&apos;ve run the accounts</h2>
-          <p>
-            {site.appName} comes from nearly twenty years in paid media, including building and selling a white-label PPC agency that managed around 150 recurring client accounts.
-            Every screen exists because a real agency month needed it: the 7am pacing check, the client who asks why leads dipped, the report due Friday.
-          </p>
-        </div>
-      </section>
-
-      <section id="request-access" className="mn-cta" aria-labelledby="cta-title">
-        <div className="mn-wrap mn-cta-inner">
+      <section id="start" className="mn-wrap mn-section" aria-labelledby="start-title">
+        <div className="mn-start">
           <div>
-            <h2 id="cta-title">Bring your client list. We&apos;ll connect the first accounts with you.</h2>
-            <p>
-              {site.appName} is onboarding agencies one at a time while it&apos;s in early access. Tell us a little about your accounts and we&apos;ll set up a walkthrough.
-            </p>
-            <p className="mn-cta-signin">
+            <h2 id="start-title">See your own clients&apos; answers this week.</h2>
+            <ol className="mn-start-steps">
+              <li><strong>Enter your work email.</strong> That&apos;s the whole form.</li>
+              <li><strong>Book a short setup call.</strong> We&apos;ll email you a time.</li>
+              <li><strong>Connect your first client together.</strong> Ads, Analytics, Search Console and rankings.</li>
+              <li><strong>Leave with real answers.</strong> Insights, a pacing forecast and a first report.</li>
+            </ol>
+          </div>
+          <div className="mn-start-form">
+            <p className="mn-start-label">Early access</p>
+            <p className="mn-start-sub">We&apos;re onboarding agencies one at a time.</p>
+            <EarlyAccessForm position="start" tone="dark" />
+            <p className="mn-start-signin">
               Already have an account? <a href={appLink("/login")}>Sign in</a>
             </p>
           </div>
-          <EarlyAccessForm />
         </div>
+      </section>
+
+      <section id="faq" className="mn-wrap mn-section mn-faq" aria-labelledby="faq-title">
+        <h2 id="faq-title" className="mn-h2">Questions</h2>
+        <div>
+          {FAQ.map((f, i) => (
+            <details key={f.q} open={i === 0}>
+              <summary>{f.q}</summary>
+              <p>{f.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      <section className="mn-wrap mn-final" aria-labelledby="final-title">
+        <h2 id="final-title">Stop reading reports. Start acting on them.</h2>
+        <p>All your marketing data in one place, with answers you can act on.</p>
+        <EarlyAccessForm position="final" />
       </section>
     </>
   );

@@ -24,7 +24,7 @@ function getClient(): Anthropic {
 /** An error whose message is safe and useful to show in the UI. */
 export class AiError extends Error {}
 
-const BASE_RULES = `You are an analyst at a digital advertising agency, working from the agency's reporting data.
+const BASE_RULES = `You are an analyst at a digital marketing agency, working from the agency's reporting data: paid advertising and, when connected, the client's website analytics, organic search and keyword rankings.
 
 Rules:
 - Use only the figures in the DATA block. Never invent numbers, benchmarks, industry averages, or causes. If something can't be judged from the data, say what's missing instead of guessing.
@@ -38,6 +38,8 @@ Rules:
 - Don't claim causes you can't see in the data. Use "may" for possible causes ("this may point to the landing page"), and never state a cause as fact.
 - Never invent figures, comparisons or explanations. Say "too few to compare" when the data marks a change that way, and don't call a change good or bad when the data says it is normal variation or still being counted.
 - Return on ad spend is the sales value the ad platforms credited to the ads for every 1 spent; it is not profit. Say so when you mention it.
+- When website, organic search or ranking data is present, connect it to the ad results where the figures support it (for example, more paid clicks but fewer website goals, or organic clicks falling while rankings drop). Say which data each point comes from. Never add ad conversions to website goals; they overlap.
+- Keep three things distinct: what the data shows (an observation, with its figures), what may explain it (always "may", never stated as fact), and what to do next.
 - Write plain text without Markdown headings, tables or bold.
 - Write dates like "Oct 19" (add the year only when it isn't obvious), never as 2026-10-19. Write counts of conversions as whole numbers unless there are fewer than 10.`;
 
@@ -95,6 +97,8 @@ export async function generateSuggestions(data: string): Promise<Suggestions> {
     SuggestionsSchema,
     `Review this client's advertising data and give the account manager up to 6 proactive, specific recommendations, most important first.
 Look for: budget pacing risks and how much to change daily spend; campaigns or platforms whose cost per result is clearly worse or better than the rest; meaningful changes against the comparison period; tracking gaps (spend with no conversions or leads); stale or estimated data that limits conclusions.
+When website, organic search or keyword ranking data is present, also look across channels: organic clicks or rankings falling where paid search could cover the gap (or the reverse), paid traffic rising while website goals fall (a possible landing page or tracking issue), and keywords that moved in or out of the top 10.
+In "detail", give the action and, separately, what may explain the finding, using "may".
 Each recommendation must cite the figures it rests on in "evidence". Skip anything the data doesn't support. If nothing needs attention, return one low-priority suggestion saying so.`,
     data,
     "high",

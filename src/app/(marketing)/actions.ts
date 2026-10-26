@@ -9,12 +9,11 @@ import { site } from "@/lib/site";
 
 export type EarlyAccessState = { ok?: boolean; error?: string } | undefined;
 
+// One required field. Everything else about the agency is gathered on the setup call.
 const schema = z.object({
-  name: z.string().trim().min(1, "Enter your name.").max(120),
   email: z.string().trim().email("Enter a work email we can reply to.").max(200),
-  agency: z.string().trim().min(1, "Enter your agency or company name.").max(160),
-  accounts: z.enum(["1-10", "11-30", "31-100", "100+"], { errorMap: () => ({ message: "Choose how many ad accounts you manage." }) }),
-  note: z.string().trim().max(1000).optional(),
+  position: z.string().trim().max(40).optional(),
+  utm: z.string().trim().max(500).optional(),
 });
 
 // Light per-instance limit so the public form can't be used to flood the inbox.
@@ -35,13 +34,11 @@ export async function requestEarlyAccess(_prev: EarlyAccessState, form: FormData
   if (String(form.get("website") ?? "").length > 0) return { ok: true };
 
   const parsed = schema.safeParse({
-    name: form.get("name"),
     email: form.get("email"),
-    agency: form.get("agency"),
-    accounts: form.get("accounts"),
-    note: form.get("note") || undefined,
+    position: form.get("position") || undefined,
+    utm: form.get("utm") || undefined,
   });
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form and try again." };
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the email address and try again." };
 
   if (!allow(clientIp(await headers()))) return { error: "Too many requests from this network. Try again in an hour or email us directly." };
 
@@ -49,12 +46,14 @@ export async function requestEarlyAccess(_prev: EarlyAccessState, form: FormData
   const text = [
     `New early-access request for ${site.appName}`,
     "",
-    `Name: ${d.name}`,
     `Email: ${d.email}`,
-    `Agency: ${d.agency}`,
-    `Client ad accounts: ${d.accounts}`,
-    d.note ? `\nNote:\n${d.note}` : "",
-  ].join("\n");
+    d.position ? `Form: ${d.position}` : "",
+    d.utm ? `Campaign: ${d.utm}` : "",
+    "",
+    "Reply to set up the walkthrough.",
+  ]
+    .filter((l, i, a) => l !== "" || (i > 0 && a[i - 1] !== ""))
+    .join("\n");
 
   // Recorded in the outbox even when SMTP isn't configured, so no request is lost.
   // Filed under the first (owner) agency so it shows in Settings → Email.
@@ -63,7 +62,7 @@ export async function requestEarlyAccess(_prev: EarlyAccessState, form: FormData
     agencyId: owner?.id ?? null,
     to: site.contactEmail ?? "early-access@unconfigured",
     replyTo: d.email,
-    subject: `Early access: ${d.agency} (${d.accounts} accounts)`,
+    subject: `Early access request: ${d.email}`,
     text,
     kind: "lead",
   });

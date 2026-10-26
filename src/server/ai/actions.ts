@@ -6,7 +6,7 @@ import { prisma } from "../db";
 import { requireClientEdit } from "../access";
 import { loadClientReport } from "../client-report";
 import { sendEmail, type SendResult } from "../email";
-import { contextForReport } from "./context";
+import { aiContextForReport } from "./context";
 import { AI_MODEL, AiError, answerQuestion, draftClientEmail, draftReportSummary, EMAIL_PURPOSES, generateSuggestions, type EmailDraft, type EmailPurpose, type QaTurn } from "./assistant";
 import { questionTools } from "./questions";
 import { PRESET_LABEL } from "@/lib/date-ranges";
@@ -21,7 +21,7 @@ async function reportFor(clientId: string, form?: FormData) {
   const get = (k: string) => (form?.get(k) ? String(form.get(k)) : undefined);
   const rep = await loadClientReport(clientId, { range: get("range"), compare: get("compare"), from: get("from"), to: get("to") });
   const agency = await prisma.agency.findUniqueOrThrow({ where: { id: rep.client.agencyId }, select: { name: true } });
-  return { rep, agencyName: agency.name, data: contextForReport(rep) };
+  return { rep, agencyName: agency.name, data: await aiContextForReport(rep) };
 }
 
 export type SuggestionsState = { ok?: string; error?: string } | undefined;
@@ -107,7 +107,7 @@ export async function askQuestionAction(clientId: string, query: Record<string, 
   try {
     const rep = await loadClientReport(clientId, { range: query.range, compare: query.compare, from: query.from, to: query.to });
     const periodLabel = `${PRESET_LABEL[rep.preset].toLowerCase()} (${formatDate(rep.range.from)} to ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })})`;
-    return { answer: await answerQuestion(contextForReport(rep), q, turns, questionTools(rep), { periodLabel }) };
+    return { answer: await answerQuestion(await aiContextForReport(rep), q, turns, questionTools(rep), { periodLabel }) };
   } catch (e) {
     return fail(e);
   }
