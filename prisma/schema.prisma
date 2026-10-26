@@ -43,6 +43,8 @@ model Agency {
   alertSettings Json?
   /// Slack incoming-webhook URL for new alerts, encrypted like OAuth tokens. Null = Slack off.
   slackWebhookEnc String?
+  /// When an admin dismissed the "Get set up" checklist (null = showing).
+  setupChecklistDismissedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -157,6 +159,10 @@ model Client {
   agency    Agency  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   name      String
   timezone  String  @default("America/New_York")
+  /// What the client wants from advertising; null = guessed from the data.
+  goal      ClientGoal?
+  /// Alert types muted for this client (still recorded, not shown or sent).
+  mutedAlertTypes AlertType[] @default([])
   currency  String  @default("USD") @db.Char(3)
   primaryManagerId String?
   primaryManager   User?  @relation("PrimaryManager", fields: [primaryManagerId], references: [id], onDelete: SetNull)
@@ -377,6 +383,8 @@ model Budget {
   // JSON array of {"start":"YYYY-MM-DD","end":"YYYY-MM-DD"} pauses (no planned spend)
   pauses         Json?
   forecastModel  ForecastModel @default(STRAIGHT_LINE)
+  /// Carried forward to the next calendar month automatically (whole-month budgets only).
+  repeatsMonthly Boolean @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -498,6 +506,17 @@ enum AlertType {
   CAMPAIGN_NO_SPEND
   SYNC_FAILED
   ACCOUNT_DISCONNECTED
+  CPA_SPIKE
+  RESULTS_DROP
+  TRACKING_ZERO
+}
+
+enum ClientGoal {
+  LEADS
+  CALLS
+  SALES
+  BOOKINGS
+  AWARENESS
 }
 
 enum AlertStatus {
