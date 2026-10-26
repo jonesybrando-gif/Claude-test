@@ -1,5 +1,6 @@
 "use client";
 
+import { displayCampaignName } from "@/lib/campaign-name";
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import type { PlatformKey } from "@/lib/platforms";
@@ -111,7 +112,7 @@ export function CampaignTable({ rows, currency }: { rows: CampaignRow[]; currenc
       <ul className="flex flex-col gap-2 px-3 md:hidden" aria-label="Campaigns">
         {visible.map((r) => (
           <li key={r.id} className="rounded-lg border border-border p-3">
-            <p className="font-medium">{r.name}</p>
+            <p className="font-medium">{displayCampaignName(r.name)}</p>
             <p className="text-xs text-text-3"><PlatformLabel platform={r.platform} /> · {r.status.charAt(0) + r.status.slice(1).toLowerCase()}</p>
             <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
               <div><dt className="text-text-3">Ad spend</dt><dd className="font-medium tabular">{money(r.costMinor, true)}</dd></div>
@@ -144,7 +145,7 @@ export function CampaignTable({ rows, currency }: { rows: CampaignRow[]; currenc
         <TBody>
           {visible.map((r) => (
             <TR key={r.id}>
-              <TD className="pl-5 font-medium whitespace-normal min-w-56">{r.name}</TD>
+              <TD className="pl-5 font-medium whitespace-normal min-w-56">{displayCampaignName(r.name)}</TD>
               <TD className="text-xs"><PlatformLabel platform={r.platform} /></TD>
               <TD className="text-xs text-text-2">{r.status.charAt(0) + r.status.slice(1).toLowerCase()}</TD>
               <TD className="text-right">{money(r.costMinor, true)}</TD>

@@ -67,8 +67,12 @@ export function hasPlaceholderValues(t: MetricTotals): boolean {
   return t.conversions >= 5 && t.conversionValueMinor > 0 && Math.abs(t.conversionValueMinor / t.conversions - 100) < 1;
 }
 
-/** Real conversion values are tracked (not missing, not the $1 placeholder). */
-export const tracksValue = (t: MetricTotals): boolean => t.conversionValueMinor > 0 && !hasPlaceholderValues(t);
+/**
+ * Real conversion values are tracked: not missing, not the $1 placeholder, and
+ * big enough to mean something (at least 20% of spend; a few dollars of value on
+ * thousands of spend is a leftover setting, not sales tracking).
+ */
+export const tracksValue = (t: MetricTotals): boolean => t.conversionValueMinor > 0 && !hasPlaceholderValues(t) && t.conversionValueMinor >= t.costMinor * 0.2;
 
 /** Results of ONE platform's line (an ad account or a campaign): the larger of conversions and leads. */
 export const lineResults = (t: MetricTotals): number => Math.max(t.conversions, t.leads);

@@ -1,3 +1,4 @@
+import { displayCampaignName } from "@/lib/campaign-name";
 import "server-only";
 import type { ClientReport } from "../client-report";
 import { buildAiContext, type AiContextInput } from "@/lib/ai-context";
@@ -44,7 +45,7 @@ export function contextInput(rep: ClientReport): AiContextInput {
           // Its own budget line this month, if it has one (campaign budget rows are labelled with the campaign name).
           const row = pacing.subRows.find((r) => r.level === "CAMPAIGNS" && r.label === cmp.name && r.accounts[0]?.id === a.id && r.result);
           const budget = row?.result ? { status: row.result.status, currentDailyRateMinor: row.result.currentDailyRateMinor, requiredDailyMinor: row.result.requiredDailyMinor } : null;
-          return { name: cmp.name, platform: PLATFORM_LABEL[a.platform], status: cmp.status, totals: perf.byCampaign[cmp.id], previous: cmpPerf?.byCampaign[cmp.id] ?? null, budget };
+          return { name: displayCampaignName(cmp.name), platform: PLATFORM_LABEL[a.platform], status: cmp.status, totals: perf.byCampaign[cmp.id], previous: cmpPerf?.byCampaign[cmp.id] ?? null, budget };
         }),
     ),
     pacing: total
