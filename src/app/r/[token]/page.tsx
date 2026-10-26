@@ -70,11 +70,11 @@ export default async function SharedReportPage({ params, searchParams }: { param
           {agency.reportHeader && <p className="text-xs text-text-2">{agency.reportHeader}</p>}
         </div>
       </header>
-      <main className="mx-auto flex max-w-[1400px] flex-col gap-5 px-4 py-6 md:px-6">
+      <main className="mx-auto flex max-w-[1400px] flex-col gap-6 px-4 py-6 md:px-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold">{client.name}</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">{client.name}</h1>
               {isDemo && <DemoBadge />}
             </div>
             <p className="text-sm text-text-2">

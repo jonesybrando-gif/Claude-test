@@ -43,7 +43,7 @@ export function NeedsAttention({ clients, total, limit = 10 }: { clients: Attent
           ))}
           {clients.length > limit && (
             <li className="px-5 py-2.5 text-sm">
-              <Link href="/performance?attention=1" className="text-brand hover:underline">See all {clients.length} on All clients</Link>
+              <Link href="/performance?attention=1" className="text-brand-text hover:underline">See all {clients.length} on All clients</Link>
             </li>
           )}
         </ul>

@@ -35,10 +35,10 @@ export default async function ShareLinksPage({ params, searchParams }: { params:
   const ranges: [string, string][] = [["template", `Report default (${PRESET_LABEL[template.defaultRange].toLowerCase()})`], ...RANGES.map((r) => [r, PRESET_LABEL[r]] as [string, string])];
 
   return (
-    <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1200px] flex-col gap-6">
       <div>
         <Link href={back} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
-        <h1 className="mt-1 text-xl font-semibold">Share {client.name}&apos;s report</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Share {client.name}&apos;s report</h1>
         <p className="text-sm text-text-2">
           Anyone with a link can view this client&apos;s report in their browser and download the PDF, without signing in. They see the client-facing version
           (the sections chosen in <Link className="underline" href={`/clients/${id}/report`}>Customize report</Link>), never your internal notes or AI suggestions.

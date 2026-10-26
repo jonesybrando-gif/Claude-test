@@ -1,6 +1,6 @@
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import { formatKpi, KPI_BY_KEY, kpiChangeWords, type KpiValue } from "@/lib/kpis";
-import { InfoTip } from "@/components/ui/info-tip";
+import { MetricCard } from "@/components/ui/metric-card";
 import { Sparkline } from "./sparkline";
 
 /** Ratios and costs with no value read "not reported"; counts fall back to KpiCard's own wording. */
@@ -30,25 +30,20 @@ export function KpiCard({ kv, currency, trend, note, chip }: { kv: KpiValue; cur
   const def = KPI_BY_KEY[kv.key];
   const words = kpiChangeWords(kv, currency);
   return (
-    <div className="flex flex-col gap-1 rounded-xl border border-border bg-surface px-4 py-3">
-      <div className="flex min-w-0 items-start justify-between gap-2">
-        <p className="flex items-center gap-1 text-xs leading-tight text-text-3">
-          {def.label}
-          <InfoTip label={def.label} text={def.plain} />
-        </p>
-        {trend && kv.value !== null && <span className="shrink-0"><Sparkline values={trend} width={48} height={18} /></span>}
-      </div>
-      <p className="flex items-baseline gap-2 truncate text-xl font-semibold tabular">
-        {formatKpi(kv.key, kv.value, currency)}
-        {chip && <span className="rounded bg-warning-bg px-1.5 py-0.5 text-[11px] font-medium text-warning-ink">{chip}</span>}
-      </p>
-      <p className="flex min-w-0 items-center gap-1 text-xs tabular">
-        {kv.changePct === null || kv.verdict === null ? (
+    <MetricCard
+      size="md"
+      label={def.label}
+      info={def.plain}
+      value={formatKpi(kv.key, kv.value, currency)}
+      chip={chip}
+      aside={trend && kv.value !== null ? <Sparkline values={trend} width={48} height={18} /> : undefined}
+      change={
+        kv.changePct === null || kv.verdict === null ? (
           <span className="text-text-3">{note ?? (kv.value === null ? "not reported" : "no comparison data")}</span>
         ) : (
-          <ChangeLine tone={kv.tone} changePct={kv.changePct} text={words.text} aria={words.aria} />
-        )}
-      </p>
-    </div>
+          <ChangeLine tone={kv.tone} changePct={kv.changePct} text={words.text} aria={words.aria} className="max-w-full" />
+        )
+      }
+    />
   );
 }

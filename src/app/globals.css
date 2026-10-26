@@ -24,6 +24,8 @@
   --focus-ring: #1c5cab;
   /* Empty part of progress / pace bars: 1.4:1 against white so the bar's extent is visible. */
   --track: #d9d8d3;
+  /* Amber status dot: darker than --warning so the dot is visible on white. Words carry the meaning. */
+  --dot-watch: #c98500;
 
   /* Charts (validated reference palette) */
   --series-actual: #2a78d6;
@@ -63,6 +65,7 @@
     /* 8.3:1 on #1a1a19, 8.9:1 on #121211 */
     --focus-ring: #86b6ef;
     --track: #3a3a37;
+    --dot-watch: #e0a32a;
     --series-actual: #3987e5;
     --series-projected: #d95926;
     --series-planned: #92918a;
@@ -91,6 +94,7 @@
   --selected: color-mix(in srgb, var(--brand) 24%, var(--surface));
   --focus-ring: #86b6ef;
   --track: #3a3a37;
+  --dot-watch: #e0a32a;
   --series-actual: #3987e5;
   --series-projected: #d95926;
   --series-planned: #92918a;
@@ -120,6 +124,10 @@
   --color-selected: var(--selected);
   --color-focus-ring: var(--focus-ring);
   --color-track: var(--track);
+  /* Brand as text (links, suggestion labels): mixed toward the text colour so a light agency colour still reads.
+     Inline (not a :root variable) so it follows the per-agency --brand set on the app shell. */
+  --color-brand-text: color-mix(in srgb, var(--brand) 72%, var(--text));
+  --color-dot-watch: var(--dot-watch);
   --color-good: var(--good);
   --color-warning: var(--warning);
   --color-serious: var(--serious);

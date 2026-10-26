@@ -139,7 +139,7 @@ export function PacingTable({ rows, labels = [], labelsByClient = {}, initialSta
                 <div><dt className="text-text-3">Projected</dt><dd className={`font-medium tabular ${res && res.projectedVarianceMinor > 0 ? "text-critical-ink" : ""}`}>{res ? formatMoney(res.projectedMinor, c, { whole: true }) : "—"}</dd></div>
               </dl>
               {r.notConnected ? (
-                <Link href={`/clients/${r.clientId}/accounts`} className="mt-2 inline-block text-xs text-brand hover:underline">{r.accounts.length ? "Check ad accounts" : "Link an ad account"}</Link>
+                <Link href={`/clients/${r.clientId}/accounts`} className="mt-2 inline-block text-xs text-brand-text hover:underline">{r.accounts.length ? "Check ad accounts" : "Link an ad account"}</Link>
               ) : (
                 <>
                   {res && displayPacingStatus(res).forecastNote && <p className="mt-2 text-xs text-text-2">{displayPacingStatus(res).forecastNote}</p>}
@@ -185,7 +185,7 @@ export function PacingTable({ rows, labels = [], labelsByClient = {}, initialSta
                 <TD className="pl-5">
                   <Link href={`/clients/${r.clientId}`} className="block truncate font-medium text-text hover:underline" title={r.clientName}>{r.clientName}</Link>
                   <div className="truncate text-xs text-text-3" title={r.level === "CLIENT" ? "Combined budget" : r.label}>{r.level === "CLIENT" ? "Combined budget" : r.label}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                     {r.platforms.map((p) => <PlatformLabel key={p} platform={p} />)}
                     {tags.map((l) => <LabelBadge key={l.id} label={l} />)}
                   </div>
@@ -193,11 +193,11 @@ export function PacingTable({ rows, labels = [], labelsByClient = {}, initialSta
                 <TD>
                   <div className="flex flex-col items-start gap-1">
                     {r.notConnected ? <NotConnectedBadge label={r.accounts.length ? "Awaiting first sync" : "Not connected"} /> : res ? <StatusBadge status={displayPacingStatus(res).status} /> : <NoBudgetBadge />}
-                    {r.notConnected && <Link href={`/clients/${r.clientId}/accounts`} className="text-[11px] text-brand hover:underline">{r.accounts.length ? "Check ad accounts" : "Link an ad account"}</Link>}
+                    {r.notConnected && <Link href={`/clients/${r.clientId}/accounts`} className="text-xs text-brand-text hover:underline">{r.accounts.length ? "Check ad accounts" : "Link an ad account"}</Link>}
                     {!r.notConnected && res && (displayPacingStatus(res).forecastNote ? (
-                      <span className="text-[11px] text-text-2">{displayPacingStatus(res).forecastNote}</span>
+                      <span className="text-xs text-text-2">{displayPacingStatus(res).forecastNote}</span>
                     ) : res.forecastStatus !== res.status && res.forecastStatus !== "ON_TARGET" ? (
-                      <span className="text-[11px] text-text-2">Forecast: {STATUS_LABEL[res.forecastStatus].toLowerCase()}</span>
+                      <span className="text-xs text-text-2">Forecast: {STATUS_LABEL[res.forecastStatus].toLowerCase()}</span>
                     ) : null)}
                     {r.disconnected && <StaleBadge label="Disconnected" />}
                     {!r.disconnected && r.stale && <StaleBadge />}
@@ -212,13 +212,13 @@ export function PacingTable({ rows, labels = [], labelsByClient = {}, initialSta
                   ) : (
                     <div className="text-xs text-text-3">no budget</div>
                   )}
-                  {r.hasEstimatedSpend && <div className="text-[11px] text-warning-ink">estimated</div>}
+                  {r.hasEstimatedSpend && <div className="text-xs text-warning-ink">estimated</div>}
                 </TD>
                 <TD>
                   {res && res.pctBudgetConsumed !== null ? (
                     <>
                       <PaceBar consumed={res.pctBudgetConsumed} elapsed={res.pctPeriodElapsed} expected={res.budgetMinor ? (res.expectedToDateMinor / res.budgetMinor) * 100 : 0} status={res.status} />
-                      <div className="mt-1 text-[11px] text-text-3">Expected by now {formatMoney(res.expectedToDateMinor, c, { whole: true })}</div>
+                      <div className="mt-1 text-xs text-text-3">Expected by now {formatMoney(res.expectedToDateMinor, c, { whole: true })}</div>
                     </>
                   ) : <span className="text-text-3">—</span>}
                 </TD>

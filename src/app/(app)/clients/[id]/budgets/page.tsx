@@ -41,10 +41,10 @@ export default async function BudgetsPage({ params, searchParams }: { params: Pr
   const campaigns = client.accounts.flatMap((a) => a.campaigns.map((c) => ({ id: c.id, label: `${PLATFORM_LABEL[a.platform]} · ${c.name}` })));
 
   return (
-    <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1200px] flex-col gap-6">
       <div>
         <Link href={back} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
-        <h1 className="mt-1 text-xl font-semibold">Budgets</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Budgets</h1>
         <p className="text-sm text-text-2">Budgets entered here drive pacing only. They never change budgets inside Google, Meta or Microsoft.</p>
       </div>
 

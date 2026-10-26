@@ -56,10 +56,10 @@ export default async function PickClientAccountPage({ params, searchParams }: { 
   const hasLsa = live.some((l) => l.clientId === id && l.platform === "GOOGLE_LSA");
 
   return (
-    <div className="mx-auto flex max-w-[900px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[900px] flex-col gap-6">
       <div>
         <Link href={`/clients/${id}/accounts`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name} · Ad accounts</Link>
-        <h1 className="mt-1 text-xl font-semibold">Choose {client.name}&apos;s {PLATFORM_LABEL[platform]} account</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Choose {client.name}&apos;s {PLATFORM_LABEL[platform]} account</h1>
         <p className="text-sm text-text-2">Accounts available to {connection.label}.</p>
       </div>
       <Card>

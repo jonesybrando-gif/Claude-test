@@ -70,7 +70,7 @@ function RankTable({ rows, clientId, showDevice }: { rows: KeywordRankRow[]; cli
               <div><dt className="text-text-3">30 days</dt><dd className="font-medium tabular"><Change v={r.change30} /></dd></div>
               <div><dt className="text-text-3">Best</dt><dd className="font-medium tabular">{r.best ?? "—"}</dd></div>
             </dl>
-            {r.url && <p className="mt-2 truncate text-xs"><a href={r.url} target="_blank" rel="noreferrer noopener" className="text-brand hover:underline" title={r.url}>{shortUrl(r.url)}</a></p>}
+            {r.url && <p className="mt-2 truncate text-xs"><a href={r.url} target="_blank" rel="noreferrer noopener" className="text-brand-text hover:underline" title={r.url}>{shortUrl(r.url)}</a></p>}
             {features.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
                 {features.slice(0, 4).map((f) => <Badge key={f} variant="neutral">{FEATURE_LABEL[f] ?? f.replace(/_/g, " ")}</Badge>)}
@@ -117,7 +117,7 @@ function RankTable({ rows, clientId, showDevice }: { rows: KeywordRankRow[]; cli
               <TD className="text-right"><Change v={r.change30} /></TD>
               <TD className="text-right">{r.best ?? "—"}</TD>
               <TD className="max-w-[240px] truncate">
-                {r.url ? <a href={r.url} target="_blank" rel="noreferrer noopener" className="text-brand hover:underline" title={r.url}>{shortUrl(r.url)}</a> : <span className="text-text-3">—</span>}
+                {r.url ? <a href={r.url} target="_blank" rel="noreferrer noopener" className="text-brand-text hover:underline" title={r.url}>{shortUrl(r.url)}</a> : <span className="text-text-3">—</span>}
               </TD>
               <TD><Sparkline values={r.history.map((h) => (h.position === null ? null : -h.position))} width={90} height={24} /></TD>
               <TD className="max-w-[260px] whitespace-normal">
@@ -159,10 +159,10 @@ export default async function RankingsPage({ params, searchParams }: { params: P
   const lastRunAt = asset?.settings && typeof asset.settings === "object" && "lastRunAt" in asset.settings ? String((asset.settings as Record<string, unknown>).lastRunAt) : null;
 
   return (
-    <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1200px] flex-col gap-6">
       <div>
         <Link href={back} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
-        <h1 className="mt-1 text-xl font-semibold">Keyword rankings</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Keyword rankings</h1>
         <p className="text-sm text-text-2">
           Exact Google organic positions for {client.name}&apos;s keywords, checked once a day (top 100 results) through DataForSEO.
           Add the “Keyword rankings” dashboard template to show them to the client.

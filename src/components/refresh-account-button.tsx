@@ -22,7 +22,7 @@ export function RefreshAccountButton({ accountId }: { accountId: string }) {
       >
         <RefreshCw className={`h-3 w-3 ${pending ? "animate-spin" : ""}`} aria-hidden /> {pending ? "Refreshing…" : "Refresh now"}
       </button>
-      {message && <span className={`text-[11px] whitespace-normal ${message.startsWith("Failed") ? "text-critical-ink" : "text-text-3"}`} role="status">{message}</span>}
+      {message && <span className={`text-xs whitespace-normal ${message.startsWith("Failed") ? "text-critical-ink" : "text-text-3"}`} role="status">{message}</span>}
     </span>
   );
 }

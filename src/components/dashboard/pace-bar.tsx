@@ -26,7 +26,7 @@ export function PaceBar({ consumed, elapsed, expected, status }: { consumed: num
         <div className="absolute -top-1 -bottom-1 w-0.5 rounded bg-text" style={{ left: `calc(${clamp(expected)}% - 1px)` }} aria-hidden />
         {consumed > 100 && <div className="absolute inset-y-0 right-0 w-1 rounded-r-full bg-critical-ink" aria-hidden />}
       </div>
-      <div className="flex justify-between text-[11px] text-text-3 tabular">
+      <div className="flex justify-between text-xs text-text-3 tabular">
         <span><span className="text-text-2">{formatPct(consumed, 0)}</span> used</span>
         <span>{formatPct(elapsed, 0)} of month</span>
       </div>

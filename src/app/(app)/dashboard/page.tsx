@@ -78,9 +78,9 @@ async function PacingDashboard({ user, initialStatus }: { user: Awaited<ReturnTy
 
   if (clients.length === 0) {
     return (
-      <div className="mx-auto flex max-w-[1000px] flex-col gap-5">
+      <div className="mx-auto flex max-w-[1000px] flex-col gap-6">
         <div>
-          <h1 className="text-xl font-semibold">Welcome. Let&apos;s set up budget pacing</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Welcome. Let&apos;s set up budget pacing</h1>
           <p className="text-sm text-text-2">You don&apos;t have any clients yet. Work through these steps and this page fills in.</p>
         </div>
         {checklist ? (
@@ -93,10 +93,10 @@ async function PacingDashboard({ user, initialStatus }: { user: Awaited<ReturnTy
   }
 
   return (
-    <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1500px] flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-xl font-semibold">Home</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Home</h1>
           <p className="text-sm text-text-2">
             {`${clients.length} client${clients.length === 1 ? "" : "s"}`}
             {s.typicalAsOf && <> · data through {formatDate(s.typicalAsOf, { month: "short", day: "numeric" })}</>}
@@ -168,7 +168,7 @@ async function PacingDashboard({ user, initialStatus }: { user: Awaited<ReturnTy
               <span className={split.overLines ? "text-critical-ink" : ""}>Over: {whole(split.overMinor)} across {split.overLines} line{split.overLines === 1 ? "" : "s"}</span>
               {" · "}
               <span className={split.underLines ? "text-warning-ink" : ""}>Under: {whole(split.underMinor)} across {split.underLines} line{split.underLines === 1 ? "" : "s"}</span>
-              <span className="mt-0.5 block text-[11px] text-text-3">Net {variance >= 0 ? "+" : "−"}{whole(Math.abs(variance))} vs budget</span>
+              <span className="mt-0.5 block text-xs text-text-3">Net {variance >= 0 ? "+" : "−"}{whole(Math.abs(variance))} vs budget</span>
             </>
           }
         />

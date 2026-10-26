@@ -38,10 +38,10 @@ export default async function NewDashboardPage({ params, searchParams }: { param
     }),
   ];
   return (
-    <div className="mx-auto flex max-w-[1100px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1100px] flex-col gap-6">
       <div>
         <Link href={back} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
-        <h1 className="mt-1 text-xl font-semibold">New dashboard</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">New dashboard</h1>
         <p className="text-sm text-text-2">A custom view of {client.name}&apos;s data. Start blank or from a template; you can change everything afterwards.</p>
       </div>
       <NewDashboardForm action={createDashboardAction.bind(null, id)} options={options} showVisibility />

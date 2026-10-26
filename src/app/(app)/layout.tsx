@@ -94,7 +94,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </nav>
         <div className="border-t border-border p-2">{account}</div>
       </aside>
-      <main className="min-w-0 flex-1 px-4 py-6 md:px-8">{children}</main>
+      <main className="min-w-0 flex-1 px-4 py-6 md:px-10 md:py-8">{children}</main>
     </div>
   );
 }

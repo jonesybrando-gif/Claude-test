@@ -20,7 +20,7 @@ export function SetupChecklist({ steps, dismissible = true }: { steps: SetupStep
       <div className="flex items-start justify-between gap-3 px-5 pt-4">
         <div>
           <h2 className="text-sm font-semibold">Get set up · {done} of {steps.length} done</h2>
-          <p className="text-xs text-text-3">A few steps to your first useful client report.{next && <> Next: <Link href={next.href} className="text-brand hover:underline">{next.title.toLowerCase()}</Link>.</>}</p>
+          <p className="text-xs text-text-3">A few steps to your first useful client report.{next && <> Next: <Link href={next.href} className="text-brand-text hover:underline">{next.title.toLowerCase()}</Link>.</>}</p>
         </div>
         {dismissible && (
           <button

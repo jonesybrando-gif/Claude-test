@@ -163,11 +163,11 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const noClientsAtAll = !removedView && clients.length === 0 && !sp.q?.trim() && !sp.label;
 
   return (
-    <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1200px] flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-2">
-        <h1 className="text-xl font-semibold">{removedView ? "Removed clients" : "Clients"}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{removedView ? "Removed clients" : "Clients"}</h1>
         <div className="flex flex-wrap items-center gap-2">
-          {admin && (removedView ? <Link href="/clients" className="text-sm text-brand hover:underline">Back to clients</Link> : removedCount > 0 && <Link href="/clients?view=removed" className="text-sm text-text-2 hover:underline">Removed clients ({removedCount})</Link>)}
+          {admin && (removedView ? <Link href="/clients" className="text-sm text-brand-text hover:underline">Back to clients</Link> : removedCount > 0 && <Link href="/clients?view=removed" className="text-sm text-text-2 hover:underline">Removed clients ({removedCount})</Link>)}
           {admin && !removedView && (
             <>
               <DialogButton label="Manage labels" title="Labels" description="Group clients (for example by industry, region or service) to filter and sort them here and on Home." variant="outline" icon={<Tags className="h-4 w-4" aria-hidden />}>

@@ -42,10 +42,10 @@ export function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate?:
                 active ? "bg-brand/10 font-medium text-text ring-1 ring-inset ring-focus-ring" : "text-text-2 hover:bg-surface-2 hover:text-text",
               )}
             >
-              <Icon className={cn("h-4 w-4 shrink-0", active && "text-brand")} aria-hidden />
+              <Icon className={cn("h-4 w-4 shrink-0", active && "text-brand-text")} aria-hidden />
               {label}
               {count > 0 && (
-                <span className="ml-auto rounded-full bg-critical px-1.5 text-[11px] font-semibold text-white tabular">
+                <span className="ml-auto rounded-full bg-critical px-1.5 text-xs font-semibold text-white tabular">
                   <span aria-hidden>{count > 99 ? "99+" : count}</span>
                   <span className="sr-only">, {count} unread</span>
                 </span>

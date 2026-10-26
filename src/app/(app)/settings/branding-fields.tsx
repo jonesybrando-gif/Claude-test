@@ -126,7 +126,7 @@ export function BrandingFields({ values }: { values: BrandingValues }) {
               )}
               <span className="truncate text-xs font-semibold">{v.name || "Your agency"}</span>
             </div>
-            {v.reportHeader && <span className="truncate text-[10px] text-text-2">{v.reportHeader}</span>}
+            {v.reportHeader && <span className="truncate text-xs text-text-2">{v.reportHeader}</span>}
           </div>
           <div className="flex flex-col gap-2 px-3 py-3">
             <p className="text-sm font-semibold">Client name</p>
@@ -138,8 +138,8 @@ export function BrandingFields({ values }: { values: BrandingValues }) {
                 </div>
               ))}
             </div>
-            <span className="self-start rounded-md bg-brand px-2 py-1 text-[10px] font-medium text-brand-ink">Download PDF</span>
-            {v.reportFooter && <p className="border-t border-border pt-2 text-[10px] text-text-3">{v.reportFooter}</p>}
+            <span className="self-start rounded-md bg-brand px-2 py-1 text-xs font-medium text-brand-ink">Download PDF</span>
+            {v.reportFooter && <p className="border-t border-border pt-2 text-xs text-text-3">{v.reportFooter}</p>}
           </div>
         </div>
       </figure>

@@ -46,9 +46,9 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   const notConfigured = error?.endsWith("_not_configured");
 
   return (
-    <div className="mx-auto flex max-w-[1100px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1100px] flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold">Integrations</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
         <p className="text-sm text-text-2">Only official APIs and supported authentication are used. No scraping, no unofficial endpoints.</p>
       </div>
       {error && (

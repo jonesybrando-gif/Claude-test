@@ -1,5 +1,3 @@
-import { Badge } from "@/components/ui/badge";
-
 export interface LabelInfo {
   id: string;
   name: string;
@@ -21,10 +19,11 @@ export const LABEL_DOT: Record<string, string> = {
 };
 
 export function LabelBadge({ label }: { label: LabelInfo }) {
+  // Quiet by design: a coloured dot and the name in secondary text, no chip, so labels never compete with status.
   return (
-    <Badge variant="neutral" className="font-normal">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-text-2">
       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: LABEL_DOT[label.color] ?? LABEL_DOT.neutral }} aria-hidden />
       {label.name}
-    </Badge>
+    </span>
   );
 }
