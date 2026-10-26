@@ -17,10 +17,10 @@ export interface BudgetStatusWords {
 
 const WORD: Record<BudgetState, { word: string; tone: StatusTone }> = {
   ON_TARGET: { word: "On track", tone: "good" },
-  SLIGHTLY_OVER: { word: "Over", tone: "watch" },
+  SLIGHTLY_OVER: { word: "A bit over", tone: "watch" },
   // Red is kept for overspending; underspending is never red.
   OVERSPENDING: { word: "Over", tone: "critical" },
-  SLIGHTLY_UNDER: { word: "Under", tone: "watch" },
+  SLIGHTLY_UNDER: { word: "A bit under", tone: "watch" },
   UNDERSPENDING: { word: "Under", tone: "watch" },
   NOT_STARTED: { word: "Not started", tone: "none" },
   NO_BUDGET: { word: "No budget", tone: "none" },
@@ -28,16 +28,18 @@ const WORD: Record<BudgetState, { word: string; tone: StatusTone }> = {
 };
 
 /**
- * Plain budget status for people who don't manage ads: three words (On track,
- * Over, Under) plus grey states, with the forecast amount when it is known.
+ * Plain budget status for people who don't manage ads: On track, A bit over,
+ * Over, A bit under, Under, or a grey state, with the forecast amount when it
+ * is known. The words, not only the dot colour, say how far off it is.
  * The seven pacing states and their thresholds are unchanged; only the words are.
  */
 export function budgetStatusWords(state: BudgetState, projectedVarianceMinor?: number | null, currency = "USD"): BudgetStatusWords {
   const { word, tone } = WORD[state];
   const detail = state === "NOT_CONNECTED" ? "No ad account connected" : STATUS_LABEL[state];
-  const directional = word === "Over" || word === "Under";
+  const over = word.toLowerCase().endsWith("over");
+  const directional = over || word.toLowerCase().endsWith("under");
   // The amount only shows when it points the same way as the word (status can be "over so far" with a forecast under).
-  const agrees = projectedVarianceMinor != null && (word === "Over" ? projectedVarianceMinor > 0 : projectedVarianceMinor < 0);
+  const agrees = projectedVarianceMinor != null && (over ? projectedVarianceMinor > 0 : projectedVarianceMinor < 0);
   if (!directional || !agrees || projectedVarianceMinor == null) {
     return { label: word, tone, detail };
   }

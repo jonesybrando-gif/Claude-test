@@ -4,7 +4,9 @@ import { budgetStatusWords } from "../budget-status";
 describe("budgetStatusWords", () => {
   it("uses three plain words plus grey states", () => {
     expect(budgetStatusWords("ON_TARGET").label).toBe("On track");
-    expect(budgetStatusWords("SLIGHTLY_OVER").label).toBe("Over");
+    expect(budgetStatusWords("SLIGHTLY_OVER").label).toBe("A bit over");
+    expect(budgetStatusWords("OVERSPENDING").label).toBe("Over");
+    expect(budgetStatusWords("SLIGHTLY_UNDER").label).toBe("A bit under");
     expect(budgetStatusWords("UNDERSPENDING").label).toBe("Under");
     expect(budgetStatusWords("NO_BUDGET")).toMatchObject({ label: "No budget", tone: "none" });
     expect(budgetStatusWords("NOT_CONNECTED")).toMatchObject({ label: "Not connected", tone: "none" });
@@ -12,10 +14,11 @@ describe("budgetStatusWords", () => {
   });
 
   it("adds the forecast amount when it points the same way", () => {
-    expect(budgetStatusWords("SLIGHTLY_OVER", 12_300).label).toBe("Over · +$123");
+    expect(budgetStatusWords("SLIGHTLY_OVER", 12_300).label).toBe("A bit over · +$123");
     expect(budgetStatusWords("UNDERSPENDING", -96_200).label).toBe("Under · −$962");
+    expect(budgetStatusWords("OVERSPENDING", 54_600).label).toBe("Over · +$546");
     // Over so far but forecast under: no contradictory amount.
-    expect(budgetStatusWords("SLIGHTLY_OVER", -5_000).label).toBe("Over");
+    expect(budgetStatusWords("SLIGHTLY_OVER", -5_000).label).toBe("A bit over");
     expect(budgetStatusWords("ON_TARGET", 1_200).label).toBe("On track");
   });
 
