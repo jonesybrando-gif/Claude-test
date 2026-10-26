@@ -1,6 +1,7 @@
 // Render-ready data for one dashboard widget, produced on the server by
 // src/server/dashboards/data.ts and passed to client components. Plain JSON.
 
+import type { Verdict } from "@/lib/change";
 import type { MetricSource } from "@/lib/metrics-registry";
 import type { MetricInfo, Tone } from "./metrics";
 
@@ -48,7 +49,7 @@ export interface FormLogRow {
 }
 
 export type WidgetData =
-  | { kind: "kpi"; metric: MetricInfo; value: number | null; previous: number | null; changePct: number | null; tone: Tone | null; spark: (number | null)[]; hasComparison: boolean }
+  | { kind: "kpi"; metric: MetricInfo; value: number | null; previous: number | null; changePct: number | null; tone: Tone | null; verdict?: Verdict | null; spark: (number | null)[]; hasComparison: boolean }
   | { kind: "series"; metrics: MetricInfo[]; dates: string[]; current: Record<string, (number | null)[]>; previous: Record<string, (number | null)[]> | null; previousDates: string[] | null }
   | { kind: "breakdown"; metrics: MetricInfo[]; dimensionLabel: string; rows: { label: string; values: Record<string, number | null> }[] }
   | { kind: "rankings"; rows: KeywordRankRow[]; hasComparison: boolean }

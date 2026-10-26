@@ -1,34 +1,28 @@
 import { Suspense, type ReactNode } from "react";
 import type { ClientReport } from "@/server/client-report";
 import { automaticSummary, getExecutiveSummary, wantsAiSummary, type ExecSummary } from "@/server/exec-summary";
-import { summaryAsHtml, summaryAsText } from "@/lib/exec-summary";
+import { summaryAsHtml, summaryAsText, summarySections } from "@/lib/exec-summary";
 import { formatDate } from "@/lib/time";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopySummaryButton } from "./copy-summary-button";
 
-const SECTIONS = [
-  { key: "working", title: "What's working", numbered: false },
-  { key: "notWorking", title: "What needs attention", numbered: false },
-  { key: "recommendations", title: "Recommendations", numbered: true },
-] as const;
-
-/** Up to three headline points: the top win, the top issue and the top recommendation. */
-function keyPoints(s: ExecSummary): string[] {
-  const pts = [s.working[0], s.notWorking[0], s.recommendations[0]].filter((x): x is string => !!x);
+/** Up to three headline points: the top win, the top issue and the top recommendation (or next step, for clients). */
+function keyPoints(s: ExecSummary, clientFacing: boolean): string[] {
+  const pts = [s.working[0], s.notWorking[0], clientFacing ? s.nextSteps?.[0] : s.recommendations[0]].filter((x): x is string => !!x);
   if (pts.length) return pts;
   const first = s.overview.split(/(?<=[.!?])\s+/)[0];
   return first ? [first] : [];
 }
 
 /** One continuous section, laid out like a written memo so it reads (and copies) cleanly. */
-function SummaryText({ summary, heading, pending, copyable, compact }: { summary: ExecSummary; heading: string; pending?: boolean; copyable: boolean; compact?: boolean }) {
-  const full = <FullText summary={summary} />;
+function SummaryText({ summary, heading, pending, copyable, compact, clientFacing = false }: { summary: ExecSummary; heading: string; pending?: boolean; copyable: boolean; compact?: boolean; clientFacing?: boolean }) {
+  const full = <FullText summary={summary} clientFacing={clientFacing} />;
   return (
     <div className="flex flex-col gap-4" aria-busy={pending || undefined}>
       {compact ? (
         <>
           <ul className="flex max-w-[80ch] list-disc flex-col gap-1.5 pl-5 text-[15px] leading-relaxed text-text">
-            {keyPoints(summary).map((x, i) => <li key={i} className="pl-1">{x}</li>)}
+            {keyPoints(summary, clientFacing).map((x, i) => <li key={i} className="pl-1">{x}</li>)}
           </ul>
           <details className="group">
             <summary className="cursor-pointer text-sm font-medium text-brand hover:underline">
@@ -43,7 +37,8 @@ function SummaryText({ summary, heading, pending, copyable, compact }: { summary
       )}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
         <p className="text-xs text-text-3" aria-live="polite">
-          {pending ? "Writing a fuller analysis…" : summary.source === "ai" ? "Written by AI from the figures in this report." : "Worked out automatically from the figures in this report."} Recommendations are suggestions; nothing has been changed in the ad accounts.
+          {pending ? "Writing a fuller analysis…" : summary.source === "ai" ? "Written by AI from the figures in this report." : "Worked out automatically from the figures in this report."}
+          {clientFacing ? " Results are counted by each ad platform." : " Recommendations are suggestions; nothing has been changed in the ad accounts."}
         </p>
         {copyable && !pending && <CopySummaryButton html={summaryAsHtml(summary, heading)} text={summaryAsText(summary, heading)} />}
       </div>
@@ -51,12 +46,13 @@ function SummaryText({ summary, heading, pending, copyable, compact }: { summary
   );
 }
 
-function FullText({ summary }: { summary: ExecSummary }) {
+function FullText({ summary, clientFacing }: { summary: ExecSummary; clientFacing: boolean }) {
   return (
       <article className="max-w-[80ch] text-[15px] leading-relaxed text-text">
         {summary.overview.split(/\n{2,}/).map((para, i) => <p key={i} className="mb-3">{para}</p>)}
-        {SECTIONS.map((sec) => {
-          const items = summary[sec.key];
+        {/* Client-facing copies show "What we're doing next" instead of the agency's recommendations, or nothing when empty. */}
+        {summarySections(clientFacing).map((sec) => {
+          const items = summary[sec.key] ?? [];
           if (!items.length) return null;
           const List = sec.numbered ? "ol" : "ul";
           return (
@@ -72,8 +68,8 @@ function FullText({ summary }: { summary: ExecSummary }) {
   );
 }
 
-async function AiSummary({ rep, heading, copyable, compact }: { rep: ClientReport; heading: string; copyable: boolean; compact?: boolean }) {
-  return <SummaryText summary={await getExecutiveSummary(rep, { generate: true })} heading={heading} copyable={copyable} compact={compact} />;
+async function AiSummary({ rep, heading, copyable, compact, clientFacing }: { rep: ClientReport; heading: string; copyable: boolean; compact?: boolean; clientFacing?: boolean }) {
+  return <SummaryText summary={await getExecutiveSummary(rep, { generate: true })} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} />;
 }
 
 /**
@@ -81,15 +77,16 @@ async function AiSummary({ rep, heading, copyable, compact }: { rep: ClientRepor
  * recommendations, as one section. The automatic version shows at once; an
  * AI-written one streams in when the layout asks for it.
  */
-export function ExecutiveSummary({ rep, marker, copyable = false, compact = false, title = "Executive summary", actions, bare = false }: { rep: ClientReport; marker?: ReactNode; copyable?: boolean; compact?: boolean; title?: string; actions?: ReactNode; bare?: boolean }) {
+/** `clientFacing` (client logins, shared links): "What we're doing next" in agency voice replaces Recommendations. */
+export function ExecutiveSummary({ rep, marker, copyable = false, compact = false, title = "Executive summary", actions, bare = false, clientFacing = false }: { rep: ClientReport; marker?: ReactNode; copyable?: boolean; compact?: boolean; title?: string; actions?: ReactNode; bare?: boolean; clientFacing?: boolean }) {
   const auto = automaticSummary(rep);
   const heading = `${rep.client.name}: performance summary, ${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })}`;
   const body = wantsAiSummary(rep) ? (
-    <Suspense fallback={<SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} pending />}>
-      <AiSummary rep={rep} heading={heading} copyable={copyable} compact={compact} />
+    <Suspense fallback={<SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} pending />}>
+      <AiSummary rep={rep} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} />
     </Suspense>
   ) : (
-    <SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} />
+    <SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} />
   );
   if (bare) return body;
   return (

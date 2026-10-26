@@ -3,7 +3,9 @@ import { ChevronLeft } from "lucide-react";
 import { prisma } from "@/server/db";
 import { requireClientEdit } from "@/server/access";
 import { getClientTemplate } from "@/server/report-templates";
-import { resetClientTemplateAction, saveClientTemplateAction } from "@/server/report-template-actions";
+import { resetClientTemplateAction, saveClientGoalAction, saveClientTemplateAction } from "@/server/report-template-actions";
+import { reportResults } from "@/server/client-report";
+import { GoalForm } from "@/components/reports/goal-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ExportButtons } from "@/components/export-buttons";
@@ -19,7 +21,7 @@ export default async function ClientReportBuilderPage({ params, searchParams }: 
   const { id } = await params;
   const { reset } = await searchParams;
   const user = await requireClientEdit(id);
-  const client = await prisma.client.findUniqueOrThrow({ where: { id }, select: { name: true } });
+  const client = await prisma.client.findUniqueOrThrow({ where: { id }, select: { name: true, goal: true } });
   const [{ template, custom }, rep] = await Promise.all([getClientTemplate(user.agencyId, id), loadClientReport(id, {})]);
   // Real figures for the live preview, for the report's default range.
   const sample: PreviewSample = {
@@ -28,6 +30,9 @@ export default async function ClientReportBuilderPage({ params, searchParams }: 
     values: Object.fromEntries(kpiValues(ALL_KPI_KEYS, rep.perf.totals, null).map((kv) => [kv.key, formatKpi(kv.key, kv.value, rep.client.currency)])),
   };
   const isAdmin = user.role === "AGENCY_ADMIN";
+  // What "Let Marketing Nexus decide" would pick right now, from the report's data.
+  const guessed = reportResults({ ...rep, client: { ...rep.client, goal: null } }).current;
+  const guess = guessed.goal === "AWARENESS" ? "awareness (people who clicked)" : guessed.goal === "SALES" ? "sales (conversions with their value)" : "results (conversions and leads)";
 
   return (
     <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
@@ -44,6 +49,15 @@ export default async function ClientReportBuilderPage({ params, searchParams }: 
           <ExportButtons base={`/api/reports/clients/${id}`} internalPdf />
         </div>
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Goal</CardTitle>
+          <CardDescription>The report opens with one Results figure built from this goal, using the ad platforms&apos; own counts with nothing counted twice.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <GoalForm goal={client.goal} guess={guess} action={saveClientGoalAction.bind(null, id)} />
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>Report layout</CardTitle>

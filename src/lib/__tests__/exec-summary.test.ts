@@ -30,11 +30,12 @@ describe("automatic executive summary", () => {
   it("describes the selected range with changes, results, top campaign and budget", () => {
     const s = autoExecutiveSummary(base);
     const [p1, p2] = s.split("\n\n");
-    expect(p1).toContain("From Sep 17 – Oct 16, 2026 (last 30 days), ABC Plumbing's ads earned 16,000 impressions and 880 clicks (up 7%) on $5,750 of spend (up 7%).");
-    expect(p1).toContain("79.4 conversions at $72.42 each (up 2%)");
-    expect(p1).toContain("a 5.80× return on ad spend");
+    // Results first, with the cost per result compared in words (a 1.5% change is normal variation).
+    expect(p1).toMatch(/^From Sep 17 to Oct 16 you spent \$5,750 and got 79 results at about \$72\.42 each, worth \$33,361 by the ad platforms' count — about the same per result as the previous period\./);
+    expect(p1).toContain("ABC Plumbing's ads were shown 16,000 times and clicked 880 times (up 7%).");
+    expect(p1).toContain("That is $5.80 in sales for every $1 spent, as credited by the ad platforms (this is not profit).");
     expect(p2).toContain("The largest campaign was Emergency on Google Ads, with $2,875 (50% of spend) and 40.3 conversions.");
-    expect(p2).toContain("For October, $3,225 of the $5,000 budget has been spent through Oct 16, ahead of plan; at the current pace the month would end at $6,249.");
+    expect(p2).toContain("For October, $3,225 of the $5,000 budget has been spent through Oct 16, ahead of plan; at the current pace the month would end around $6,249 (estimate).");
   });
 
   it("uses the final budget result for a past month and skips current pacing", () => {
@@ -46,7 +47,8 @@ describe("automatic executive summary", () => {
   it("handles no comparison, no results, no activity and demo data", () => {
     const noCmp = autoExecutiveSummary({ ...base, previous: null, totals: t({ costMinor: 10000, clicks: 20 }), campaigns: [], pacing: null });
     expect(noCmp).not.toMatch(/up|down/);
-    expect(noCmp).toContain("No conversions or leads were reported");
+    expect(noCmp).toContain("No conversions or leads were reported, so for now the ads can only be judged on clicks.");
+    expect(noCmp).toContain("people clicked your ads 20 times, at about $5.00 per click");
     expect(autoExecutiveSummary({ ...base, totals: emptyTotals(), isDemo: true })).toBe("These figures are illustrative demo data. No advertising activity was recorded for ABC Plumbing from Sep 17 – Oct 16, 2026.");
   });
 });
@@ -57,6 +59,12 @@ describe("email-ready summary", () => {
   it("formats plain text with headings, bullets and numbers, skipping empty sections", async () => {
     const { summaryAsText } = await import("../exec-summary");
     expect(summaryAsText(s, "ABC: summary")).toBe("ABC: summary\n\nPara one.\n\nPara <two> & more.\n\nWhat's working\n• Search did well.\n\nRecommendations\n1. Move budget.\n2. Fix tracking.");
+  });
+
+  it("swaps recommendations for what we're doing next in client-facing copies, or leaves them out", async () => {
+    const { summaryAsText } = await import("../exec-summary");
+    expect(summaryAsText({ ...s, nextSteps: ["We'll move budget."] }, "ABC: summary", { clientFacing: true })).toBe("ABC: summary\n\nPara one.\n\nPara <two> & more.\n\nWhat's working\n• Search did well.\n\nWhat we're doing next\n• We'll move budget.");
+    expect(summaryAsText({ ...s, nextSteps: [] }, "ABC: summary", { clientFacing: true })).not.toMatch(/Recommendations|doing next/);
   });
 
   it("formats escaped, inline-styled HTML for email clients", async () => {

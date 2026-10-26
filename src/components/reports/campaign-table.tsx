@@ -7,6 +7,8 @@ import { formatMoney, formatNumber } from "@/lib/money";
 import { Input, Select } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { PlatformLabel } from "@/components/platform-badge";
+import { InfoTip } from "@/components/ui/info-tip";
+import { KPI_BY_KEY } from "@/lib/kpis";
 
 export interface CampaignRow {
   id: string;
@@ -55,12 +57,15 @@ export function CampaignTable({ rows, currency }: { rows: CampaignRow[]; currenc
     (t, r) => ({ costMinor: t.costMinor + r.costMinor, clicks: t.clicks + r.clicks, conversions: t.conversions + r.conversions, conversionValueMinor: t.conversionValueMinor + r.conversionValueMinor }),
     { costMinor: 0, clicks: 0, conversions: 0, conversionValueMinor: 0 },
   );
-  const head = (key: SortKey, text: string, className = "text-right") => (
+  const head = (key: SortKey, text: string, className = "text-right", info?: string) => (
     <TH className={className} aria-sort={sort.key === key ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
-      <button type="button" className="inline-flex items-center gap-1 hover:text-text cursor-pointer" onClick={() => setSort((s) => ({ key, dir: s.key === key ? ((-s.dir) as 1 | -1) : key === "name" || key === "cpa" ? 1 : -1 }))}>
-        {text}
-        {sort.key === key && (sort.dir === 1 ? <ArrowUp className="h-3 w-3" aria-hidden /> : <ArrowDown className="h-3 w-3" aria-hidden />)}
-      </button>
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+        <button type="button" className="inline-flex items-center gap-1 hover:text-text cursor-pointer" onClick={() => setSort((s) => ({ key, dir: s.key === key ? ((-s.dir) as 1 | -1) : key === "name" || key === "cpa" ? 1 : -1 }))}>
+          {text}
+          {sort.key === key && (sort.dir === 1 ? <ArrowUp className="h-3 w-3" aria-hidden /> : <ArrowDown className="h-3 w-3" aria-hidden />)}
+        </button>
+        {info && <InfoTip label={text} text={info} align="end" />}
+      </span>
     </TH>
   );
   const money = (m: number | null, whole = false) => (m === null ? "—" : formatMoney(m, currency, { whole }));
@@ -85,8 +90,8 @@ export function CampaignTable({ rows, currency }: { rows: CampaignRow[]; currenc
           <option value="spend:1">Lowest spend</option>
           <option value="conversions:-1">Most conversions</option>
           <option value="clicks:-1">Most clicks</option>
-          <option value="cpa:1">Lowest cost / conv.</option>
-          <option value="roas:-1">Highest ROAS</option>
+          <option value="cpa:1">Lowest cost per conversion</option>
+          <option value="roas:-1">Highest return on ad spend</option>
           <option value="name:1">Name A–Z</option>
           {!MOBILE_SORTS.has(`${sort.key}:${sort.dir}`) && <option value={`${sort.key}:${sort.dir}`}>Custom</option>}
         </Select>
@@ -109,16 +114,16 @@ export function CampaignTable({ rows, currency }: { rows: CampaignRow[]; currenc
             <p className="font-medium">{r.name}</p>
             <p className="text-xs text-text-3"><PlatformLabel platform={r.platform} /> · {r.status.charAt(0) + r.status.slice(1).toLowerCase()}</p>
             <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
-              <div><dt className="text-text-3">Spend</dt><dd className="font-medium tabular">{money(r.costMinor, true)}</dd></div>
-              <div><dt className="text-text-3">Conv.</dt><dd className="font-medium tabular">{formatNumber(r.conversions, 0)}</dd></div>
-              <div><dt className="text-text-3">Cost / conv.</dt><dd className="font-medium tabular">{money(cpa(r))}</dd></div>
+              <div><dt className="text-text-3">Ad spend</dt><dd className="font-medium tabular">{money(r.costMinor, true)}</dd></div>
+              <div><dt className="text-text-3">Conversions</dt><dd className="font-medium tabular">{formatNumber(r.conversions, 0)}</dd></div>
+              <div><dt className="text-text-3">Cost per conversion</dt><dd className="font-medium tabular">{money(cpa(r))}</dd></div>
             </dl>
           </li>
         ))}
         {visible.length > 1 && (
           <li className="flex justify-between rounded-lg bg-surface-2 px-3 py-2 text-xs font-medium">
             <span>Total ({visible.length})</span>
-            <span className="tabular">{money(total.costMinor, true)} · {formatNumber(total.conversions, 0)} conv.</span>
+            <span className="tabular">{money(total.costMinor, true)} · {formatNumber(total.conversions, 0)} conversions</span>
           </li>
         )}
       </ul>
@@ -129,11 +134,11 @@ export function CampaignTable({ rows, currency }: { rows: CampaignRow[]; currenc
             {head("name", "Campaign", "pl-5")}
             <TH>Platform</TH>
             <TH>Status</TH>
-            {head("spend", "Spend")}
-            {head("clicks", "Clicks")}
-            {head("conversions", "Conv.")}
-            {head("cpa", "Cost / conv.")}
-            {head("roas", "ROAS", "pr-5 text-right")}
+            {head("spend", KPI_BY_KEY.spend.label, "text-right", KPI_BY_KEY.spend.plain)}
+            {head("clicks", KPI_BY_KEY.clicks.label, "text-right", KPI_BY_KEY.clicks.plain)}
+            {head("conversions", KPI_BY_KEY.conversions.label, "text-right", KPI_BY_KEY.conversions.plain)}
+            {head("cpa", KPI_BY_KEY.costPerConversion.label, "text-right", KPI_BY_KEY.costPerConversion.plain)}
+            {head("roas", KPI_BY_KEY.roas.label, "pr-5 text-right", KPI_BY_KEY.roas.plain)}
           </tr>
         </THead>
         <TBody>

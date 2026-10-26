@@ -24,7 +24,8 @@ import { ClientDashboardsTab } from "@/components/dashboards/client-dashboards-t
 import { ClientFacingDashboards } from "@/components/dashboards/dashboard-section";
 import { ConnectedDataSection } from "@/components/dashboards/connected-data-section";
 import { listClientDashboards } from "@/server/dashboards/access";
-import { CampaignsSection, DataFreshness, hiddenMarker, HistorySection, KpiSection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
+import { AdvertisingDetail, CampaignsSection, DataFreshness, hiddenMarker, HistorySection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
+import { AtAGlance } from "@/components/reports/at-a-glance";
 
 export const dynamic = "force-dynamic";
 
@@ -195,7 +196,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           <WithReport report={full}>
             {(rep) => (
               <>
-                <KpiSection rep={rep} marker={mark("kpis")} editable={canEdit} />
+                <AtAGlance rep={rep} />
+                <AdvertisingDetail rep={rep} marker={mark("kpis")} editable={canEdit} />
                 <ConnectedDataSection rep={rep} canEdit={canEdit} query={sp} />
                 <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand hover:underline">Open Insights</Link>} />
                 <NoteSection rep={rep} marker={mark("summary")} />

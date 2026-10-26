@@ -6,7 +6,7 @@ import { loadClientReport } from "@/server/client-report";
 import { cookies } from "next/headers";
 import { recordShareView, resolveShareToken, shareAccessGranted, shareCookieName } from "@/server/share-links";
 import { SharePasswordForm } from "./password-form";
-import { PRESET_LABEL } from "@/lib/date-ranges";
+import { rangeLabel } from "@/lib/date-ranges";
 import { formatDate } from "@/lib/time";
 import { buttonVariants } from "@/components/ui/button";
 import { DemoBadge } from "@/components/status-badge";
@@ -77,7 +77,7 @@ export default async function SharedReportPage({ params, searchParams }: { param
               {isDemo && <DemoBadge />}
             </div>
             <p className="text-sm text-text-2">
-              {template.title} · {PRESET_LABEL[preset]}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
+              {template.title} · {rangeLabel(preset, range)}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
               {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
             </p>
             <div className="mt-1.5"><DataFreshness rep={rep} staff={false} /></div>

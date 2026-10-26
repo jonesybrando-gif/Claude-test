@@ -5,7 +5,12 @@ import type { PacingRow } from "@/server/pacing-service";
 import type { ClientReport } from "@/server/client-report";
 import { PRESET_LABEL } from "@/lib/date-ranges";
 import { derive, type MetricTotals } from "@/lib/metrics";
-import { ALL_KPI_KEYS, dailyKpiValue, kpiValues, type KpiKey, type KpiValue } from "@/lib/kpis";
+import { ALL_KPI_KEYS, dailyKpiValue, KPI_BY_KEY, kpiValues, untrackedKpis, type KpiKey, type KpiValue } from "@/lib/kpis";
+import { stillCounting } from "@/lib/results";
+import { pacingHeadline } from "@/lib/at-a-glance";
+import { displayPacingStatus } from "@/lib/pacing/display-status";
+import { InfoTip } from "@/components/ui/info-tip";
+import { DetailDisclosure } from "./detail-disclosure";
 import type { SectionKey } from "@/lib/report-template";
 import { formatMoney, formatNumber, formatPct } from "@/lib/money";
 import { formatDate, relativeTime } from "@/lib/time";
@@ -41,13 +46,32 @@ export function hiddenMarker(rep: Pick<ClientReport, "template">, staff: boolean
   };
 }
 
-/** `editable` (staff who may edit the client) adds the inline "Edit KPIs" editor. */
+/**
+ * The full KPI tiles, collapsed by default under "Advertising detail" so the
+ * page opens on At a glance. Each viewer's open/closed choice is remembered.
+ */
+export function AdvertisingDetail({ rep, marker, editable = false }: { rep: ClientReport; marker?: ReactNode; editable?: boolean }) {
+  return (
+    <DetailDisclosure storageKey="advertising-detail" title="Advertising detail" hint="Clicks, conversions, costs and more from the ad platforms">
+      <KpiSection rep={rep} marker={marker} editable={editable} />
+    </DetailDisclosure>
+  );
+}
+
+/**
+ * `editable` (staff who may edit the client) adds the inline "Edit KPIs" editor.
+ * Tiles the client doesn't track (no real conversion values, no leads) are
+ * hidden; staff can still add them back with Edit KPIs.
+ */
 export function KpiSection({ rep, marker, editable = false }: { rep: ClientReport; marker?: ReactNode; editable?: boolean }) {
   const { template, perf, cmpPerf, client } = rep;
   const t = perf.totals;
+  const counting = stillCounting(rep.range.to, rep.today);
+  const hidden = untrackedKpis(t, cmpPerf?.totals ?? null);
   // The editor previews any catalogue KPI, so it gets every value; the static view only the chosen ones.
-  const kvs = kpiValues(editable ? ALL_KPI_KEYS : template.kpis, t, cmpPerf?.totals ?? null);
+  const kvs = kpiValues(editable ? ALL_KPI_KEYS : template.kpis.filter((k) => !hidden.has(k)), t, cmpPerf?.totals ?? null, { stillCounting: counting });
   const trend = (k: KpiKey) => perf.byDate.map((d) => dailyKpiValue(d, k));
+  const chip = (k: KpiKey) => (k === "spend" && t.hasEstimatedCost ? "Estimated" : undefined);
   return (
     <section aria-label="Key metrics" className="flex flex-col gap-2">
       {editable ? (
@@ -58,16 +82,19 @@ export function KpiSection({ rep, marker, editable = false }: { rep: ClientRepor
           trends={Object.fromEntries(ALL_KPI_KEYS.map((k) => [k, trend(k)])) as Record<KpiKey, (number | null)[]>}
           currency={client.currency}
           marker={marker}
+          hidden={[...hidden]}
+          chips={t.hasEstimatedCost ? { spend: "Estimated" } : {}}
         />
       ) : (
         <>
           {marker}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-            {kvs.map((kv) => <KpiCard key={kv.key} kv={kv} currency={client.currency} trend={trend(kv.key)} note={kpiNote(kv)} />)}
+            {kvs.map((kv) => <KpiCard key={kv.key} kv={kv} currency={client.currency} trend={trend(kv.key)} note={kpiNote(kv)} chip={chip(kv.key)} />)}
           </div>
         </>
       )}
-      {t.hasEstimatedCost && <p className="text-xs text-warning-ink">Spend includes estimated Local Services cost.</p>}
+      {t.hasEstimatedCost && <p className="text-xs text-warning-ink">Spend includes an estimate for Google Local Services ads, which don&apos;t report exact daily spend.</p>}
+      {counting && <p className="text-xs text-text-3">The last few days may still rise as ad platforms finish counting results, so result changes aren&apos;t judged yet.</p>}
       {noActivity(rep) && client.accounts.length > 0 && <p className="text-xs text-text-3">No advertising activity was recorded from {formatDate(rep.range.from)} to {formatDate(rep.range.to)}. Try a different date range, or check the accounts under Setup.</p>}
     </section>
   );
@@ -123,6 +150,31 @@ export function PacingSection({ rep, staff, basePath, query, marker, showLines =
   // Clients don't need the combined line as a second chip (it is the total) or lines with no budget behind them.
   const chipLines = allLines.filter((r) => pacing.seriesByKey[r.key] && (staff || (r.level !== "CLIENT" && r.level !== "UNBUDGETED" && !r.notConnected)));
   const unit = isCalendarMonth(rep) ? "month" : "period";
+  const periodName = isCalendarMonth(rep) ? formatDate(pacing.period.start, { month: "long" }) : "this budget period";
+  // The badge is the worse of spend so far and the month-end forecast.
+  const display = shown ? displayPacingStatus(shown) : null;
+  const m = (v: number) => formatMoney(v, c, { whole: true });
+  // Clients see four plain figures; staff keep every figure, in plain words.
+  const facts: [string, string][] = shown
+    ? staff
+      ? [
+          ["Spent so far", m(shown.actualToDateMinor)],
+          ["Budget", m(shown.budgetMinor)],
+          ["Left to spend", m(shown.remainingBudgetMinor)],
+          [`Estimated ${unit}-end`, `${m(shown.projectedMinor)} (${shown.projectedVarianceMinor >= 0 ? "+" : "−"}${m(Math.abs(shown.projectedVarianceMinor))})`],
+          ["Spending pace", shown.pacingPct === null ? "—" : `${formatPct(shown.pacingPct, 0)} of plan`],
+          ["Planned by now", m(shown.expectedToDateMinor)],
+          [`Budget used vs ${unit} elapsed`, `${formatPct(shown.pctBudgetConsumed, 0)} vs ${formatPct(shown.pctPeriodElapsed, 0)}`],
+          ["Daily spend needed to land on budget", shown.requiredDailyMinor === null ? "—" : `${m(shown.requiredDailyMinor)} a day for ${shown.remainingActiveDays} days`],
+          ["Daily spend lately (7-day average)", m(shown.currentDailyRateMinor)],
+        ]
+      : [
+          ["Spent", m(shown.actualToDateMinor)],
+          ["Budget", m(shown.budgetMinor)],
+          ["Left", m(shown.remainingBudgetMinor)],
+          [`Estimated ${unit}-end`, m(shown.projectedMinor)],
+        ]
+    : [];
   return (
     <>
       <Card>
@@ -132,8 +184,10 @@ export function PacingSection({ rep, staff, basePath, query, marker, showLines =
               <CardTitle>Budget pacing · {pacingPeriodLabel(rep)}</CardTitle>
               {marker}
             </div>
-            {shown && <StatusBadge status={shown.status} />}
+            {display && <StatusBadge status={display.status} />}
           </div>
+          {shown && <p className="max-w-[75ch] text-sm text-text">{pacingHeadline(shown, c, periodName)}</p>}
+          {display?.forecastNote && <p className="text-xs text-text-2">{display.forecastNote}.</p>}
           <CardDescription>
             {shown?.asOf ? <>Complete data through {formatDate(shown.asOf)}. Today&apos;s partial spend is excluded.</> : "No complete days of data in this period yet."}
           </CardDescription>
@@ -159,16 +213,7 @@ export function PacingSection({ rep, staff, basePath, query, marker, showLines =
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
               <PacingChart series={shownSeries} budgetMinor={shown.budgetMinor} asOf={shown.asOf} currency={c} height={300} notes={notesFor(rep, staff)} />
               <dl className="grid grid-cols-2 content-start gap-x-4 gap-y-3 text-sm lg:grid-cols-1">
-                {[
-                  ["Spent to date", formatMoney(shown.actualToDateMinor, c, { whole: true })],
-                  ["Expected to date", formatMoney(shown.expectedToDateMinor, c, { whole: true })],
-                  ["Pacing (actual ÷ expected)", formatPct(shown.pacingPct)],
-                  [`Budget used / ${unit} elapsed`, `${formatPct(shown.pctBudgetConsumed, 0)} / ${formatPct(shown.pctPeriodElapsed, 0)}`],
-                  ["Remaining budget", formatMoney(shown.remainingBudgetMinor, c, { whole: true })],
-                  [`Projected ${unit}-end`, `${formatMoney(shown.projectedMinor, c, { whole: true })} (${shown.projectedVarianceMinor >= 0 ? "+" : "−"}${formatMoney(Math.abs(shown.projectedVarianceMinor), c, { whole: true })})`],
-                  ["Required daily spend", shown.requiredDailyMinor === null ? "—" : `${formatMoney(shown.requiredDailyMinor, c, { whole: true })} × ${shown.remainingActiveDays} days`],
-                  ["Current daily rate (7-day)", formatMoney(shown.currentDailyRateMinor, c, { whole: true })],
-                ].map(([k, v]) => (
+                {facts.map(([k, v]) => (
                   <div key={k}>
                     <dt className="text-xs text-text-3">{k}</dt>
                     <dd className="font-medium tabular">{v}</dd>
@@ -191,11 +236,15 @@ export function PacingSection({ rep, staff, basePath, query, marker, showLines =
         </CardContent>
       </Card>
 
-      {caveats.length > 0 && (
-        <div className="rounded-lg border border-border bg-warning-bg px-4 py-3 text-sm text-warning-ink" role="note">
-          <p className="flex items-center gap-1.5 font-medium"><AlertTriangle className="h-4 w-4" aria-hidden /> Data notes</p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">{caveats.map((w) => <li key={w}>{w}</li>)}</ul>
-        </div>
+      {/* Data notes (time zones, estimated spend…) are for staff only, folded into one line. */}
+      {staff && caveats.length > 0 && (
+        <details className="group w-fit max-w-full rounded-lg border border-border bg-warning-bg px-3 py-1.5 text-xs text-warning-ink">
+          <summary className="flex cursor-pointer items-center gap-1.5 font-medium">
+            <AlertTriangle className="h-3.5 w-3.5" aria-hidden /> {caveats.length} data note{caveats.length === 1 ? "" : "s"}
+            <span className="font-normal text-text-3">· team only</span>
+          </summary>
+          <ul className="mt-1.5 mb-1 list-disc space-y-0.5 pl-5">{caveats.map((w) => <li key={w}>{w}</li>)}</ul>
+        </details>
       )}
 
       {showLines && allLines.length > (staff ? 0 : 1) && <BudgetLinesCard rep={rep} staff={staff} />}
@@ -233,12 +282,12 @@ export function BudgetLinesCard({ rep, staff }: { rep: ClientReport; staff: bool
                 <p className="font-medium">{lineName(r, staff)}</p>
                 <p className="text-xs text-text-3">{r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ")}{staff && sub.has(r) && " · sub-allocation"}</p>
               </div>
-              {r.notConnected ? <NotConnectedBadge /> : r.result ? <StatusBadge status={r.result.status} /> : <NoBudgetBadge />}
+              {r.notConnected ? <NotConnectedBadge /> : r.result ? <StatusBadge status={displayPacingStatus(r.result).status} /> : <NoBudgetBadge />}
             </div>
             <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
               <div><dt className="text-text-3">Spent</dt><dd className="font-medium tabular">{r.notConnected ? "—" : formatMoney(r.result?.actualToDateMinor ?? r.unbudgetedSpendMinor, c, { whole: true })}</dd></div>
               <div><dt className="text-text-3">of</dt><dd className="font-medium tabular">{r.result ? formatMoney(r.result.budgetMinor, c, { whole: true }) : "—"}</dd></div>
-              <div><dt className="text-text-3">Projected</dt><dd className="font-medium tabular">{r.result && !r.notConnected ? formatMoney(r.result.projectedMinor, c, { whole: true }) : "—"}</dd></div>
+              <div><dt className="text-text-3">Estimated end</dt><dd className="font-medium tabular">{r.result && !r.notConnected ? formatMoney(r.result.projectedMinor, c, { whole: true }) : "—"}</dd></div>
             </dl>
             {staff && <p className="mt-2 text-xs text-text-2">{r.action.headline}. {r.action.detail}</p>}
           </li>
@@ -248,7 +297,12 @@ export function BudgetLinesCard({ rep, staff }: { rep: ClientReport; staff: bool
       <Table>
         <THead>
           <tr>
-            <TH className="pl-5">{staff ? "Line" : "Budget"}</TH><TH>Status</TH><TH className="text-right">Amount</TH><TH className="text-right">Spent</TH><TH className="text-right">Pacing</TH><TH className="text-right">Projected</TH><TH className={staff ? "text-right" : "pr-5 text-right"}>Required / day</TH>{staff && <TH className="pr-5">Recommendation</TH>}
+            <TH className="pl-5">{staff ? "Line" : "Budget"}</TH><TH>Status</TH><TH className="text-right">Amount</TH><TH className="text-right">Spent</TH>
+            {staff ? (
+              <><TH className="text-right">Spending pace</TH><TH className="text-right">Estimated end</TH><TH className="text-right">Needed per day</TH><TH className="pr-5">Recommendation</TH></>
+            ) : (
+              <><TH className="text-right">Left</TH><TH className="pr-5 text-right">Estimated end</TH></>
+            )}
           </tr>
         </THead>
         <TBody>
@@ -260,13 +314,22 @@ export function BudgetLinesCard({ rep, staff }: { rep: ClientReport; staff: bool
                   <div className="font-medium">{lineName(r, staff)}</div>
                   <div className="text-xs text-text-3">{r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ")}{staff && isSub && " · sub-allocation"}{r.level === "UNBUDGETED" && " · not budgeted"}</div>
                 </TD>
-                <TD>{r.notConnected ? <NotConnectedBadge label={r.accounts.length ? "Awaiting first sync" : "Not connected"} /> : r.result ? <StatusBadge status={r.result.status} /> : <NoBudgetBadge />}</TD>
+                <TD>{r.notConnected ? <NotConnectedBadge label={r.accounts.length ? "Awaiting first sync" : "Not connected"} /> : r.result ? <StatusBadge status={displayPacingStatus(r.result).status} /> : <NoBudgetBadge />}</TD>
                 <TD className="text-right">{r.result ? formatMoney(r.result.budgetMinor, c, { whole: true }) : "—"}</TD>
                 <TD className="text-right">{r.notConnected ? "—" : formatMoney(r.result?.actualToDateMinor ?? r.unbudgetedSpendMinor, c, { whole: true })}</TD>
-                <TD className="text-right">{r.result && !r.notConnected ? formatPct(r.result.pacingPct) : "—"}</TD>
-                <TD className="text-right">{r.result && !r.notConnected ? formatMoney(r.result.projectedMinor, c, { whole: true }) : "—"}</TD>
-                <TD className={staff ? "text-right" : "pr-5 text-right"}>{r.result?.requiredDailyMinor != null && !r.notConnected ? formatMoney(r.result.requiredDailyMinor, c, { whole: true }) : "—"}</TD>
-                {staff && <TD className="pr-5 text-xs text-text-2 whitespace-normal min-w-64">{r.action.headline}. {r.action.detail}</TD>}
+                {staff ? (
+                  <>
+                    <TD className="text-right">{r.result && !r.notConnected && r.result.pacingPct !== null ? `${formatPct(r.result.pacingPct, 0)} of plan` : "—"}</TD>
+                    <TD className="text-right">{r.result && !r.notConnected ? formatMoney(r.result.projectedMinor, c, { whole: true }) : "—"}</TD>
+                    <TD className="text-right">{r.result?.requiredDailyMinor != null && !r.notConnected ? formatMoney(r.result.requiredDailyMinor, c, { whole: true }) : "—"}</TD>
+                    <TD className="pr-5 text-xs text-text-2 whitespace-normal min-w-64">{r.action.headline}. {r.action.detail}</TD>
+                  </>
+                ) : (
+                  <>
+                    <TD className="text-right">{r.result && !r.notConnected ? formatMoney(r.result.remainingBudgetMinor, c, { whole: true }) : "—"}</TD>
+                    <TD className="pr-5 text-right">{r.result && !r.notConnected ? `${formatMoney(r.result.projectedMinor, c, { whole: true })} (estimate)` : "—"}</TD>
+                  </>
+                )}
               </TR>
             );
           })}
@@ -286,7 +349,7 @@ export function PlatformSection({ rep, staff, marker, status = false, title = "P
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center gap-2"><CardTitle>{title}</CardTitle>{marker}</div>
-        <CardDescription>{PRESET_LABEL[preset]} · conversions are platform-reported and defined differently by each platform.</CardDescription>
+        <CardDescription>{PRESET_LABEL[preset]} · each ad platform counts conversions in its own way.</CardDescription>
       </CardHeader>
       {/* Phones (report view): one card per account with the headline numbers. The setup view keeps the scrolling table for its sync controls. */}
       {!status && (
@@ -299,9 +362,9 @@ export function PlatformSection({ rep, staff, marker, status = false, title = "P
                 <PlatformLabel platform={a.platform} />
                 <p className="truncate text-xs text-text-3">{a.name}</p>
                 <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
-                  <div><dt className="text-text-3">Spend</dt><dd className="font-medium tabular">{m ? formatMoney(m.costMinor, c, { whole: true }) : "—"}{!a.spendIsVerified && <span className="block font-normal text-warning-ink">estimated</span>}</dd></div>
-                  <div><dt className="text-text-3">Conv.</dt><dd className="font-medium tabular">{m ? formatNumber(m.conversions, 0) : "—"}</dd></div>
-                  <div><dt className="text-text-3">Cost / conv.</dt><dd className="font-medium tabular">{x?.costPerConversionMinor == null ? "—" : formatMoney(x.costPerConversionMinor, c)}</dd></div>
+                  <div><dt className="text-text-3">Ad spend</dt><dd className="font-medium tabular">{m ? formatMoney(m.costMinor, c, { whole: true }) : "—"}{!a.spendIsVerified && <span className="block font-normal text-warning-ink">estimated</span>}</dd></div>
+                  <div><dt className="text-text-3">Conversions</dt><dd className="font-medium tabular">{m ? formatNumber(m.conversions, 0) : "—"}</dd></div>
+                  <div><dt className="text-text-3">Cost per conversion</dt><dd className="font-medium tabular">{x?.costPerConversionMinor == null ? "—" : formatMoney(x.costPerConversionMinor, c)}</dd></div>
                 </dl>
               </li>
             );
@@ -312,7 +375,11 @@ export function PlatformSection({ rep, staff, marker, status = false, title = "P
       <Table>
         <THead>
           <tr>
-            <TH className="pl-5">Account</TH><TH className="text-right">Spend</TH><TH className="text-right">Impr.</TH><TH className="text-right">Clicks</TH><TH className="text-right">CTR</TH><TH className="text-right">CPC</TH><TH className="text-right">Conv.</TH><TH className="text-right">Cost / conv.</TH><TH className="text-right">Leads</TH><TH className={status ? "text-right" : "pr-5 text-right"}>ROAS</TH>{status && <TH className="pr-5">Data status</TH>}
+            <TH className="pl-5">Account</TH>
+            {(["spend", "impressions", "clicks", "ctr", "cpc", "conversions", "costPerConversion", "leads", "roas"] as const).map((k) => (
+              <TH key={k} className={k === "roas" && !status ? "pr-5 text-right" : "text-right"}><KpiHead k={k} /></TH>
+            ))}
+            {status && <TH className="pr-5">Data status</TH>}
           </tr>
         </THead>
         <TBody>
@@ -360,6 +427,17 @@ export function PlatformSection({ rep, staff, marker, status = false, title = "P
       )}
       <div className="h-4" />
     </Card>
+  );
+}
+
+/** A table header with the KPI's full name and its ⓘ definition. */
+function KpiHead({ k }: { k: KpiKey }) {
+  const def = KPI_BY_KEY[k];
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+      {def.label}
+      <InfoTip label={def.label} text={def.plain} align="end" />
+    </span>
   );
 }
 

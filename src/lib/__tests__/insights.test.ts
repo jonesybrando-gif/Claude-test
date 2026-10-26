@@ -83,7 +83,7 @@ describe("performance insights", () => {
     });
     expect(r.working[0]).toBe("Leads A (Meta Ads) delivered 25 leads at $60.00 each, 40% below the $100 average, on 50% of spend.");
     expect(r.notWorking[0]).toBe("Leads B (Meta Ads) paid $300 per lead, 3× the $100 average, across 50% of spend.");
-    expect(analyzePerformance({ ...base, totals: emptyTotals() })).toEqual({ working: [], notWorking: [], recommendations: [] });
+    expect(analyzePerformance({ ...base, totals: emptyTotals() })).toEqual({ working: [], notWorking: [], recommendations: [], nextSteps: [], driver: null });
   });
 
   it("names the most efficient campaign even without a clear standout, and judges reported value", () => {
@@ -97,7 +97,7 @@ describe("performance insights", () => {
       ],
     });
     expect(r.working[0]).toBe("A (Google Ads) is the most efficient campaign: 55 conversions at $90.91 each, against the $100 average.");
-    expect(r.working).toContain("Every $1.00 of ad spend returned $3.00 in platform-reported conversion value.");
+    expect(r.working).toContain("Ad platforms credited your ads with $3.00 in sales for every $1 spent (this is not profit).");
     expect(r.recommendations.some((x) => x.startsWith("Give A (Google Ads) more room"))).toBe(true);
   });
 
@@ -134,13 +134,41 @@ describe("performance insights", () => {
     expect(r.recommendations).toContain(
       "Tighten Summer (Google Ads) before letting it spend more: its own budget is pacing under (about $62.00 a day against $79.00 needed), but at $93.43 per conversion extra spend would buy few results. Cut its weakest keywords, placements and audiences first, or lower its budget and move the difference to Opening (Google Ads).",
     );
-    expect(r.working.some((x) => x.includes("ad spend returned"))).toBe(false);
+    expect(r.working.some((x) => x.includes("credited your ads"))).toBe(false);
   });
 
   it("is part of the automatic executive summary", () => {
     const s = autoExecutiveSummary(base);
-    expect(s.overview).toContain("ABC Plumbing's ads earned");
+    expect(s.overview).toContain("ABC Plumbing's ads were shown");
+    // The best campaign has enough results to be named in the headline.
+    expect(s.overview).toContain("Emergency (Google Ads) did best, at $62.50 per result.");
     expect(s.working.length).toBeGreaterThan(0);
     expect(s.recommendations.length).toBeGreaterThan(0);
+    // Client-facing next steps, in agency voice, one per recommendation.
+    expect(s.nextSteps.length).toBe(s.recommendations.length);
+    expect(s.nextSteps.every((x) => x.startsWith("We'll"))).toBe(true);
+  });
+
+  it("needs enough results before naming winners, losers or trends", () => {
+    const r = analyzePerformance({
+      ...base,
+      // 9 results now, 6 before: too few to say results rose or cost per result fell.
+      totals: t({ costMinor: 90_000, impressions: 10_000, clicks: 300, conversions: 9 }),
+      previous: t({ costMinor: 90_000, impressions: 10_000, clicks: 300, conversions: 6 }),
+      campaigns: [
+        { name: "One", platform: "Google Ads", status: "ENABLED", totals: t({ costMinor: 45_000, conversions: 1 }), previous: null },
+        { name: "Two", platform: "Google Ads", status: "ENABLED", totals: t({ costMinor: 45_000, conversions: 8 }), previous: null },
+      ],
+    });
+    // One conversion is not a strong (or weak) performer.
+    expect(r.working.concat(r.notWorking).some((x) => x.startsWith("One"))).toBe(false);
+    expect(r.working.concat(r.notWorking).some((x) => /rose|fell/.test(x) && /Conversions|Cost per conversion/.test(x))).toBe(false);
+    expect(r.driver?.name ?? null).not.toBe("One");
+  });
+
+  it("uses the client's goal for its wording", () => {
+    const r = analyzePerformance({ ...base, goal: "CALLS" });
+    expect(r.working[0]).toBe("Emergency (Google Ads) delivered 80 calls at $62.50 each, 38% below the $100 average, on 50% of spend.");
+    expect(r.working).toContain("Calls rose 25% to 100, while cost per call fell 11%.");
   });
 });

@@ -15,7 +15,7 @@ const KIND = "exec_summary";
 const TTL_MS = 24 * 3600_000;
 export type ExecSummary = ExecutiveSummaryContent & { source: "ai" | "auto" };
 /** Bumped when the stored shape changes, so older cached summaries are rewritten. */
-const VERSION = 2;
+const VERSION = 3;
 
 const compareKey = (rep: ClientReport) => (rep.cmpRange ? `${rep.cmpRange.from}..${rep.cmpRange.to}` : "none");
 
@@ -38,7 +38,7 @@ async function cached(rep: ClientReport, now: Date): Promise<ExecutiveSummaryCon
     const s = c.summary;
     if (c.v !== VERSION || c.compare !== compareKey(rep) || !s) continue;
     if (typeof s.overview === "string" && strings(s.working) && strings(s.notWorking) && strings(s.recommendations)) {
-      return { overview: s.overview, working: s.working, notWorking: s.notWorking, recommendations: s.recommendations };
+      return { overview: s.overview, working: s.working, notWorking: s.notWorking, recommendations: s.recommendations, nextSteps: strings(s.nextSteps) ? s.nextSteps : [] };
     }
   }
   return null;

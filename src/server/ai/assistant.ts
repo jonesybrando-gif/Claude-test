@@ -33,6 +33,11 @@ Rules:
 - "not reported" means the platforms didn't report it, not that it was zero.
 - If the data is marked as demo data, say so plainly wherever results are described.
 - Nobody has changed anything in the ad platforms. Never claim that a change was made; recommend changes for a person to make.
+- The reader may be a business owner with no advertising knowledge. Write plain English: no acronyms (write "cost per click", not CPC; "return on ad spend", not ROAS) and no jargon; when you mention a metric, explain it in a few words the first time (the DATA block has plain definitions under "What the metrics mean").
+- Lead with results (the "Results" section of the DATA block: leads, calls, sales, bookings or clicks, and what each cost), then spend, then everything else.
+- Don't claim causes you can't see in the data. Use "may" for possible causes ("this may point to the landing page"), and never state a cause as fact.
+- Never invent figures, comparisons or explanations. Say "too few to compare" when the data marks a change that way, and don't call a change good or bad when the data says it is normal variation or still being counted.
+- Return on ad spend is the sales value the ad platforms credited to the ads for every 1 spent; it is not profit. Say so when you mention it.
 - Write plain text without Markdown headings, tables or bold.
 - Write dates like "Oct 19" (add the year only when it isn't obvious), never as 2026-10-19. Write counts of conversions as whole numbers unless there are fewer than 10.`;
 
@@ -105,7 +110,7 @@ export async function draftReportSummary(data: string, opts: { agencyName: strin
   const out = await generate(
     SummarySchema,
     `Write the written summary that opens this client's performance report, from ${opts.agencyName} to the client.
-80 to 150 words, two short paragraphs, friendly and plain-spoken. Lead with the most important results versus the comparison period, then budget pacing, then one or two next steps the agency recommends. Avoid jargon; spell out abbreviations once.`,
+80 to 150 words, two short paragraphs, friendly and plain-spoken. Lead with the results (leads, calls, sales, bookings or clicks, and what each cost) versus the comparison period, then budget pacing, then one or two things the agency will do next ("We'll…"). No jargon or abbreviations.`,
     data,
   );
   return out.summary.trim();
@@ -118,6 +123,7 @@ const ExecSummarySchema = z.object({
   working: z.array(z.string()).describe("What's working: one specific finding per item, each citing its figures"),
   notWorking: z.array(z.string()).describe("What isn't working or needs attention: one specific finding per item, each citing its figures"),
   recommendations: z.array(z.string()).describe("Strategic recommendations, most important first: what to do, where, and why, citing the figures"),
+  nextSteps: z.array(z.string()).describe("The same recommendations rewritten for the client as what the agency will do next, in the agency's voice, e.g. \"We'll review…\", \"We'll move…\""),
 });
 export type ExecSummaryDraft = z.infer<typeof ExecSummarySchema>;
 
@@ -127,17 +133,19 @@ export async function draftExecutiveSummary(data: string, opts: { agencyName: st
     ExecSummarySchema,
     `Write the executive summary at the top of this client's report, from ${opts.agencyName} to the client, covering exactly the reporting period in the data. It should read like a strategist's analysis, not a list of numbers.
 
-overview: ${short ? "one paragraph of 60 to 100 words" : "two paragraphs, 120 to 200 words in total"}. Lead with the headline results and how they compare with the comparison period, then what drove them (which platforms and campaigns) and the budget position if the data covers it.
+overview: ${short ? "one paragraph of 60 to 100 words" : "two paragraphs, 120 to 200 words in total"}. Start with the results (from the Results section) and what each cost, and how they compare with the comparison period, then what drove them (which platforms and campaigns) and the budget position if the data covers it.
 working: ${short ? "2 to 3" : "3 to 5"} findings about what is performing well and why it matters: campaigns or platforms with a clearly lower cost per result than the account average, improvements against the comparison period, efficient use of budget. Compare each one with the average or the previous period using figures in the data.
 notWorking: ${short ? "2 to 3" : "3 to 5"} findings about what is underperforming or at risk: spend with few or no conversions or leads, campaigns whose cost per result is well above average or rising, falling click-through or conversion rates, budget pacing problems, tracking or data gaps. Be direct but not alarmist.
 recommendations: ${short ? "3 to 4" : "4 to 6"} strategic recommendations, most important first. Each one names the campaign, platform or setting, says what to change (for example move budget from one campaign to another, tighten targeting, refresh creative, fix landing pages or conversion tracking, adjust daily spend to land on budget) and gives the figures that justify it. Recommend only what the data supports, and say when a test is needed before committing.
+
+nextSteps: the same recommendations, in the same order, rewritten as what ${opts.agencyName} will do next, in the agency's voice and plain English ("We'll review…", "We'll move…", "We'll check…"). The client reads these, so leave out internal detail and keep each to one sentence.
 
 If there aren't enough results to judge something, say so in the relevant list rather than inventing a finding. Write to the client ("your ads" is fine), without greetings or a sign-off. Each list item is one or two sentences of plain text with no leading bullet or number.`,
     data,
     "medium",
   );
   const clean = (xs: string[]) => xs.map((x) => x.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, "").trim()).filter(Boolean);
-  return { overview: out.overview.trim(), working: clean(out.working), notWorking: clean(out.notWorking), recommendations: clean(out.recommendations) };
+  return { overview: out.overview.trim(), working: clean(out.working), notWorking: clean(out.notWorking), recommendations: clean(out.recommendations), nextSteps: clean(out.nextSteps ?? []) };
 }
 
 // --- Client email -----------------------------------------------------------

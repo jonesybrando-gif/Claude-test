@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { comparisonRange, resolveRange } from "../date-ranges";
+import { comparisonRange, rangeLabel, resolveRange } from "../date-ranges";
 
 describe("date ranges", () => {
   it("month to date ends yesterday", () => {
     expect(resolveRange("mtd", "2026-10-17")).toEqual({ from: "2026-10-01", to: "2026-10-16" });
-    // on the 1st there are no complete days yet; range collapses to the 1st
-    expect(resolveRange("mtd", "2026-10-01")).toEqual({ from: "2026-10-01", to: "2026-10-01" });
+    // on the 1st there are no complete days yet, so it shows last month and says so
+    const first = resolveRange("mtd", "2026-10-01");
+    expect(first).toEqual({ from: "2026-09-01", to: "2026-09-30" });
+    expect(rangeLabel("mtd", first)).toMatch(/^Month to date \(showing last month/);
+    expect(rangeLabel("mtd", resolveRange("mtd", "2026-10-17"))).toBe("Month to date");
+    expect(rangeLabel("last_month", first)).toBe("Last month");
   });
 
   it("last month", () => {

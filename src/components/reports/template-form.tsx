@@ -16,7 +16,7 @@ const COMPARE_LABEL = { previous_period: "Previous period", previous_month: "Sam
 const SECTION_HINT: Record<(typeof SECTION_KEYS)[number], string> = {
   executive: "A paragraph or two at the top about the selected date range, rewritten whenever the range changes.",
   summary: "Your own note below, shown as written.",
-  kpis: "Scorecards for the KPIs you choose.",
+  kpis: "The KPI tiles you choose, folded under “Advertising detail”. At a glance always opens the report.",
   trends: "Daily charts for the trend KPIs, with the comparison period.",
   pacing: "Monthly budget, spend to date and month-end projection.",
   platforms: "One row per connected ad account.",
