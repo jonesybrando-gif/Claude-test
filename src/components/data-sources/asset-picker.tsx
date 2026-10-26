@@ -4,7 +4,7 @@ import { Fragment, useActionState } from "react";
 import { linkDataAssets } from "@/app/(app)/integrations/data-sources/actions";
 import { useFormSubmit } from "@/components/use-form-submit";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/input";
+import { ClientCombobox } from "@/components/ui/client-combobox";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 // Shared "link assets to clients" picker for every non-ad data source
@@ -29,6 +29,7 @@ export function AssetPicker({ connectionId, clients, assets, kindLabels }: { con
   const [state, action, pending] = useActionState(linkDataAssets.bind(null, connectionId), undefined);
   const form = useFormSubmit(action);
   const kinds = [...new Set(assets.map((a) => a.kind))];
+  const options = clients.map((c) => ({ value: c.id, label: c.name }));
 
   return (
     <form {...form}>
@@ -59,10 +60,7 @@ export function AssetPicker({ connectionId, clients, assets, kindLabels }: { con
                         <TD className="text-text-2 whitespace-normal break-all">{a.detail ?? a.externalId}</TD>
                         <TD className="text-text-2">{a.timezone || "Client's"}</TD>
                         <TD className="pr-5">
-                          <Select name={`client:${a.kind}:${a.externalId}`} defaultValue={a.linkedClientId} aria-label={`Client for ${a.name}`} className="w-52">
-                            <option value="">Don&apos;t monitor</option>
-                            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </Select>
+                          <ClientCombobox name={`client:${a.kind}:${a.externalId}`} defaultValue={a.linkedClientId} options={options} emptyLabel="Don't monitor" ariaLabel={`Client for ${a.name}`} className="w-52" />
                         </TD>
                       </TR>
                     ))}
