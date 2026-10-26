@@ -52,7 +52,7 @@ export function AskPanel({ clientId, query }: { clientId: string; query: Record<
 
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-4">
-      <h3 className="flex items-center gap-1.5 text-sm font-semibold"><MessageSquare className="h-4 w-4 text-brand" aria-hidden /> Ask about this client</h3>
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold"><MessageSquare className="h-4 w-4 text-brand-text" aria-hidden /> Ask about this client</h3>
       {turns.map((t, i) => (
         <div key={i} className="flex flex-col gap-2 rounded-lg border border-border p-3">
           <p className="text-sm font-medium">{t.question}</p>

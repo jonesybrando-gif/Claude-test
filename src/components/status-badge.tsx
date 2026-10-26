@@ -1,56 +1,26 @@
-import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, CheckCircle2, CircleDashed, MinusCircle, Unplug } from "lucide-react";
 import { Badge } from "./ui/badge";
-import { STATUS_LABEL, type PacingStatus } from "@/lib/pacing/status";
+import type { PacingStatus } from "@/lib/pacing/status";
+import { BudgetStatus, StatusDot } from "./status-dot";
 
-// Status always carries an icon + label, never color alone. Colour follows
-// direction: overspending red/orange, underspending amber, on target green,
-// not started / no budget / not connected grey.
-const STYLE: Record<PacingStatus, { variant: "good" | "warning" | "serious" | "critical" | "neutral" | "info"; Icon: typeof CheckCircle2 }> = {
-  OVERSPENDING: { variant: "critical", Icon: ArrowUpCircle },
-  SLIGHTLY_OVER: { variant: "serious", Icon: ArrowUpCircle },
-  ON_TARGET: { variant: "good", Icon: CheckCircle2 },
-  SLIGHTLY_UNDER: { variant: "warning", Icon: ArrowDownCircle },
-  UNDERSPENDING: { variant: "warning", Icon: ArrowDownCircle },
-  NOT_STARTED: { variant: "neutral", Icon: CircleDashed },
-  NO_BUDGET: { variant: "neutral", Icon: MinusCircle },
-};
+// Status is a dot plus plain words (On track, Over, Under, or a grey state),
+// never colour alone and never a filled pill. Overspending gets a red dot,
+// any other miss amber, on target green; the exact state is in the tooltip.
 
-export function StatusBadge({ status }: { status: PacingStatus }) {
-  const { variant, Icon } = STYLE[status];
-  return (
-    <Badge variant={variant}>
-      <Icon className="h-3.5 w-3.5" aria-hidden />
-      {STATUS_LABEL[status]}
-    </Badge>
-  );
+export function StatusBadge({ status, varianceMinor, currency }: { status: PacingStatus; varianceMinor?: number | null; currency?: string }) {
+  return <BudgetStatus state={status} varianceMinor={varianceMinor} currency={currency} />;
 }
 
 export function NoBudgetBadge() {
-  return (
-    <Badge variant="neutral">
-      <MinusCircle className="h-3.5 w-3.5" aria-hidden />
-      No budget
-    </Badge>
-  );
+  return <BudgetStatus state="NO_BUDGET" />;
 }
 
 /** A budget line with no ad account linked (or never synced): grey, never a pacing colour. */
 export function NotConnectedBadge({ label = "Not connected" }: { label?: string }) {
-  return (
-    <Badge variant="neutral">
-      <Unplug className="h-3.5 w-3.5" aria-hidden />
-      {label}
-    </Badge>
-  );
+  return <StatusDot tone="none">{label}</StatusDot>;
 }
 
 export function StaleBadge({ label = "Stale data" }: { label?: string }) {
-  return (
-    <Badge variant="warning">
-      <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-      {label}
-    </Badge>
-  );
+  return <StatusDot tone="watch" detail="The latest data is older than expected">{label}</StatusDot>;
 }
 
 export function DemoBadge() {

@@ -1,5 +1,5 @@
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
-import { Card } from "../ui/card";
+import { MetricCard } from "../ui/metric-card";
 import { formatMoney, formatNumber } from "@/lib/money";
 import { formatDate } from "@/lib/time";
 import { costPerResult, describeChange, type ChangeWords } from "@/lib/portfolio";
@@ -9,22 +9,15 @@ function ChangeLine({ c }: { c: ChangeWords }) {
   const tone = c.verdict === "better" ? "text-good-ink" : c.verdict === "worse" ? "text-critical-ink" : "text-text-2";
   const Icon = c.pct === null || c.verdict === "same" ? Minus : c.pct > 0 ? ArrowUpRight : ArrowDownRight;
   return (
-    <p className={`mt-1 flex items-center gap-1 text-xs ${tone}`}>
+    <p className={`flex items-center gap-1 ${tone}`}>
       <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
       <span>{c.text}</span>
     </p>
   );
 }
 
-function Tile({ label, value, change, hint }: { label: string; value: string; change: ChangeWords; hint?: string }) {
-  return (
-    <Card className="px-4 py-3.5" aria-label={`${label}: ${value}. ${change.text}.`}>
-      <p className="text-xs text-text-3">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular">{value}</p>
-      <ChangeLine c={change} />
-      {hint && <p className="mt-0.5 text-[11px] text-text-3">{hint}</p>}
-    </Card>
-  );
+function Tile({ label, value, change, info }: { label: string; value: string; change: ChangeWords; info?: string }) {
+  return <MetricCard label={label} value={value} info={info} change={<ChangeLine c={change} />} ariaLabel={`${label}: ${value}. ${change.text}.`} />;
 }
 
 /** Home: spend, results and cost per result for the last 30 complete days vs the 30 before, across all clients. */
@@ -49,9 +42,9 @@ export function HomeSummary({ r }: { r: PortfolioResults }) {
         </p>
       )}
       <div className="grid gap-3 sm:grid-cols-3">
-        <Tile label="Spent" value={money(cur.spendMinor)} change={describeChange({ current: cur.spendMinor, previous: prev.spendMinor, better: "neutral", format: money })} hint="More or less spend is neither good nor bad on its own." />
-        <Tile label="Results" value={formatNumber(cur.results, 0)} change={describeChange({ current: cur.results, previous: prev.results, better: "up", format: (n) => formatNumber(n, 0), counts })} hint="Conversions reported by the ad platforms, each counted once." />
-        <Tile label="Cost per result" value={cpr === null ? "—" : formatMoney(cpr, c)} change={describeChange({ current: cpr, previous: prevCpr, better: "down", format: (n) => formatMoney(n, c), counts })} hint="Spent ÷ results. Lower is better." />
+        <Tile label="Spent" value={money(cur.spendMinor)} change={describeChange({ current: cur.spendMinor, previous: prev.spendMinor, better: "neutral", format: money })} info="Total ad spend across clients. More or less spend is neither good nor bad on its own." />
+        <Tile label="Results" value={formatNumber(cur.results, 0)} change={describeChange({ current: cur.results, previous: prev.results, better: "up", format: (n) => formatNumber(n, 0), counts })} info="Conversions or leads reported by the ad platforms, each counted once." />
+        <Tile label="Cost per result" value={cpr === null ? "—" : formatMoney(cpr, c)} change={describeChange({ current: cpr, previous: prevCpr, better: "down", format: (n) => formatMoney(n, c), counts })} info="Spend divided by results: what one result cost on average. Lower is better." />
       </div>
     </section>
   );

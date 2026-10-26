@@ -38,11 +38,11 @@ export default async function ClientReportBuilderPage({ params, searchParams }: 
   const guess = guessed.goal === "AWARENESS" ? "awareness (people who clicked)" : guessed.goal === "SALES" ? "sales (conversions with their value)" : "results (conversions and leads)";
 
   return (
-    <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1200px] flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link href={back} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
-          <h1 className="mt-1 text-xl font-semibold">Customize report</h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Customize report</h1>
           <p className="text-sm text-text-2">
             Choose what {client.name}&apos;s report shows. This drives the client page and the PDF report. CSV exports always contain every daily row.
           </p>

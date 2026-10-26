@@ -38,7 +38,7 @@ export function NewDashboardForm({ action, options, showVisibility, submitLabel 
       {needs.length > 0 && (
         <span className="mt-1 flex flex-wrap gap-1">
           {needs.map((n) => (
-            <span key={n.label} className={cn("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]", n.connected ? "bg-good-bg text-good-ink" : "bg-surface-2 text-text-2")}>
+            <span key={n.label} className={cn("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs", n.connected ? "bg-good-bg text-good-ink" : "bg-surface-2 text-text-2")}>
               {!n.connected && <Plug className="h-3 w-3" aria-hidden />}
               {n.connected ? n.label : `needs ${n.label}`}
             </span>
@@ -61,7 +61,7 @@ export function NewDashboardForm({ action, options, showVisibility, submitLabel 
         {agency.length > 0 && (
           <>
             <p className="mt-3 mb-1 text-xs font-medium uppercase tracking-wide text-text-3">Your agency&apos;s templates</p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{agency.map((o) => card(o.value, o.name, o.description, <LayoutTemplate className="h-4 w-4 text-brand" aria-hidden />))}</div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{agency.map((o) => card(o.value, o.name, o.description, <LayoutTemplate className="h-4 w-4 text-brand-text" aria-hidden />))}</div>
           </>
         )}
       </fieldset>

@@ -36,7 +36,7 @@ export default async function EditDashboardPage({ params, searchParams }: { para
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <Link href={doneHref} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
-          <h1 className="mt-1 text-xl font-semibold">Edit dashboard</h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Edit dashboard</h1>
           <p className="text-sm text-text-2">
             {PRESET_LABEL[preset]}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
             {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}

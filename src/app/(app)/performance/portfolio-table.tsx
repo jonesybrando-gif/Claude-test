@@ -88,7 +88,7 @@ function Change({ c, pct, better }: { c?: ChangeWords | null; pct?: number | nul
     words.verdict === "too_few" ? "Too few to compare" : words.verdict === "none" ? "—" : words.verdict === "same" ? "About the same" : `${words.pct! > 0 ? "Up" : "Down"} ${Math.round(Math.abs(words.pct!))}%${words.verdict === "better" || words.verdict === "worse" ? `, ${words.verdict}` : ""}`;
   const tone = words.verdict === "better" ? "text-good-ink" : words.verdict === "worse" ? "text-critical-ink" : "text-text-3";
   return (
-    <div className={`text-[11px] ${tone}`} title={words.text}>
+    <div className={`text-xs ${tone}`} title={words.text}>
       <span aria-hidden>{short}</span>
       <span className="sr-only">{words.text}</span>
     </div>
@@ -207,7 +207,7 @@ export function PortfolioTable({ rows, totals, labels, rangeQuery, periodLabel, 
                 <div><dt className="text-text-3">Cost / conv.</dt><dd className="font-medium tabular">{r.costPerConversionMinor === null ? "—" : formatMoney(r.costPerConversionMinor, r.currency)}</dd><Change c={r.costPerConversionChange} /></div>
               </dl>
               {r.platforms.length > 0 && (
-                <p className="mt-2 text-[11px] text-text-3">Synced {relativeTime(r.lastSyncAt).toLowerCase()}{r.stale && <span className="text-warning-ink"> · data is old</span>}</p>
+                <p className="mt-2 text-xs text-text-3">Synced {relativeTime(r.lastSyncAt).toLowerCase()}{r.stale && <span className="text-warning-ink"> · data is old</span>}</p>
               )}
             </li>
           ))}
@@ -245,7 +245,7 @@ export function PortfolioTable({ rows, totals, labels, rangeQuery, periodLabel, 
                 <TD className="pl-5">
                   <Link href={r.href} className="font-medium text-text hover:underline">{r.name}</Link>
                   {(r.owner || r.labels.length > 0 || r.isDemo) && (
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-text-3">
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-text-3">
                       {r.owner}
                       {r.labels.map((l) => <LabelBadge key={l.id} label={l} />)}
                       {r.isDemo && <span className="text-info-ink">· demo data</span>}
@@ -286,7 +286,7 @@ export function PortfolioTable({ rows, totals, labels, rangeQuery, periodLabel, 
         </Table>
       </div>
       <p className="px-5 pt-3 pb-4 text-xs text-text-3">
-        Spend and conversions cover the selected range; changes compare with the comparison period (under 5% is “about the same”; fewer than 10 conversions is “too few to compare”). Pacing is for the current budget period. “Needs attention” uses the last 30 days, as on Home. <Link href={`/performance?client=all&${rangeQuery}`} className="text-brand hover:underline">View all clients combined</Link>
+        Spend and conversions cover the selected range; changes compare with the comparison period (under 5% is “about the same”; fewer than 10 conversions is “too few to compare”). Pacing is for the current budget period. “Needs attention” uses the last 30 days, as on Home. <Link href={`/performance?client=all&${rangeQuery}`} className="text-brand-text hover:underline">View all clients combined</Link>
       </p>
     </div>
   );

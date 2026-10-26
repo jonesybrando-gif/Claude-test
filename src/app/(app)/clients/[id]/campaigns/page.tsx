@@ -62,10 +62,10 @@ export default async function ClientCampaignsPage({ params, searchParams }: { pa
   const includedTotal = client.accounts.length && new Set(client.accounts.map((a) => a.currency)).size === 1 ? client.accounts.reduce((sum, a) => sum + includedSpend(a), 0) : null;
 
   return (
-    <div className="mx-auto flex max-w-[1000px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1000px] flex-col gap-6">
       <div>
         <Link href={clientBackHref(id, { ...sp, range: preset }, "setup")} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
-        <h1 className="mt-1 text-xl font-semibold">Campaigns</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Campaigns</h1>
         <p className="text-sm text-text-2">
           Choose which campaigns count for {client.name}. A removed campaign is left out of the dashboard, reports, share links, exports, budget pacing and alerts. Nothing changes in the ad account, and its data keeps syncing, so you can add it back at any time.
         </p>
@@ -80,7 +80,7 @@ export default async function ClientCampaignsPage({ params, searchParams }: { pa
       {client.accounts.length === 0 && (
         <Card>
           <CardContent className="py-6 text-sm text-text-2">
-            No ad accounts are linked yet. <Link href={`/clients/${id}/accounts`} className="font-medium text-brand underline">Link an ad account</Link> and its campaigns appear here after the first sync.
+            No ad accounts are linked yet. <Link href={`/clients/${id}/accounts`} className="font-medium text-brand-text underline">Link an ad account</Link> and its campaigns appear here after the first sync.
           </CardContent>
         </Card>
       )}

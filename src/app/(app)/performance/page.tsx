@@ -124,10 +124,10 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
       attention: rows.filter((r) => r.attention).length,
     };
     return (
-      <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
+      <div className="mx-auto flex max-w-[1500px] flex-col gap-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold">All clients</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">All clients</h1>
             <p className="text-sm text-text-2">
               {PRESET_LABEL[preset]}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
               {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
@@ -144,7 +144,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
             <CardDescription>Click a column to sort; click a row to open the client.</CardDescription>
           </CardHeader>
           {pickable.length === 0 ? (
-            <CardContent className="text-sm text-text-3">No clients yet. <Link href="/clients" className="text-brand hover:underline">Add your first client</Link>.</CardContent>
+            <CardContent className="text-sm text-text-3">No clients yet. <Link href="/clients" className="text-brand-text hover:underline">Add your first client</Link>.</CardContent>
           ) : (
             <PortfolioTable rows={rows} totals={totals} labels={labels} rangeQuery={rangeQuery} periodLabel={PRESET_LABEL[preset]} initialAttention={sp.attention === "1"} />
           )}
@@ -163,12 +163,12 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
   const isDemo = cur.byClient.some((c) => c.isDemo);
 
   return (
-    <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1500px] flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link href={`/performance?${rangeQuery}`} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" aria-hidden /> All clients</Link>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold">Performance · {chosenName}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Performance · {chosenName}</h1>
             {isDemo && <DemoBadge />}
           </div>
           <p className="text-sm text-text-2">
@@ -179,7 +179,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
         <div className="flex flex-wrap items-center gap-2">
           <ClientPicker clients={pickerClients} labels={labels} current={chosen} />
           <RangeControls preset={preset} compare={compareMode} from={range.from} to={range.to} />
-          {chosen !== "all" && <Link href={`/clients/${chosen}?${rangeQuery}`} className="text-sm text-brand hover:underline">Full client report</Link>}
+          {chosen !== "all" && <Link href={`/clients/${chosen}?${rangeQuery}`} className="text-sm text-brand-text hover:underline">Full client report</Link>}
         </div>
       </div>
       {cur.currencies.length > 1 && (

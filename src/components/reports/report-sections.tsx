@@ -36,7 +36,7 @@ export const TREND_EXTRAS: KpiKey[] = ["spend", "conversions", "leads", "costPer
 
 /** Shown to staff on sections the client-facing report leaves out. */
 export function HiddenFromClient() {
-  return <span className="inline-flex items-center gap-1 rounded-md bg-surface-2 px-2 py-0.5 text-[11px] font-normal text-text-3"><EyeOff className="h-3 w-3" aria-hidden /> Hidden from client report</span>;
+  return <span className="inline-flex items-center gap-1 rounded-md bg-surface-2 px-2 py-0.5 text-xs font-normal text-text-3"><EyeOff className="h-3 w-3" aria-hidden /> Hidden from client report</span>;
 }
 
 /** Marker for staff when the client-facing report leaves a section out. */
@@ -394,7 +394,7 @@ export function PlatformSection({ rep, staff, marker, status = false, title = "P
                   <PlatformLabel platform={a.platform} />
                   <div className="text-xs text-text-3">{a.name} · {a.platform === "GOOGLE_ADS" && /^\d{10}$/.test(a.externalId) ? formatCustomerId(a.externalId) : a.externalId}</div>
                 </TD>
-                <TD className="text-right font-medium">{m ? formatMoney(m.costMinor, c, { whole: true }) : "—"}{!a.spendIsVerified && <div className="text-[11px] font-normal text-warning-ink">estimated</div>}</TD>
+                <TD className="text-right font-medium">{m ? formatMoney(m.costMinor, c, { whole: true }) : "—"}{!a.spendIsVerified && <div className="text-xs font-normal text-warning-ink">estimated</div>}</TD>
                 <TD className="text-right">{lsa ? "n/a" : m ? formatNumber(m.impressions) : "—"}</TD>
                 <TD className="text-right">{lsa ? "n/a" : m ? formatNumber(m.clicks) : "—"}</TD>
                 <TD className="text-right">{lsa ? "n/a" : formatPct(x?.ctr ?? null, 2)}</TD>
@@ -488,7 +488,7 @@ export function CampaignsSection({ rep, staff, basePath, marker }: { rep: Client
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2"><CardTitle>Campaigns</CardTitle>{marker}</div>
-          {staff && <Link href={`${basePath}/campaigns?range=${preset}&from=${range.from}&to=${range.to}`} className="text-sm font-medium text-brand hover:underline">Add or remove campaigns</Link>}
+          {staff && <Link href={`${basePath}/campaigns?range=${preset}&from=${range.from}&to=${range.to}`} className="text-sm font-medium text-brand-text hover:underline">Add or remove campaigns</Link>}
         </div>
         <CardDescription>{PRESET_LABEL[preset]} · sorted by spend. Click a column to re-sort.</CardDescription>
       </CardHeader>

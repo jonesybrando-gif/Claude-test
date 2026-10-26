@@ -43,7 +43,7 @@ export async function ClientAlertsStrip({ clientId, user }: { clientId: string; 
             <h2 className="text-sm font-semibold">Open alerts ({alerts.length})</h2>
             <div className="flex items-center gap-2">
               <AcknowledgeButton alertIds={alerts.map((a) => a.id)} label={alerts.length === 1 ? "Acknowledge" : `Acknowledge all ${alerts.length}`} variant="ghost" />
-              <Link href={`/alerts?client=${clientId}`} className="text-sm text-brand hover:underline">See all</Link>
+              <Link href={`/alerts?client=${clientId}`} className="text-sm text-brand-text hover:underline">See all</Link>
             </div>
           </div>
           <ul className="divide-y divide-border px-4 pb-1">
@@ -61,14 +61,14 @@ export async function ClientAlertsStrip({ clientId, user }: { clientId: string; 
                     {detail && <p className="text-xs text-text-2">{detail}</p>}
                   </div>
                   <div className="flex flex-wrap items-center gap-1">
-                    <Link href={fix.href} className="inline-flex h-8 items-center rounded-md px-3 text-xs font-medium text-brand hover:bg-surface-2">{fix.label}</Link>
+                    <Link href={fix.href} className="inline-flex h-8 items-center rounded-md px-3 text-xs font-medium text-brand-text hover:bg-surface-2">{fix.label}</Link>
                     <MuteAlertTypeButton clientId={clientId} type={type} typeLabel={ALERT_KIND_LABEL[type] ?? type} />
                   </div>
                 </li>
               );
             })}
           </ul>
-          {issues.length > top.length && <p className="px-4 pb-3 text-xs text-text-3">+{issues.length - top.length} more — <Link href={`/alerts?client=${clientId}`} className="text-brand hover:underline">see all</Link></p>}
+          {issues.length > top.length && <p className="px-4 pb-3 text-xs text-text-3">+{issues.length - top.length} more — <Link href={`/alerts?client=${clientId}`} className="text-brand-text hover:underline">see all</Link></p>}
         </>
       )}
       {muted.length > 0 && (

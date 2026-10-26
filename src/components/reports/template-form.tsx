@@ -115,7 +115,7 @@ function LayoutPreview({ t, sample }: { t: ReportTemplate; sample?: PreviewSampl
   const on = t.sections;
   const block = (title: string, body: React.ReactNode) => (
     <div className="rounded-md border border-border bg-surface p-2">
-      <p className="mb-1.5 text-[10px] font-semibold text-text">{title}</p>
+      <p className="mb-1.5 text-xs font-semibold text-text">{title}</p>
       {body}
     </div>
   );
@@ -123,14 +123,14 @@ function LayoutPreview({ t, sample }: { t: ReportTemplate; sample?: PreviewSampl
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3 text-text" aria-label="Live preview of the client report">
       <div>
         <p className="text-xs font-semibold">{sample?.clientName ?? "Client name"}</p>
-        <p className="text-[10px] text-text-3">{t.title} · {PRESET_LABEL[t.defaultRange]}{t.compare !== "none" ? ` vs ${COMPARE_LABEL[t.compare].toLowerCase()}` : ""}</p>
+        <p className="text-xs text-text-3">{t.title} · {PRESET_LABEL[t.defaultRange]}{t.compare !== "none" ? ` vs ${COMPARE_LABEL[t.compare].toLowerCase()}` : ""}</p>
       </div>
       {on.kpis && (
         <div className="grid grid-cols-3 gap-1">
           {t.kpis.map((k) => (
             <div key={k} className="rounded border border-border bg-surface px-1.5 py-1">
               <p className="truncate text-[8px] text-text-3">{KPI_BY_KEY[k].label}</p>
-              <p className="truncate text-[11px] font-semibold tabular">{sample?.values[k] ?? "—"}</p>
+              <p className="truncate text-xs font-semibold tabular">{sample?.values[k] ?? "—"}</p>
             </div>
           ))}
         </div>
@@ -282,7 +282,7 @@ export function TemplateForm({
       <div className="flex flex-col gap-2 lg:sticky lg:top-4">
         <p className="text-xs font-medium text-text-3">Live preview{sample ? " · this client's figures" : ""}</p>
         <LayoutPreview t={preview} sample={sample} />
-        <p className="text-[11px] text-text-3">Updates as you edit; save to apply it to the report, shared links and PDF.</p>
+        <p className="text-xs text-text-3">Updates as you edit; save to apply it to the report, shared links and PDF.</p>
       </div>
     </aside>
     </div>

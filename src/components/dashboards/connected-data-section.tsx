@@ -66,10 +66,10 @@ export async function ConnectedDataSection({ rep, canEdit, query }: { rep: Clien
                 {names.length > 0 && <p className="truncate text-xs text-text-3">{names.join(" · ")}</p>}
               </div>
               {href ? (
-                <Link href={href} className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline">Full dashboard <ArrowRight className="h-3.5 w-3.5" aria-hidden /></Link>
+                <Link href={href} className="inline-flex items-center gap-1 text-sm font-medium text-brand-text hover:underline">Full dashboard <ArrowRight className="h-3.5 w-3.5" aria-hidden /></Link>
               ) : canEdit ? (
                 <form action={openTemplateDashboardAction.bind(null, clientId, t.key)}>
-                  <button type="submit" className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline">Full dashboard <ArrowRight className="h-3.5 w-3.5" aria-hidden /></button>
+                  <button type="submit" className="inline-flex items-center gap-1 text-sm font-medium text-brand-text hover:underline">Full dashboard <ArrowRight className="h-3.5 w-3.5" aria-hidden /></button>
                 </form>
               ) : null}
             </div>

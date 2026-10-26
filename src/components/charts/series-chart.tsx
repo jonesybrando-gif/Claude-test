@@ -77,7 +77,7 @@ export function SeriesChart({
             <MetricToggle options={metrics.map((x) => ({ key: x.key, label: x.short }))} value={m.key} onChange={setSelected} />
           ) : <span />}
           {previous && (
-            <div className="flex gap-3 text-[11px] text-text-3">
+            <div className="flex gap-3 text-xs text-text-3">
               <span className="flex items-center gap-1.5"><span className="h-0.5 w-3 rounded bg-[var(--series-actual)]" /> Selected</span>
               <span className="flex items-center gap-1.5"><span className="h-0 w-3 border-t-2 border-dashed border-[var(--series-planned)]" /> Comparison</span>
             </div>

@@ -45,10 +45,10 @@ export default async function ConnectionPage({ params }: { params: Promise<{ slu
   const advertisers = accounts.filter((a) => !a.isManager);
 
   return (
-    <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1200px] flex-col gap-6">
       <div>
         <Link href="/integrations" className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> Integrations</Link>
-        <h1 className="mt-1 text-xl font-semibold">{connection.label}</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">{connection.label}</h1>
         <p className="text-sm text-text-2">Choose which accounts to monitor and which client each belongs to.</p>
       </div>
       {error ? (

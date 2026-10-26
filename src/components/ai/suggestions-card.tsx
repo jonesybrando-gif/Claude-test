@@ -19,9 +19,9 @@ export async function AiSuggestionsCard({ clientId, query, bare = false }: { cli
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div>
         {bare ? (
-          <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Sparkles className="h-4 w-4 text-brand" aria-hidden /> Suggestions <span className="font-normal text-text-3">· only your team sees these</span></h3>
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Sparkles className="h-4 w-4 text-brand-text" aria-hidden /> Suggestions <span className="font-normal text-text-3">· only your team sees these</span></h3>
         ) : (
-          <CardTitle className="flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-brand" aria-hidden /> AI assistant</CardTitle>
+          <CardTitle className="flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-brand-text" aria-hidden /> AI assistant</CardTitle>
         )}
         <CardDescription>
           {latest

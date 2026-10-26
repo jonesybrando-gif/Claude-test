@@ -145,7 +145,7 @@ function phone(n: string | null): string {
 }
 
 function YesNo({ yes }: { yes: boolean }) {
-  return <span className={cn("rounded px-1.5 py-0.5 text-[11px] font-medium", yes ? "bg-good-bg text-good-ink" : "bg-critical-bg text-critical-ink")}>{yes ? "Yes" : "No"}</span>;
+  return <span className={cn("rounded px-1.5 py-0.5 text-xs font-medium", yes ? "bg-good-bg text-good-ink" : "bg-critical-bg text-critical-ink")}>{yes ? "Yes" : "No"}</span>;
 }
 
 function LogFooter({ shown, total, noun }: { shown: number; total: number; noun: string }) {
@@ -185,7 +185,7 @@ function CallLog({ rows, total, timeZone }: { rows: CallLogRow[]; total: number;
               {withRecordings && (
                 <TD className="pr-4">
                   {r.recordingUrl ? (
-                    <a href={r.recordingUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline">
+                    <a href={r.recordingUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-brand-text hover:underline">
                       <PlayCircle className="h-3.5 w-3.5" aria-hidden /> Listen
                     </a>
                   ) : <span className="text-text-3">—</span>}
@@ -279,7 +279,7 @@ function EmptyState({ data, staff }: { data: Extract<WidgetData, { kind: "empty"
     <div className="flex h-full min-h-16 flex-col items-center justify-center gap-1.5 rounded-lg bg-surface-2 px-3 py-4 text-center">
       {connect && <Plug className="h-4 w-4 text-text-3" aria-hidden />}
       <p className="text-xs text-text-2">{connect && !staff ? "Not connected yet" : data.message}</p>
-      {connect && staff && href && <Link href={href} className="text-xs font-medium text-brand hover:underline">Go to Integrations</Link>}
+      {connect && staff && href && <Link href={href} className="text-xs font-medium text-brand-text hover:underline">Go to Integrations</Link>}
     </div>
   );
 }

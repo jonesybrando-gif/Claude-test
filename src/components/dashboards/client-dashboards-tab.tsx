@@ -63,7 +63,7 @@ export async function ClientDashboardsTab({ rep, user, canEdit, query }: { rep: 
             </Link>
           ))}
           {canEdit && (
-            <Link href={newHref} className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-sm font-medium text-brand hover:underline">
+            <Link href={newHref} className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-sm font-medium text-brand-text hover:underline">
               <Plus className="h-3.5 w-3.5" aria-hidden /> New dashboard
             </Link>
           )}

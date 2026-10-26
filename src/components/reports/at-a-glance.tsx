@@ -11,6 +11,7 @@ import { resultsDefinition } from "@/lib/results";
 import { KPI_BY_KEY } from "@/lib/kpis";
 import { formatDate } from "@/lib/time";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MetricCard } from "@/components/ui/metric-card";
 import { InfoTip } from "@/components/ui/info-tip";
 import { ChangeLine } from "@/components/kpi/kpi-card";
 
@@ -26,20 +27,14 @@ function change(label: string, cur: number | null, prev: number | null | undefin
 
 function Tile({ label, info, value, chip, change: ch, note, extra }: { label: string; info: string; value: string; chip?: string; change?: Change; note?: string | null; extra?: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-surface px-4 py-3">
-      <p className="flex items-center gap-1 text-xs leading-tight text-text-3">
-        {label}
-        <InfoTip label={label} text={info} />
-      </p>
-      <p className="flex flex-wrap items-baseline gap-2 text-2xl font-semibold tabular">
-        {value}
-        {chip && <span className="rounded bg-warning-bg px-1.5 py-0.5 text-[11px] font-medium text-warning-ink">{chip}</span>}
-      </p>
-      <p className="flex min-w-0 items-center gap-1 text-xs tabular">
-        {ch ? <ChangeLine tone={ch.tone} changePct={ch.changePct} text={ch.text} aria={ch.aria} /> : note ? <span className="text-text-3">{note}</span> : null}
-      </p>
-      {extra}
-    </div>
+    <MetricCard
+      label={label}
+      info={info}
+      value={value}
+      chip={chip}
+      change={ch ? <ChangeLine tone={ch.tone} changePct={ch.changePct} text={ch.text} aria={ch.aria} /> : note ? <span className="text-text-3">{note}</span> : null}
+      extra={extra}
+    />
   );
 }
 

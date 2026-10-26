@@ -114,7 +114,7 @@ export function CommandPalette({ items, variant = "bar" }: { items: PaletteItem[
         >
           <Search className="h-4 w-4 shrink-0" aria-hidden />
           <span className="flex-1 text-left">Search clients…</span>
-          <kbd className="hidden rounded border border-border bg-surface px-1.5 text-[11px] font-medium md:inline">{mac ? "⌘" : "Ctrl "}K</kbd>
+          <kbd className="hidden rounded border border-border bg-surface px-1.5 text-xs font-medium md:inline">{mac ? "⌘" : "Ctrl "}K</kbd>
         </button>
       )}
       {open && (
@@ -142,7 +142,7 @@ export function CommandPalette({ items, variant = "bar" }: { items: PaletteItem[
                 aria-activedescendant={results[active] ? `${listId}-${active}` : undefined}
                 aria-autocomplete="list"
               />
-              <kbd className="rounded border border-border px-1.5 text-[11px] text-text-3">Esc</kbd>
+              <kbd className="rounded border border-border px-1.5 text-xs text-text-3">Esc</kbd>
             </div>
             <ul ref={list} id={listId} role="listbox" aria-label="Results" className="max-h-[50vh] overflow-y-auto p-1">
               {results.map((r, i) => (
@@ -158,7 +158,7 @@ export function CommandPalette({ items, variant = "bar" }: { items: PaletteItem[
                 >
                   {r.kind === "Client" ? <Building2 className="h-4 w-4 shrink-0 text-text-3" aria-hidden /> : r.kind === "Action" ? <Plus className="h-4 w-4 shrink-0 text-text-3" aria-hidden /> : <CornerDownLeft className="h-4 w-4 shrink-0 text-text-3" aria-hidden />}
                   <span className="min-w-0 flex-1 truncate">{r.label}{r.hint && <span className="text-text-3"> · {r.hint}</span>}</span>
-                  <span className="text-[11px] text-text-3">{r.kind}</span>
+                  <span className="text-xs text-text-3">{r.kind}</span>
                 </li>
               ))}
               {results.length === 0 && <li className="px-3 py-6 text-center text-sm text-text-3">No clients or pages match “{q}”.</li>}

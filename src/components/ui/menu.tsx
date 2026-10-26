@@ -76,7 +76,7 @@ export function Menu({ label, icon, sections, variant = "outline", align = "end"
         <div id={id} role="menu" aria-label={label} onKeyDown={onMenuKey} className={cn("absolute z-30 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface p-1 shadow-lg", align === "end" ? "right-0" : "left-0")}>
           {sections.map((sec, si) => (
             <div key={si} className={cn(si > 0 && "mt-1 border-t border-border pt-1")} role="group" aria-label={sec.heading}>
-              {sec.heading && <p className="px-2.5 pt-1.5 pb-1 text-[11px] font-medium uppercase tracking-wide text-text-3">{sec.heading}</p>}
+              {sec.heading && <p className="px-2.5 pt-1.5 pb-1 text-xs font-medium uppercase tracking-wide text-text-3">{sec.heading}</p>}
               {sec.items.map((it) => {
                 const body = (
                   <>

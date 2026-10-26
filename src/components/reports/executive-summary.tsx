@@ -25,7 +25,7 @@ function SummaryText({ summary, heading, pending, copyable, compact, clientFacin
             {keyPoints(summary, clientFacing).map((x, i) => <li key={i} className="pl-1">{x}</li>)}
           </ul>
           <details className="group">
-            <summary className="cursor-pointer text-sm font-medium text-brand hover:underline">
+            <summary className="cursor-pointer text-sm font-medium text-brand-text hover:underline">
               <span className="group-open:hidden">Read full summary</span>
               <span className="hidden group-open:inline">Hide full summary</span>
             </summary>

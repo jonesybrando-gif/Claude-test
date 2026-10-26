@@ -1,11 +1,6 @@
-import { Card } from "./ui/card";
+import { MetricCard } from "./ui/metric-card";
 
-export function StatTile({ label, value, sub, tone }: { label: string; value: string; sub?: React.ReactNode; tone?: "critical" | "good" }) {
-  return (
-    <Card className="px-4 py-3.5">
-      <p className="text-xs text-text-3">{label}</p>
-      <p className={`mt-1 text-2xl font-semibold tabular ${tone === "critical" ? "text-critical-ink" : tone === "good" ? "text-good-ink" : "text-text"}`}>{value}</p>
-      {sub && <div className="mt-0.5 text-xs text-text-2">{sub}</div>}
-    </Card>
-  );
+/** A figure with a short line under it. Kept as a thin wrapper so older pages share the one MetricCard look. */
+export function StatTile({ label, value, sub, tone, info }: { label: string; value: string; sub?: React.ReactNode; tone?: "critical" | "good"; info?: string }) {
+  return <MetricCard label={label} value={value} info={info} valueTone={tone} change={sub ? <div className="text-text-2">{sub}</div> : undefined} size="md" />;
 }

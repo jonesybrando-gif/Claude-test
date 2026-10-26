@@ -97,7 +97,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           </nav>
         )}
         <div className="flex items-center gap-1">
-          <h1 className="truncate text-xl font-semibold">{client.name}</h1>
+          <h1 className="truncate text-2xl font-semibold tracking-tight">{client.name}</h1>
           {staff && <ClientSwitcher clientId={id} clients={switchable.map((c) => ({ value: c.id, label: c.name }))} />}
           {isDemo && <DemoBadge />}
         </div>
@@ -145,7 +145,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
   if (!staff) {
     return (
-      <div className="mx-auto flex max-w-[1400px] flex-col gap-5">
+      <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
         {header}
         <Suspense fallback={<SectionSkeleton tiles={6} cards={2} />}>
           <WithReport report={full}>
@@ -161,9 +161,9 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   }
 
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
       {/* Header, date range and tabs stay in view while scrolling (desktop); on phones only the tabs stick, under the top bar. */}
-      <div className="max-md:contents md:sticky md:top-0 md:z-20 md:-mx-8 md:-mt-6 md:flex md:flex-col md:gap-3 md:border-b md:border-border md:bg-background/95 md:px-8 md:pt-6 md:backdrop-blur">
+      <div className="max-md:contents md:sticky md:top-0 md:z-20 md:-mx-10 md:-mt-8 md:flex md:flex-col md:gap-3 md:border-b md:border-border md:bg-background/95 md:px-10 md:pt-8 md:backdrop-blur">
         {header}
         <nav className="sticky top-12 z-20 -mx-4 -mb-px flex gap-1 overflow-x-auto border-b border-border bg-background/95 px-4 backdrop-blur max-md:-mt-3 md:static md:mx-0 md:border-b-0 md:bg-transparent md:px-0 md:backdrop-blur-none" aria-label="Client sections">
           {TABS.map((t) => (
@@ -208,7 +208,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                 <AtAGlance rep={rep} />
                 <AdvertisingDetail rep={rep} marker={mark("kpis")} editable={canEdit} />
                 <ConnectedDataSection rep={rep} canEdit={canEdit} query={sp} />
-                <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand hover:underline">Open Insights</Link>} />
+                <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand-text hover:underline">Open Insights</Link>} />
                 <NoteSection rep={rep} marker={mark("summary")} />
                 <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />
               </>
@@ -253,7 +253,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         // One place for every AI-written insight, with a clear switch for what the client sees.
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-brand" aria-hidden /> Insights</CardTitle>
+            <CardTitle className="flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-brand-text" aria-hidden /> Insights</CardTitle>
             <CardDescription>The summary can go in the client&apos;s report; suggestions and answers stay with your team.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">

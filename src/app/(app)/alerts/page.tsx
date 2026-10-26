@@ -170,17 +170,17 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
         <p className="mt-1 text-xs text-text-3">
           First seen {relativeTime(a.firstSeenAt.toISOString()).toLowerCase()}
           {a.status === "RESOLVED" && a.resolvedAt ? ` · resolved ${relativeTime(a.resolvedAt.toISOString()).toLowerCase()}` : ` · still true as of ${relativeTime(a.lastSeenAt.toISOString()).toLowerCase()}`}
-          {fix && a.status !== "RESOLVED" && <> · <Link href={fix.href} className="text-brand hover:underline">{fix.label}</Link></>}
+          {fix && a.status !== "RESOLVED" && <> · <Link href={fix.href} className="text-brand-text hover:underline">{fix.label}</Link></>}
         </p>
       </>
     );
   }
 
   return (
-    <div className="mx-auto flex max-w-[1100px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1100px] flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Alerts</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Alerts</h1>
           <p className="text-sm text-text-2">
             {tab === "open" ? (
               <>

@@ -44,10 +44,10 @@ export default async function ClientAccountsPage({ params, searchParams }: { par
   const status = Object.fromEntries(integrationStatus().map((i) => [i.platform, i]));
 
   return (
-    <div className="mx-auto flex max-w-[1000px] flex-col gap-5">
+    <div className="mx-auto flex max-w-[1000px] flex-col gap-6">
       <div>
         <Link href={back} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
-        <h1 className="mt-1 text-xl font-semibold">Ad accounts</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Ad accounts</h1>
         <p className="text-sm text-text-2">Each platform links to one of {client.name}&apos;s ad accounts. Marketing Nexus only reads reporting data; it never changes campaigns or budgets.</p>
       </div>
       {sp.linked && (

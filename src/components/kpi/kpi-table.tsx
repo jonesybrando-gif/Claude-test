@@ -62,7 +62,7 @@ export function KpiTable({ rows, kpis, currency, firstHeader, showChange }: { ro
                 <TD key={k} className="text-right">
                   {formatKpi(k, v.value, currency, { whole: true })}
                   {showChange?.includes(k) && v.changePct !== null && (
-                    <div className={`text-[11px] ${v.tone === "good" ? "text-good-ink" : v.tone === "bad" ? "text-critical-ink" : "text-text-3"}`}>
+                    <div className={`text-xs ${v.tone === "good" ? "text-good-ink" : v.tone === "bad" ? "text-critical-ink" : "text-text-3"}`}>
                       <span aria-hidden>
                         {v.verdict === "few" ? "too few to compare" : v.verdict === "same" ? "about the same" : `${v.changePct > 0 ? "+" : "−"}${formatPct(Math.abs(v.changePct), 0)}${v.verdict === "better" ? " · better" : v.verdict === "worse" ? " · worse" : ""}`}
                       </span>
