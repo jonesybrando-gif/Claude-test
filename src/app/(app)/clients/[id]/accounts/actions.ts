@@ -14,7 +14,7 @@ import { syncAccount } from "@/server/sync/sync-account";
 
 export type PickState = { error?: string } | undefined;
 
-/** Link the account chosen on a client's picker page (one per platform; replaces the previous one). */
+/** Link the account chosen on a client's picker page (one per platform; replaces the previous one). The account may also be tracked by other clients. */
 export async function linkClientAccountAction(clientId: string, connectionId: string, _prev: PickState, form: FormData): Promise<PickState> {
   const user = await requireAdmin();
   const [client, connection] = await Promise.all([
@@ -46,6 +46,12 @@ export async function linkClientAccountAction(clientId: string, connectionId: st
   });
   revalidatePath(`/clients/${clientId}`, "layout");
   revalidatePath("/dashboard");
+  if (result.sharedWith.length) {
+    // Shared account: its campaigns all start out left out, so send the admin
+    // straight to choosing this client's campaigns.
+    const notice = `Linked ${remote.name}, which is shared with ${result.sharedWith.join(", ")}. Every campaign starts out left out of this client's reports so nothing is counted twice. Add this client's campaigns below; they appear once the first sync finishes (refresh in a minute or two).`;
+    redirect(`/clients/${clientId}/campaigns?notice=${encodeURIComponent(notice)}`);
+  }
   redirect(`/clients/${clientId}/accounts?linked=${result.accountIds.length}&replaced=${result.replaced}`);
 }
 

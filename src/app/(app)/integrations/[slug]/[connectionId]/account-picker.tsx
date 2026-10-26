@@ -18,9 +18,10 @@ interface Row {
   statusNote: string | null;
 }
 
-export function AccountPicker({ connectionId, platforms, clients, accounts, linkedTo }: { connectionId: string; platforms: { key: string; label: string }[]; clients: { id: string; name: string }[]; accounts: Row[]; linkedTo: Record<string, string> }) {
+export function AccountPicker({ connectionId, platforms, clients, accounts, linkedTo }: { connectionId: string; platforms: { key: string; label: string }[]; clients: { id: string; name: string }[]; accounts: Row[]; linkedTo: Record<string, string[]> }) {
   const [state, action, pending] = useActionState(linkAccounts.bind(null, connectionId), undefined);
   const form = useFormSubmit(action);
+  const clientName = new Map(clients.map((c) => [c.id, c.name]));
   return (
     <form {...form}>
       <Table>
@@ -42,10 +43,17 @@ export function AccountPicker({ connectionId, platforms, clients, accounts, link
               <TD className="text-text-2">{a.timezone}</TD>
               {platforms.map((p, i) => (
                 <TD key={p.key} className={i === platforms.length - 1 ? "pr-5" : ""}>
-                  <Select name={`client:${p.key}:${a.externalId}`} defaultValue={linkedTo[`${p.key}:${a.externalId}`] ?? ""} aria-label={`${p.label} client for ${a.name}`} className="w-52">
-                    <option value="">Don&apos;t monitor</option>
-                    {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </Select>
+                  {(linkedTo[`${p.key}:${a.externalId}`]?.length ?? 0) > 1 ? (
+                    // Shared by several clients: not on this form, so saving leaves it alone.
+                    <div className="w-52 text-xs whitespace-normal text-text-2">
+                      Shared by {linkedTo[`${p.key}:${a.externalId}`]!.map((id) => clientName.get(id) ?? "a client").join(", ")}. Manage it on each client&apos;s Ad accounts page.
+                    </div>
+                  ) : (
+                    <Select name={`client:${p.key}:${a.externalId}`} defaultValue={linkedTo[`${p.key}:${a.externalId}`]?.[0] ?? ""} aria-label={`${p.label} client for ${a.name}`} className="w-52">
+                      <option value="">Don&apos;t monitor</option>
+                      {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </Select>
+                  )}
                 </TD>
               ))}
             </TR>

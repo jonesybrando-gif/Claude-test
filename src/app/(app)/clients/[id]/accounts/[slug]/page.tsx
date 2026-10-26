@@ -40,7 +40,7 @@ export default async function PickClientAccountPage({ params, searchParams }: { 
   });
   const rows: PickRow[] = remote.map((a) => {
     const here = live.filter((l) => l.externalId === a.externalId);
-    const other = here.find((l) => l.clientId !== id);
+    const others = [...new Set(here.filter((l) => l.clientId !== id).map((l) => l.client.name))];
     return {
       externalId: a.externalId,
       display: a.displayId ?? a.externalId,
@@ -49,7 +49,7 @@ export default async function PickClientAccountPage({ params, searchParams }: { 
       timezone: a.timezone || "—",
       isTestAccount: !!a.isTestAccount,
       statusNote: a.statusNote ?? null,
-      linkedElsewhere: other ? other.client.name : null,
+      linkedElsewhere: others.length ? others.join(", ") : null,
       current: here.some((l) => l.clientId === id),
     };
   });
