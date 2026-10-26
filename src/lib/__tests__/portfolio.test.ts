@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attentionReasons, costPerResultHigh, forecastSplit, describeChange, forecastOffBudget, medianCostPerResult, resultCount, type AttentionInput, type ClientResults } from "../portfolio";
+import { attentionReasons, attentionTier, costPerResultHigh, forecastSplit, describeChange, forecastOffBudget, medianCostPerResult, resultCount, type AttentionInput, type ClientResults } from "../portfolio";
 
 const usd = (n: number) => `$${n / 100}`;
 
@@ -55,7 +55,7 @@ describe("attentionReasons", () => {
     expect(forecastOffBudget(100000, 9000)).toBe(false);
     expect(forecastOffBudget(100000, -10001)).toBe(true);
     expect(forecastOffBudget(1000000, 40000)).toBe(false);
-    const r = attentionReasons({ ...base, lines: [{ phase: "ACTIVE", budgetMinor: 500000, projectedVarianceMinor: 124900, currency: "USD" }, { phase: "ACTIVE", budgetMinor: 500000, projectedVarianceMinor: -60000, currency: "USD" }] });
+    const r = attentionReasons({ ...base, lines: [{ phase: "ACTIVE", budgetMinor: 500000, projectedVarianceMinor: 124900, currency: "USD", forecastStatus: "OVERSPENDING" }, { phase: "ACTIVE", budgetMinor: 500000, projectedVarianceMinor: -60000, currency: "USD" }] });
     expect(r.map((x) => x.label)).toEqual(["Forecast $1,249 over budget", "Forecast $600 under budget"]);
   });
   it("cost per result up ≥20% and results down ≥30% need ≥10 results", () => {
@@ -67,6 +67,34 @@ describe("attentionReasons", () => {
     const r = attentionReasons({ ...base, disconnected: true, openCriticalAlerts: 2, oldestSyncHours: 50 });
     expect(r.map((x) => x.label)).toEqual(["Ad account disconnected", "2 critical alerts"]);
     expect(attentionReasons({ ...base, oldestSyncHours: 50 })[0].label).toBe("Data 50 hours old");
+  });
+  it("other alerts count only when nothing else explains them, as Watch", () => {
+    expect(attentionReasons({ ...base, openOtherAlerts: 1 })).toEqual([{ kind: "alerts", label: "1 open alert", tone: "warning" }]);
+    const under = { phase: "ACTIVE" as const, budgetMinor: 500000, projectedVarianceMinor: -60000, currency: "USD" };
+    expect(attentionReasons({ ...base, openOtherAlerts: 1, lines: [under] }).map((x) => x.kind)).toEqual(["under"]);
+  });
+});
+
+describe("attentionTier", () => {
+  const base: AttentionInput = { currency: "USD", openCriticalAlerts: 0, lines: [], results: null, oldestSyncHours: 2, disconnected: false };
+  it("is Critical for a lost connection, critical alerts, overspending or a used-up budget", () => {
+    expect(attentionTier(attentionReasons({ ...base, disconnected: true }))).toBe("critical");
+    expect(attentionTier(attentionReasons({ ...base, openCriticalAlerts: 1 }))).toBe("critical");
+    const over = { phase: "ACTIVE" as const, budgetMinor: 500000, projectedVarianceMinor: 60000, currency: "USD" };
+    expect(attentionTier(attentionReasons({ ...base, lines: [{ ...over, status: "OVERSPENDING", forecastStatus: "OVERSPENDING" }] }))).toBe("critical");
+    expect(attentionTier(attentionReasons({ ...base, lines: [{ ...over, status: "ON_TARGET", forecastStatus: "OVERSPENDING" }] }))).toBe("critical");
+    expect(attentionTier(attentionReasons({ ...base, lines: [{ ...over, status: "SLIGHTLY_OVER", forecastStatus: "SLIGHTLY_OVER", actualToDateMinor: 500000 }] }))).toBe("critical");
+  });
+  it("is Watch when a budget is only a bit over", () => {
+    const r = attentionReasons({ ...base, lines: [{ phase: "ACTIVE", budgetMinor: 500000, projectedVarianceMinor: 30000, currency: "USD", status: "SLIGHTLY_OVER", forecastStatus: "SLIGHTLY_OVER", actualToDateMinor: 300000 }] });
+    expect(attentionTier(r)).toBe("watch");
+    expect(r[0].label).toBe("A bit over budget · forecast +$300");
+  });
+  it("is Watch for underspend, performance drops and old data; null when clear", () => {
+    expect(attentionTier(attentionReasons({ ...base, lines: [{ phase: "ACTIVE", budgetMinor: 500000, projectedVarianceMinor: -60000, currency: "USD" }] }))).toBe("watch");
+    expect(attentionTier(attentionReasons({ ...base, oldestSyncHours: 50 }))).toBe("watch");
+    expect(attentionTier(attentionReasons({ ...base, openOtherAlerts: 2 }))).toBe("watch");
+    expect(attentionTier([])).toBeNull();
   });
 });
 
