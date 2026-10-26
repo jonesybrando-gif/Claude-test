@@ -38,7 +38,9 @@ export default async function ConnectionPage({ params }: { params: Promise<{ slu
     prisma.client.findMany({ where: { agencyId: user.agencyId, archivedAt: null }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.adAccount.findMany({ where: { platform: { in: adapter.linkablePlatforms }, client: { agencyId: user.agencyId }, isDemo: false, status: { not: "DISCONNECTED" } }, select: { platform: true, externalId: true, clientId: true } }),
   ]);
-  const linkedTo: Record<string, string> = Object.fromEntries(linked.map((l) => [`${l.platform}:${l.externalId}`, l.clientId]));
+  // An account can be shared by several clients; those are managed on each client's Ad accounts page.
+  const linkedTo: Record<string, string[]> = {};
+  for (const l of linked) (linkedTo[`${l.platform}:${l.externalId}`] ??= []).push(l.clientId);
   const managers = accounts.filter((a) => a.isManager);
   const advertisers = accounts.filter((a) => !a.isManager);
 

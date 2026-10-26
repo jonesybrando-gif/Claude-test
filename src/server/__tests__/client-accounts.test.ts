@@ -55,19 +55,28 @@ describe.skipIf(!hasDb)("per-client ad accounts (database)", () => {
     expect(await prisma.adAccount.count({ where: { clientId: acme, platform: "GOOGLE_ADS" } })).toBe(2); // no duplicate rows
   });
 
-  it("won't link an account that's live under another client, or a manager account", async () => {
+  it("shares an account another client tracks, with every campaign starting out left out for the new client", async () => {
     const r = await linkAccountToClient({ agencyId, clientId: beta, connectionId, remote: remote("1111111111", "Acme Search"), platforms: ["GOOGLE_ADS"] });
-    expect(r).toEqual({ ok: false, error: "Acme Search is already linked to Acme. Stop tracking it there first." });
+    expect(r).toMatchObject({ ok: true, replaced: 0, sharedWith: ["Acme"] });
+    const rows = await prisma.adAccount.findMany({ where: { externalId: "1111111111", platform: "GOOGLE_ADS", status: "ACTIVE" }, orderBy: { clientId: "asc" } });
+    expect(rows.map((a) => [a.clientId, a.includeNewCampaigns]).sort()).toEqual([[acme, true], [beta, false]].sort());
+    // Re-linking keeps the client's own campaign choice.
+    await prisma.adAccount.updateMany({ where: { clientId: beta, externalId: "1111111111" }, data: { includeNewCampaigns: true } });
+    await linkAccountToClient({ agencyId, clientId: beta, connectionId, remote: remote("1111111111", "Acme Search"), platforms: ["GOOGLE_ADS"] });
+    expect((await prisma.adAccount.findFirstOrThrow({ where: { clientId: beta, externalId: "1111111111" } })).includeNewCampaigns).toBe(true);
+  });
+
+  it("won't link a manager account", async () => {
     const m = await linkAccountToClient({ agencyId, clientId: beta, connectionId, remote: { ...remote("3333333333"), isManager: true }, platforms: ["GOOGLE_ADS"] });
     expect(m.ok).toBe(false);
   });
 
-  it("stop tracking frees the account for another client, and only works within the agency", async () => {
+  it("stop tracking only works within the agency, and the other client keeps the account", async () => {
     const acc = await prisma.adAccount.findFirstOrThrow({ where: { clientId: acme, platform: "GOOGLE_ADS", status: "ACTIVE" } });
     expect(await stopTrackingAccount("other-agency", acme, acc.id)).toBe(false);
     expect(await stopTrackingAccount(agencyId, acme, acc.id)).toBe(true);
     const r = await linkAccountToClient({ agencyId, clientId: beta, connectionId, remote: remote("1111111111", "Acme Search"), platforms: ["GOOGLE_ADS"] });
-    expect(r.ok).toBe(true);
+    expect(r).toMatchObject({ ok: true, sharedWith: [] });
   });
 
   it("carries the client through the OAuth state", async () => {

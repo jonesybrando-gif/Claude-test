@@ -45,7 +45,14 @@ export async function linkAccounts(connectionId: string, _prev: LinkState, form:
       const field = form.get(`client:${platform}:${acc.externalId}`);
       if (field === null) continue; // not on the form
       const clientId = String(field);
-      const existing = await prisma.adAccount.findFirst({ where: { platform, externalId: acc.externalId, isDemo: false, client: { agencyId: user.agencyId } } });
+      const rows = await prisma.adAccount.findMany({
+        where: { platform, externalId: acc.externalId, isDemo: false, client: { agencyId: user.agencyId } },
+        orderBy: { updatedAt: "desc" },
+      });
+      const live = rows.filter((r) => r.status !== "DISCONNECTED");
+      // Shared by several clients: managed on each client's Ad accounts page, never moved from here.
+      if (live.length > 1) continue;
+      const existing = live[0] ?? rows.find((r) => r.clientId === clientId) ?? rows[0] ?? null;
       if (!clientId) {
         // Stop monitoring: keep history, stop syncing.
         if (existing && existing.status !== "DISCONNECTED") {

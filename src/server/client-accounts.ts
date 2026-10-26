@@ -6,8 +6,16 @@ import type { RemoteAccount } from "./integrations/types";
 // One ad account per platform per client: linking an account from a client's
 // "Ad accounts" page replaces whatever that client had for the platform. The
 // replaced account stops syncing; its history is kept.
+//
+// One ad account can be shared by several clients (e.g. an agency account that
+// holds campaigns for several practices). Each client gets its own record and
+// its own campaign selection. When a client joins an account another client
+// already tracks, every campaign starts out left out of the new client's
+// reports, so no spend is counted twice until its own campaigns are added.
 
-export type LinkResult = { ok: true; accountIds: string[]; replaced: number } | { ok: false; error: string };
+export type LinkResult =
+  | { ok: true; accountIds: string[]; replaced: number; /** Other clients already tracking this account. */ sharedWith: string[] }
+  | { ok: false; error: string };
 
 export async function linkAccountToClient(opts: {
   agencyId: string;
@@ -21,17 +29,15 @@ export async function linkAccountToClient(opts: {
   if (remote.isManager) return { ok: false, error: "That's a manager account. Choose the client's own advertising account." };
 
   return prisma.$transaction(async (tx) => {
-    // The same account can't be live under two clients.
+    const accountIds: string[] = [];
+    const sharedWith = new Set<string>();
+    let replaced = 0;
     for (const platform of platforms) {
-      const elsewhere = await tx.adAccount.findFirst({
+      const elsewhere = await tx.adAccount.findMany({
         where: { platform, externalId: remote.externalId, isDemo: false, status: { not: "DISCONNECTED" }, clientId: { not: clientId }, client: { agencyId } },
         select: { client: { select: { name: true } } },
       });
-      if (elsewhere) return { ok: false as const, error: `${remote.name} is already linked to ${elsewhere.client.name}. Stop tracking it there first.` };
-    }
-    const accountIds: string[] = [];
-    let replaced = 0;
-    for (const platform of platforms) {
+      for (const e of elsewhere) sharedWith.add(e.client.name);
       const { count } = await tx.adAccount.updateMany({
         where: { clientId, platform, isDemo: false, status: { not: "DISCONNECTED" }, externalId: { not: remote.externalId } },
         data: { status: "DISCONNECTED", connectionId: null },
@@ -49,11 +55,12 @@ export async function linkAccountToClient(opts: {
       const row = await tx.adAccount.upsert({
         where: { platform_externalId_clientId: { platform, externalId: remote.externalId, clientId } },
         update: data,
-        create: { ...data, clientId, platform, externalId: remote.externalId },
+        // Shared with another client: start with every campaign left out.
+        create: { ...data, clientId, platform, externalId: remote.externalId, includeNewCampaigns: elsewhere.length === 0 },
       });
       accountIds.push(row.id);
     }
-    return { ok: true as const, accountIds, replaced };
+    return { ok: true as const, accountIds, replaced, sharedWith: [...sharedWith].sort() };
   });
 }
 

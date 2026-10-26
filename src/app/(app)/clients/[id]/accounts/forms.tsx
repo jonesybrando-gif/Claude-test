@@ -14,7 +14,7 @@ export interface PickRow {
   timezone: string;
   isTestAccount: boolean;
   statusNote: string | null;
-  /** Client this account is already live under, if not this one. */
+  /** Other clients this account is already live under (it can be shared). */
   linkedElsewhere: string | null;
   current: boolean;
 }
@@ -22,21 +22,21 @@ export interface PickRow {
 export function AccountChoice({ clientId, connectionId, rows, google, defaultLsa }: { clientId: string; connectionId: string; rows: PickRow[]; google: boolean; defaultLsa: boolean }) {
   const [state, action, pending] = useActionState(linkClientAccountAction.bind(null, clientId, connectionId), undefined);
   const form = useFormSubmit(action);
-  const [chosen, setChosen] = useState(rows.find((r) => r.current)?.externalId ?? (rows.filter((r) => !r.linkedElsewhere).length === 1 ? rows.find((r) => !r.linkedElsewhere)!.externalId : ""));
+  const [chosen, setChosen] = useState(rows.find((r) => r.current)?.externalId ?? (rows.length === 1 ? rows[0].externalId : ""));
   return (
     <form {...form} className="flex flex-col gap-4">
       <fieldset className="flex flex-col divide-y divide-border rounded-lg border border-border">
         <legend className="sr-only">Advertising account</legend>
         {rows.map((r) => (
-          <label key={r.externalId} className={`flex items-start gap-3 px-4 py-3 text-sm ${r.linkedElsewhere ? "opacity-60" : "cursor-pointer hover:bg-surface-2"}`}>
-            <input type="radio" name="account" value={r.externalId} checked={chosen === r.externalId} onChange={() => setChosen(r.externalId)} disabled={!!r.linkedElsewhere} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
+          <label key={r.externalId} className="flex cursor-pointer items-start gap-3 px-4 py-3 text-sm hover:bg-surface-2">
+            <input type="radio" name="account" value={r.externalId} checked={chosen === r.externalId} onChange={() => setChosen(r.externalId)} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="font-medium">
                 {r.name} {r.isTestAccount && <Badge variant="info">Test account</Badge>} {r.current && <Badge variant="good">Linked now</Badge>}
               </span>
               <span className="text-xs text-text-3">{r.display} · {r.currency} · {r.timezone}</span>
               {r.statusNote && <span className="text-xs text-warning-ink">{r.statusNote}</span>}
-              {r.linkedElsewhere && <span className="text-xs text-text-3">Already linked to {r.linkedElsewhere}</span>}
+              {r.linkedElsewhere && !r.current && <span className="text-xs text-text-3">Also tracked by {r.linkedElsewhere}. Linking shares it: you then choose which of its campaigns count for this client.</span>}
             </span>
           </label>
         ))}
@@ -52,7 +52,7 @@ export function AccountChoice({ clientId, connectionId, rows, google, defaultLsa
         <Button type="submit" disabled={pending || !chosen}>{pending ? "Linking…" : "Link to this client"}</Button>
         {state?.error && <p className="text-sm text-critical-ink" role="alert">{state.error}</p>}
       </div>
-      <p className="text-xs text-text-3">A client has one account per platform. Linking a different one replaces the current one, which stops syncing and keeps its history. About 13 months of history imports in the background.</p>
+      <p className="text-xs text-text-3">A client has one account per platform. Linking a different one replaces the current one, which stops syncing and keeps its history. One account can be shared by several clients, each counting only the campaigns chosen for it. About 13 months of history imports in the background.</p>
     </form>
   );
 }
