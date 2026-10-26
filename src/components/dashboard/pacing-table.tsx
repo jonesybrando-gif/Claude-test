@@ -14,10 +14,14 @@ import { Input, Select } from "../ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "../ui/table";
 import { LabelBadge, type LabelInfo } from "../label-badge";
 import { PaceBar } from "./pace-bar";
+import { displayPacingStatus } from "@/lib/pacing/display-status";
+
+/** Badge status: the worse of pacing to date and the month-end forecast. */
+const shown = (r: PacingRow) => (r.result ? displayPacingStatus(r.result) : null);
 
 type SortKey = "status" | "client" | "budget" | "spend" | "pacing" | "projectedVariance" | "consumed" | "sync";
 
-const statusKey = (r: PacingRow) => (r.notConnected ? -1 : (r.result ? STATUS_SEVERITY[r.result.status] : 1) + (r.disconnected ? 10 : 0));
+const statusKey = (r: PacingRow) => (r.notConnected ? -1 : (r.result ? STATUS_SEVERITY[displayPacingStatus(r.result).status] : 1) + (r.disconnected ? 10 : 0));
 
 const sorters: Record<SortKey, (a: PacingRow, b: PacingRow) => number> = {
   status: (a, b) => statusKey(b) - statusKey(a) || Math.abs(b.result?.projectedVarianceMinor ?? 0) - Math.abs(a.result?.projectedVarianceMinor ?? 0),
@@ -61,7 +65,7 @@ export function PacingTable({ rows, labels = [], labelsByClient = {}, initialSta
       if (r.notConnected) return false;
       if (status === "ATTENTION" && !r.attention) return false;
       if (status === "NO_BUDGET_ROWS" && r.result) return false;
-      if (status && status !== "ATTENTION" && status !== "NO_BUDGET_ROWS" && r.result?.status !== status) return false;
+      if (status && status !== "ATTENTION" && status !== "NO_BUDGET_ROWS" && shown(r)?.status !== status) return false;
       return true;
     });
     return out.sort((a, b) => sorters[sort.key](a, b) * sort.dir);
@@ -124,7 +128,7 @@ export function PacingTable({ rows, labels = [], labelsByClient = {}, initialSta
                   <Link href={`/clients/${r.clientId}`} className="block truncate font-medium hover:underline">{r.clientName}</Link>
                   <p className="truncate text-xs text-text-3">{r.level === "CLIENT" ? "All accounts" : r.label} · {r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ") || "no platform"}</p>
                 </div>
-                {r.notConnected ? <NotConnectedBadge label={r.accounts.length ? "Awaiting sync" : "Not connected"} /> : res ? <StatusBadge status={res.status} /> : <NoBudgetBadge />}
+                {r.notConnected ? <NotConnectedBadge label={r.accounts.length ? "Awaiting sync" : "Not connected"} /> : res ? <StatusBadge status={displayPacingStatus(res).status} /> : <NoBudgetBadge />}
               </div>
               {res && res.pctBudgetConsumed !== null && (
                 <div className="mt-2"><PaceBar consumed={res.pctBudgetConsumed} elapsed={res.pctPeriodElapsed} expected={res.budgetMinor ? (res.expectedToDateMinor / res.budgetMinor) * 100 : 0} status={res.status} /></div>
@@ -137,7 +141,10 @@ export function PacingTable({ rows, labels = [], labelsByClient = {}, initialSta
               {r.notConnected ? (
                 <Link href={`/clients/${r.clientId}/accounts`} className="mt-2 inline-block text-xs text-brand hover:underline">{r.accounts.length ? "Check ad accounts" : "Link an ad account"}</Link>
               ) : (
-                <p className="mt-2 text-xs text-text-2">{r.action.headline}{r.stale && " · stale data"}{r.disconnected && " · disconnected"}</p>
+                <>
+                  {res && displayPacingStatus(res).forecastNote && <p className="mt-2 text-xs text-text-2">{displayPacingStatus(res).forecastNote}</p>}
+                  <p className="mt-2 text-xs text-text-2">{r.action.headline}{r.stale && " · stale data"}{r.disconnected && " · disconnected"}</p>
+                </>
               )}
             </li>
           );
@@ -185,11 +192,13 @@ export function PacingTable({ rows, labels = [], labelsByClient = {}, initialSta
                 </TD>
                 <TD>
                   <div className="flex flex-col items-start gap-1">
-                    {r.notConnected ? <NotConnectedBadge label={r.accounts.length ? "Awaiting first sync" : "Not connected"} /> : res ? <StatusBadge status={res.status} /> : <NoBudgetBadge />}
+                    {r.notConnected ? <NotConnectedBadge label={r.accounts.length ? "Awaiting first sync" : "Not connected"} /> : res ? <StatusBadge status={displayPacingStatus(res).status} /> : <NoBudgetBadge />}
                     {r.notConnected && <Link href={`/clients/${r.clientId}/accounts`} className="text-[11px] text-brand hover:underline">{r.accounts.length ? "Check ad accounts" : "Link an ad account"}</Link>}
-                    {!r.notConnected && res && res.forecastStatus !== res.status && res.forecastStatus !== "ON_TARGET" && (
+                    {!r.notConnected && res && (displayPacingStatus(res).forecastNote ? (
+                      <span className="text-[11px] text-text-2">{displayPacingStatus(res).forecastNote}</span>
+                    ) : res.forecastStatus !== res.status && res.forecastStatus !== "ON_TARGET" ? (
                       <span className="text-[11px] text-text-2">Forecast: {STATUS_LABEL[res.forecastStatus].toLowerCase()}</span>
-                    )}
+                    ) : null)}
                     {r.disconnected && <StaleBadge label="Disconnected" />}
                     {!r.disconnected && r.stale && <StaleBadge />}
                   </div>

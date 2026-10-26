@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { AlertType } from "@prisma/client";
 import { prisma } from "@/server/db";
-import { requireAdmin, requireAgencyStaff, visibleClientsWhere } from "@/server/access";
+import { requireAdmin, requireAgencyStaff, userCanEditClient, visibleClientsWhere } from "@/server/access";
 import { evaluateAgencyAlerts } from "@/server/alerts";
 
 /** Alerts this person may act on: their agency's, for clients they can see. */
@@ -21,6 +22,7 @@ export async function acknowledgeAlerts(alertIds: string[]): Promise<void> {
   const { user, where } = await scope(alertIds);
   await prisma.alert.updateMany({ where: { ...where, status: "OPEN" }, data: { status: "ACKNOWLEDGED", acknowledgedAt: new Date(), acknowledgedById: user.id } });
   revalidatePath("/alerts");
+  revalidatePath("/", "layout");
 }
 
 /** Hides alerts from the open list for a while. They stay open, keep updating and resolve on their own. */
@@ -43,4 +45,34 @@ export async function checkAlertsNow(): Promise<string> {
   revalidatePath("/alerts");
   revalidatePath("/", "layout");
   return `${r.created} new, ${r.refreshed} still open, ${r.resolved} resolved.`;
+}
+
+const MUTABLE: AlertType[] = ["OVERSPENDING", "UNDERSPENDING", "PROJECTED_OVERRUN", "SPEND_SPIKE", "SPEND_STOPPED", "CAMPAIGN_NO_SPEND", "SYNC_FAILED", "ACCOUNT_DISCONNECTED", "CPA_SPIKE", "RESULTS_DROP", "TRACKING_ZERO"];
+
+/**
+ * Stops one alert type for one client (Client.mutedAlertTypes): no new alerts,
+ * emails or Slack posts of that type for the client, and its open ones close.
+ */
+export async function muteAlertType(clientId: string, type: string): Promise<void> {
+  if (!MUTABLE.includes(type as AlertType)) return;
+  const user = await requireAgencyStaff();
+  if (!(await userCanEditClient(user, clientId))) return;
+  const c = await prisma.client.findFirst({ where: { id: clientId, agencyId: user.agencyId }, select: { mutedAlertTypes: true } });
+  if (!c) return;
+  if (!c.mutedAlertTypes.includes(type as AlertType)) {
+    await prisma.client.update({ where: { id: clientId }, data: { mutedAlertTypes: { set: [...c.mutedAlertTypes, type as AlertType] } } });
+  }
+  await prisma.alert.updateMany({ where: { clientId, agencyId: user.agencyId, type: type as AlertType, status: { in: ["OPEN", "ACKNOWLEDGED"] } }, data: { status: "RESOLVED", resolvedAt: new Date() } });
+  revalidatePath("/alerts");
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/", "layout");
+}
+
+export async function unmuteAlertType(clientId: string, type: string): Promise<void> {
+  const user = await requireAgencyStaff();
+  if (!(await userCanEditClient(user, clientId))) return;
+  const c = await prisma.client.findFirst({ where: { id: clientId, agencyId: user.agencyId }, select: { mutedAlertTypes: true } });
+  if (!c) return;
+  await prisma.client.update({ where: { id: clientId }, data: { mutedAlertTypes: { set: c.mutedAlertTypes.filter((t) => t !== type) } } });
+  revalidatePath(`/clients/${clientId}`);
 }

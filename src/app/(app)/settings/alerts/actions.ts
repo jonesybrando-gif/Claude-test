@@ -29,6 +29,9 @@ export async function saveAlertSettings(_prev: AlertSettingsState, form: FormDat
     stoppedMinDailyMinor: stoppedMin,
     campaignNoSpendDays: num("campaignNoSpendDays"),
     staleHours: num("staleHours"),
+    cpaSpikeAlerts: form.get("cpaSpikeAlerts") ? 1 : 0,
+    resultsDropAlerts: form.get("resultsDropAlerts") ? 1 : 0,
+    trackingZeroAlerts: form.get("trackingZeroAlerts") ? 1 : 0,
   });
   const problems = validateAlertSettings(s);
   if (problems.length) return { errors: problems };

@@ -1,34 +1,36 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useTransition } from "react";
 import { CheckCircle2, Circle, X } from "lucide-react";
 import type { SetupStep } from "@/server/first-run";
+import { dismissSetupChecklist } from "@/app/(app)/dashboard/actions";
 
-const KEY = "mn:setup-checklist-hidden";
-
-/** First-run checklist on the dashboard. Hidden once every step is done, or when dismissed in this browser. */
+/**
+ * First-run checklist on Home. Hidden once every step is done, or when an
+ * admin dismisses it (saved on the agency, so it stays hidden on every device).
+ */
 export function SetupChecklist({ steps, dismissible = true }: { steps: SetupStep[]; dismissible?: boolean }) {
-  const [hidden, setHidden] = useState(false);
-  useEffect(() => {
-    try {
-      setHidden(dismissible && localStorage.getItem(KEY) === "1");
-    } catch {
-      /* storage unavailable: keep showing it */
-    }
-  }, [dismissible]);
+  const [pending, start] = useTransition();
   const done = steps.filter((s) => s.done).length;
-  if (hidden || done === steps.length) return null;
+  if (done === steps.length) return null;
   const next = steps.find((s) => !s.done);
   return (
     <section className="rounded-xl border border-border bg-surface" aria-label="Getting started">
       <div className="flex items-start justify-between gap-3 px-5 pt-4">
         <div>
           <h2 className="text-sm font-semibold">Get set up · {done} of {steps.length} done</h2>
-          <p className="text-xs text-text-3">A few steps to your first useful client report.</p>
+          <p className="text-xs text-text-3">A few steps to your first useful client report.{next && <> Next: <Link href={next.href} className="text-brand hover:underline">{next.title.toLowerCase()}</Link>.</>}</p>
         </div>
         {dismissible && (
-          <button type="button" className="rounded p-1 text-text-3 hover:bg-surface-2 hover:text-text cursor-pointer" aria-label="Hide the setup checklist" onClick={() => { try { localStorage.setItem(KEY, "1"); } catch { /* ignore */ } setHidden(true); }}>
+          <button
+            type="button"
+            disabled={pending}
+            className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-surface-2 hover:text-text disabled:opacity-50"
+            aria-label="Hide the setup checklist for everyone"
+            title="Hide the setup checklist"
+            onClick={() => start(() => dismissSetupChecklist())}
+          >
             <X className="h-4 w-4" />
           </button>
         )}
@@ -36,7 +38,7 @@ export function SetupChecklist({ steps, dismissible = true }: { steps: SetupStep
       <div className="mx-5 mt-3 h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
         <div className="h-full rounded-full bg-brand" style={{ width: `${(done / steps.length) * 100}%` }} />
       </div>
-      <ol className="grid gap-px p-2 sm:grid-cols-2 lg:grid-cols-3">
+      <ol className="grid gap-px p-2 sm:grid-cols-2 lg:grid-cols-4">
         {steps.map((s, i) => (
           <li key={s.key}>
             <Link href={s.href} className={`flex h-full gap-2.5 rounded-lg px-3 py-2.5 hover:bg-surface-2 ${s === next ? "bg-surface-2/60 ring-1 ring-border" : ""}`}>

@@ -9,6 +9,11 @@ import { alertEmail, dailySummaryEmail, type AlertLine } from "@/lib/email-templ
 import { slackAlertText } from "@/lib/slack";
 import { agencySlackWebhook, postToSlack } from "./slack";
 import { dateToIso, dayOfWeek, todayInTimeZone } from "@/lib/pacing/dates";
+import { resultCount } from "@/lib/portfolio";
+import { summaryLines } from "@/lib/daily-summary";
+import { groupAlertsByCause, visibleAlerts } from "@/lib/alert-groups";
+import { applyEfficiencyAdvice, highCostPerResultClients, portfolioResults } from "./portfolio";
+import { visibleClientsWhere } from "./access";
 
 const LOOKBACK_DAYS = 35;
 
@@ -22,9 +27,10 @@ function toRowInput(r: PacingRow): PacingRowInput {
     isDemo: r.isDemo,
     disconnected: r.disconnected,
     notConnected: r.notConnected,
+    accountIds: r.accounts.map((a) => a.id),
     action: { headline: r.action.headline, detail: r.action.detail },
     result: r.result
-      ? { phase: r.result.phase, periodStart: r.result.periodStart, status: r.result.status, forecastStatus: r.result.forecastStatus, budgetMinor: r.result.budgetMinor, projectedVarianceMinor: r.result.projectedVarianceMinor }
+      ? { phase: r.result.phase, periodStart: r.result.periodStart, status: r.result.status, forecastStatus: r.result.forecastStatus, budgetMinor: r.result.budgetMinor, projectedVarianceMinor: r.result.projectedVarianceMinor, elapsedDays: r.result.elapsedDays }
       : null,
   };
 }
@@ -60,10 +66,14 @@ export interface AlertRunResult {
 
 /** Evaluates every alert rule for an agency and reconciles stored alerts. */
 export async function evaluateAgencyAlerts(agencyId: string, now: Date = new Date()): Promise<AlertRunResult> {
-  const agency = await prisma.agency.findUniqueOrThrow({ where: { id: agencyId }, select: { alertSettings: true } });
+  const agency = await prisma.agency.findUniqueOrThrow({ where: { id: agencyId }, select: { alertSettings: true, defaultTimezone: true } });
   const settings = resolveAlertSettings(agency.alertSettings);
   const pacing = await loadPacing({ agencyId, archivedAt: null }, now);
+  // Underspend advice in alert text checks efficiency first (H6).
+  applyEfficiencyAdvice(pacing, highCostPerResultClients(await portfolioResults({ agencyId, archivedAt: null }, todayInTimeZone(agency.defaultTimezone, now))));
   const rows = pacing.flatMap((c) => c.rows).map(toRowInput);
+  const mutedClients = await prisma.client.findMany({ where: { agencyId, archivedAt: null, NOT: { mutedAlertTypes: { isEmpty: true } } }, select: { id: true, mutedAlertTypes: true } });
+  const muted = Object.fromEntries(mutedClients.map((c) => [c.id, c.mutedAlertTypes as AlertCandidate["kind"][]]));
 
   const since = new Date(now.getTime() - LOOKBACK_DAYS * 86_400_000);
   const [accounts, perf] = await Promise.all([
@@ -73,16 +83,21 @@ export async function evaluateAgencyAlerts(agencyId: string, now: Date = new Dat
     }),
     prisma.dailyPerformance.findMany({
       where: { account: { client: { agencyId, archivedAt: null } }, date: { gte: since }, ...INCLUDED_ROWS },
-      select: { accountId: true, campaignId: true, date: true, costMinor: true },
+      select: { accountId: true, campaignId: true, date: true, costMinor: true, conversions: true, leads: true },
     }),
   ]);
+  const platformOf = new Map(accounts.map((a) => [a.id, a.platform]));
   const accountDaily = new Map<string, Record<string, number>>();
+  const accountResults = new Map<string, Record<string, number>>();
   const campaignDaily = new Map<string, Record<string, number>>();
   for (const p of perf) {
     const d = dateToIso(p.date);
     const a = accountDaily.get(p.accountId) ?? {};
     a[d] = (a[d] ?? 0) + Number(p.costMinor);
     accountDaily.set(p.accountId, a);
+    const res = accountResults.get(p.accountId) ?? {};
+    res[d] = (res[d] ?? 0) + resultCount(platformOf.get(p.accountId)!, { conversions: Number(p.conversions), leads: Number(p.leads ?? 0) });
+    accountResults.set(p.accountId, res);
     if (p.campaignId) {
       const c = campaignDaily.get(p.campaignId) ?? {};
       c[d] = (c[d] ?? 0) + Number(p.costMinor);
@@ -104,11 +119,12 @@ export async function evaluateAgencyAlerts(agencyId: string, now: Date = new Dat
       lastSyncFailed: run && (run.status === "FAILED" || run.status === "PARTIAL") ? { at: run.startedAt, error: run.error ?? "Sync failed" } : null,
       dataCompleteThrough: a.dataCompleteThrough ? dateToIso(a.dataCompleteThrough) : null,
       daily: accountDaily.get(a.id) ?? {},
+      dailyResults: accountResults.get(a.id) ?? {},
     };
   });
   const campaignInputs: CampaignInput[] = accounts.flatMap((a) => a.campaigns.map((c) => ({ id: c.id, name: c.name, accountId: a.id, status: c.status, daily: campaignDaily.get(c.id) ?? {} })));
 
-  const candidates = evaluateAlerts({ rows, accounts: accountInputs, campaigns: campaignInputs, settings, now });
+  const candidates = evaluateAlerts({ rows, accounts: accountInputs, campaigns: campaignInputs, settings, now, muted });
   return reconcile(agencyId, candidates, now);
 }
 
@@ -121,10 +137,11 @@ async function reconcile(agencyId: string, candidates: AlertCandidate[], now: Da
   for (const c of candidates) {
     if (seen.has(c.dedupeKey)) continue;
     seen.add(c.dedupeKey);
-    const details: Prisma.InputJsonValue = { detail: c.detail, clientName: c.clientName, isDemo: c.isDemo };
-    const prev = byKey.get(c.dedupeKey);
+    const details: Prisma.InputJsonValue = { detail: c.detail, clientName: c.clientName, isDemo: c.isDemo, ...(c.accountIds ? { accountIds: c.accountIds } : {}) };
+    const prev = byKey.get(c.dedupeKey) ?? adoptLegacyPacingAlert(c.dedupeKey, byKey, seen);
     if (prev) {
-      await prisma.alert.update({ where: { id: prev.id }, data: { lastSeenAt: now, message: c.title, details, severity: c.severity } });
+      await prisma.alert.update({ where: { id: prev.id }, data: { lastSeenAt: now, message: c.title, details, severity: c.severity, type: c.kind as AlertType, dedupeKey: c.dedupeKey } });
+      seen.add(prev.dedupeKey);
       refreshed++;
     } else {
       const a = await prisma.alert.create({
@@ -138,6 +155,23 @@ async function reconcile(agencyId: string, candidates: AlertCandidate[], now: Da
 
   const emailsQueued = created.length ? await notify(agencyId, created) : 0;
   return { agencyId, created: created.length, refreshed, resolved: stale.length, emailsQueued };
+}
+
+/**
+ * Pacing alerts used to be keyed by status ("OVERSPENDING:<line>:<period>");
+ * they are now keyed by direction ("PACING_OVER:<line>:<period>"). An open
+ * alert under an old key is carried over instead of being closed and raised
+ * again, so the change doesn't re-notify anyone.
+ */
+function adoptLegacyPacingAlert<T extends { dedupeKey: string }>(key: string, byKey: Map<string, T>, seen: Set<string>): T | undefined {
+  const m = /^PACING_(OVER|UNDER):(.+)$/.exec(key);
+  if (!m) return undefined;
+  const legacy = m[1] === "OVER" ? ["OVERSPENDING", "PROJECTED_OVERRUN"] : ["UNDERSPENDING"];
+  for (const kind of legacy) {
+    const old = byKey.get(`${kind}:${m[2]}`);
+    if (old && !seen.has(old.dedupeKey)) return old;
+  }
+  return undefined;
 }
 
 /** In-app notification for every staff member who can see the client; one email per person per run. */
@@ -180,22 +214,43 @@ export async function sendDailySummaries(agencyId: string, now: Date = new Date(
 
   const staff = (await staffOf(agencyId)).filter((u) => u.dailySummary && (!u.lastDailySummaryAt || todayInTimeZone(timezone, u.lastDailySummaryAt) < today));
   if (!staff.length) return 0;
-  const rows = (await loadPacing({ agencyId, archivedAt: null }, now)).flatMap((c) => c.rows);
+  const pacing = await loadPacing({ agencyId, archivedAt: null }, now);
+  applyEfficiencyAdvice(pacing, highCostPerResultClients(await portfolioResults({ agencyId, archivedAt: null }, today)));
+  const muted = new Map((await prisma.client.findMany({ where: { agencyId, archivedAt: null }, select: { id: true, mutedAlertTypes: true } })).map((c) => [c.id, c.mutedAlertTypes as string[]]));
+  const rows = pacing.flatMap((c) => c.rows).filter((r) => !r.notConnected);
   const label = new Date(`${today}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
   let sent = 0;
   for (const u of staff) {
     const mine = rows.filter((r) => userCanSee(u, r.clientId));
     if (!mine.length) continue;
-    const needAction: AlertLine[] = mine
-      .filter((r) => r.action.severity === "critical" || r.action.severity === "warning")
-      .sort((a, z) => (a.action.severity === z.action.severity ? 0 : a.action.severity === "critical" ? -1 : 1))
-      .map((r) => ({ severity: r.action.severity as "critical" | "warning", client: r.clientName, title: r.action.headline, detail: r.action.detail }));
-    const onTarget = mine.filter((r) => r.action.severity === "ok").length;
-    await sendEmail({ agencyId, to: u.email, kind: "daily_summary", ...dailySummaryEmail(b, label, needAction, onTarget, appUrl("/dashboard")) });
+    const { needAction, onTarget, staleOnTarget } = summaryLines(mine, muted, now);
+    await sendEmail({ agencyId, to: u.email, kind: "daily_summary", ...dailySummaryEmail(b, label, needAction, onTarget, appUrl("/dashboard"), staleOnTarget) });
     await prisma.user.update({ where: { id: u.id }, data: { lastDailySummaryAt: now } });
     sent++;
   }
   return sent;
+}
+
+/**
+ * Open alert issues (alerts grouped by cause) a staff member can see: open and
+ * unacknowledged, not snoozed, not muted, not explained by another alert. This
+ * is the number in the Alerts page header (without filters) and the sidebar badge.
+ */
+export async function openAlertIssueCount(agencyId: string, userId?: string): Promise<{ alerts: number; issues: number }> {
+  const user = userId ? await prisma.user.findFirst({ where: { id: userId, agencyId } }) : null;
+  const where = user ? visibleClientsWhere(user) : { agencyId, archivedAt: null };
+  const clients = await prisma.client.findMany({ where, select: { id: true, mutedAlertTypes: true } });
+  const now = new Date();
+  const alerts = await prisma.alert.findMany({
+    where: { agencyId, clientId: { in: clients.map((c) => c.id) }, status: "OPEN", OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }] },
+    select: { id: true, type: true, severity: true, clientId: true, accountId: true, details: true, account: { select: { platform: true, connection: { select: { id: true, platform: true, status: true } } } } },
+    take: 2000,
+  });
+  const shown = visibleAlerts(
+    alerts.map((a) => ({ ...a, connection: a.account?.connection ?? null, platform: a.account?.platform ?? null })),
+    new Map(clients.map((c) => [c.id, c.mutedAlertTypes as string[]])),
+  );
+  return { alerts: shown.length, issues: groupAlertsByCause(shown).length };
 }
 
 /** Alerts + daily summaries for every agency. Called by the cron endpoints and `npm run alerts`. */
