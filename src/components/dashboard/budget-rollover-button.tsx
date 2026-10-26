@@ -23,7 +23,10 @@ export function BudgetRolloverButton({ from, to, clients }: { from: string; to: 
     <div className="flex flex-wrap items-center gap-3">
       <Button
         type="button"
-        className="h-auto min-h-9 max-w-full whitespace-normal py-2 text-left"
+        variant="outline"
+        size="sm"
+        className="h-auto min-h-8 max-w-full whitespace-normal py-1.5 text-left"
+        aria-label={`Copy ${from} budgets to ${to} for ${plural(clients)}`}
         disabled={pending}
         onClick={() =>
           start(async () => {
@@ -35,7 +38,7 @@ export function BudgetRolloverButton({ from, to, clients }: { from: string; to: 
         }
       >
         <CalendarPlus className="h-4 w-4" aria-hidden />
-        {pending ? "Copying…" : `Copy ${from} budgets to ${to} (${plural(clients)})`}
+        {pending ? "Copying…" : `Copy ${from} budgets`}
       </Button>
       {error && <p role="alert" className="text-sm text-critical-ink">{error}</p>}
     </div>

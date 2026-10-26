@@ -137,8 +137,14 @@ const WEIGHT: Record<AttentionKind, number> = { disconnected: 6, alerts: 5, over
 
 export interface AttentionInput {
   currency: string;
-  /** Open (unacknowledged, not snoozed, not muted) critical alerts for the client. */
+  /**
+   * Open (unacknowledged, not snoozed) alerts that make a client Critical: a
+   * lost connection, failed sync, conversion tracking at zero, spend stopped, or
+   * overspending. See CRITICAL_ALERT_TYPES.
+   */
   openCriticalAlerts: number;
+  /** Other open critical-severity alerts (an underspend, a cost spike…): Watch, not Critical. */
+  openOtherAlerts?: number;
   /** Connected, budgeted lines in their current period. */
   lines: { phase: "NOT_STARTED" | "ACTIVE" | "ENDED"; budgetMinor: number; projectedVarianceMinor: number; currency: string }[];
   results: ClientResults | null;
@@ -179,7 +185,23 @@ export function attentionReasons(i: AttentionInput): AttentionReason[] {
   if (!i.disconnected && i.oldestSyncHours !== null && i.oldestSyncHours > STALE_ATTENTION_HOURS) {
     out.push({ kind: "stale", label: Number.isFinite(i.oldestSyncHours) ? `Data ${Math.round(i.oldestSyncHours)} hours old` : "Data never synced", tone: "warning" });
   }
-  return out.sort((a, b) => WEIGHT[b.kind] - WEIGHT[a.kind]);
+  // Other open alerts mostly repeat a reason above (an underspend alert and "Forecast under budget");
+  // they only count on their own when nothing else explains them.
+  if ((i.openOtherAlerts ?? 0) > 0 && out.length === 0) out.push({ kind: "alerts", label: `${i.openOtherAlerts} open alert${i.openOtherAlerts === 1 ? "" : "s"}`, tone: "warning" });
+  return out.sort((a, b) => WEIGHT[b.kind] - WEIGHT[a.kind] || (a.tone === b.tone ? 0 : a.tone === "critical" ? -1 : 1));
+}
+
+/** Alert types that make a client Critical; every other alert is Watch. */
+export const CRITICAL_ALERT_TYPES = ["ACCOUNT_DISCONNECTED", "SYNC_FAILED", "TRACKING_ZERO", "SPEND_STOPPED", "OVERSPENDING", "PROJECTED_OVERRUN"] as const;
+
+/**
+ * Critical: a lost connection, broken tracking, spend stopped, or a budget
+ * forecast to run over (or already used up). Watch: smaller budget misses,
+ * performance drops and old data. Null when nothing needs attention.
+ */
+export function attentionTier(reasons: AttentionReason[]): "critical" | "watch" | null {
+  if (!reasons.length) return null;
+  return reasons.some((r) => r.tone === "critical") ? "critical" : "watch";
 }
 
 /** Sort weight for a client: its most important reason, then the number of reasons. */

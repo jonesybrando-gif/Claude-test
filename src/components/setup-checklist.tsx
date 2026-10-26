@@ -10,11 +10,38 @@ import { dismissSetupChecklist } from "@/app/(app)/dashboard/actions";
  * First-run checklist on Home. Hidden once every step is done, or when an
  * admin dismisses it (saved on the agency, so it stays hidden on every device).
  */
-export function SetupChecklist({ steps, dismissible = true }: { steps: SetupStep[]; dismissible?: boolean }) {
+export function SetupChecklist({ steps, dismissible = true, compact = false }: { steps: SetupStep[]; dismissible?: boolean; compact?: boolean }) {
   const [pending, start] = useTransition();
   const done = steps.filter((s) => s.done).length;
   if (done === steps.length) return null;
   const next = steps.find((s) => !s.done);
+  const dismiss = dismissible && (
+    <button
+      type="button"
+      disabled={pending}
+      className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-surface-2 hover:text-text disabled:opacity-50"
+      aria-label="Hide the setup checklist for everyone"
+      title="Hide the setup checklist"
+      onClick={() => start(() => dismissSetupChecklist())}
+    >
+      <X className="h-4 w-4" />
+    </button>
+  );
+  // Once set up is under way, one line is enough: progress and the next step.
+  if (compact) {
+    return (
+      <section aria-label="Getting started" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm">
+        <span className="h-2 w-2 shrink-0 rounded-full bg-brand" aria-hidden />
+        <span className="font-medium">Setup · {done} of {steps.length} done</span>
+        {next && (
+          <span className="text-text-2">
+            Next: <Link href={next.href} className="font-medium text-brand-text hover:underline">{next.title}</Link>
+          </span>
+        )}
+        <span className="ml-auto">{dismiss}</span>
+      </section>
+    );
+  }
   return (
     <section className="rounded-xl border border-border bg-surface" aria-label="Getting started">
       <div className="flex items-start justify-between gap-3 px-5 pt-4">
@@ -22,18 +49,7 @@ export function SetupChecklist({ steps, dismissible = true }: { steps: SetupStep
           <h2 className="text-sm font-semibold">Get set up · {done} of {steps.length} done</h2>
           <p className="text-xs text-text-3">A few steps to your first useful client report.{next && <> Next: <Link href={next.href} className="text-brand-text hover:underline">{next.title.toLowerCase()}</Link>.</>}</p>
         </div>
-        {dismissible && (
-          <button
-            type="button"
-            disabled={pending}
-            className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-surface-2 hover:text-text disabled:opacity-50"
-            aria-label="Hide the setup checklist for everyone"
-            title="Hide the setup checklist"
-            onClick={() => start(() => dismissSetupChecklist())}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
+        {dismiss}
       </div>
       <div className="mx-5 mt-3 h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
         <div className="h-full rounded-full bg-brand" style={{ width: `${(done / steps.length) * 100}%` }} />

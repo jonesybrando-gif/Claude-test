@@ -4,6 +4,7 @@ import { copyBannerState } from "@/server/budget-rollover";
 import { monthName } from "@/lib/budget-rollover";
 import type { SessionUser } from "@/lib/access";
 import { BudgetRolloverButton } from "./budget-rollover-button";
+import { Banner } from "../ui/banner";
 
 /**
  * From the 25th: "Copy October budgets to November (n clients)". Hidden when
@@ -23,14 +24,9 @@ export async function BudgetRolloverBanner({ user }: { user: SessionUser }) {
   const from = monthName(state.fromMonth);
   const to = monthName(state.toMonth);
   return (
-    <section aria-label={`${to} budgets`} className="flex flex-col gap-3 rounded-xl border border-border bg-info-bg px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="text-sm">
-        <p className="font-medium text-text">{to} starts soon</p>
-        <p className="text-text-2">
-          {state.clients} client{state.clients === 1 ? " has" : "s have"} {from} budgets but nothing set for {to} yet. Copy them with the same amounts and settings; you can change any of them afterwards.
-        </p>
-      </div>
-      <BudgetRolloverButton from={from} to={to} clients={state.clients} />
-    </section>
+    <Banner tone="info" action={<BudgetRolloverButton from={from} to={to} clients={state.clients} />}>
+      <span className="font-medium">{to} budgets aren&apos;t set for {state.clients} client{state.clients === 1 ? "" : "s"} yet.</span>{" "}
+      <span className="text-text-2">Copy {from}&apos;s amounts and settings; you can change any of them afterwards.</span>
+    </Banner>
   );
 }

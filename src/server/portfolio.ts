@@ -8,6 +8,7 @@ import { comparisonRange, resolveRange, type DateRange } from "@/lib/date-ranges
 import { isoToDate, type IsoDate } from "@/lib/pacing/dates";
 import {
   attentionReasons,
+  CRITICAL_ALERT_TYPES,
   costPerResultHigh,
   medianCostPerResult,
   resultCount,
@@ -120,15 +121,27 @@ export function applyEfficiencyAdvice(pacing: ClientPacing[], highCpr: Set<strin
   }
 }
 
-/** Open, unacknowledged, un-snoozed critical alerts per client. */
-async function openCriticalByClient(clientIds: string[], now: Date): Promise<Map<string, number>> {
+/**
+ * Open, unacknowledged, un-snoozed alerts per client, split into the types that
+ * make a client Critical and other critical-severity alerts (Watch).
+ */
+async function openAlertsByClient(clientIds: string[], now: Date): Promise<Map<string, { critical: number; other: number }>> {
   if (!clientIds.length) return new Map();
   const rows = await prisma.alert.groupBy({
-    by: ["clientId"],
-    where: { clientId: { in: clientIds }, status: "OPEN", severity: "critical", OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }] },
+    by: ["clientId", "type", "severity"],
+    where: { clientId: { in: clientIds }, status: "OPEN", OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }] },
     _count: { _all: true },
   });
-  return new Map(rows.map((r) => [r.clientId ?? "", r._count._all]));
+  const critical = new Set<string>(CRITICAL_ALERT_TYPES);
+  const out = new Map<string, { critical: number; other: number }>();
+  for (const r of rows) {
+    const id = r.clientId ?? "";
+    const c = out.get(id) ?? { critical: 0, other: 0 };
+    if (critical.has(r.type)) c.critical += r._count._all;
+    else if (r.severity === "critical") c.other += r._count._all;
+    out.set(id, c);
+  }
+  return out;
 }
 
 /**
@@ -136,7 +149,7 @@ async function openCriticalByClient(clientIds: string[], now: Date): Promise<Map
  * Clients › Performance so both pages agree on who needs attention and why.
  */
 export async function clientAttention(pacing: ClientPacing[], results: PortfolioResults, now: Date = new Date()): Promise<Map<string, AttentionReason[]>> {
-  const alerts = await openCriticalByClient(pacing.map((p) => p.client.id), now);
+  const alerts = await openAlertsByClient(pacing.map((p) => p.client.id), now);
   const out = new Map<string, AttentionReason[]>();
   for (const p of pacing) {
     const live = p.accounts.filter((a) => !a.isDemo);
@@ -146,7 +159,8 @@ export async function clientAttention(pacing: ClientPacing[], results: Portfolio
       p.client.id,
       attentionReasons({
         currency: p.client.currency,
-        openCriticalAlerts: alerts.get(p.client.id) ?? 0,
+        openCriticalAlerts: alerts.get(p.client.id)?.critical ?? 0,
+        openOtherAlerts: alerts.get(p.client.id)?.other ?? 0,
         lines: p.rows.filter((r) => !r.notConnected && r.result).map((r) => ({ phase: r.result!.phase, budgetMinor: r.result!.budgetMinor, projectedVarianceMinor: r.result!.projectedVarianceMinor, currency: r.currency })),
         results: results.byClient.get(p.client.id) ?? null,
         oldestSyncHours: oldest ? (now.getTime() - new Date(oldest).getTime()) / 3_600_000 : null,
