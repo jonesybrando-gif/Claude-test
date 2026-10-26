@@ -1,3 +1,4 @@
+import { displayCampaignName } from "@/lib/campaign-name";
 import "server-only";
 import { getClientPerformance, type ClientPerformance } from "../reporting";
 import { metricBreakdown, metricSeries, metricTotals } from "../metrics/query";
@@ -312,7 +313,7 @@ async function resolveBreakdown(w: DashboardWidget, p: Period, ctx: ResolveConte
     const perf = p.key === "base" ? ctx.ads.perf : await deps.adPerformance(ctx.clientId, p.range);
     const items: { label: string; t: MetricTotals | undefined }[] =
       dim === "campaign"
-        ? ctx.ads.campaigns.map((c) => ({ label: c.name, t: perf.byCampaign[c.id] }))
+        ? ctx.ads.campaigns.map((c) => ({ label: displayCampaignName(c.name), t: perf.byCampaign[c.id] }))
         : ctx.ads.accounts.map((a, _, all) => ({
             label: all.filter((b) => b.platform === a.platform).length > 1 ? `${PLATFORM_LABEL[a.platform]} · ${a.name}` : PLATFORM_LABEL[a.platform],
             t: perf.byAccount[a.id],
