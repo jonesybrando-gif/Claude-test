@@ -13,6 +13,7 @@ export type EarlyAccessState = { ok?: boolean; error?: string } | undefined;
 const schema = z.object({
   email: z.string().trim().email("Enter a work email we can reply to.").max(200),
   position: z.string().trim().max(40).optional(),
+  variant: z.string().trim().max(40).optional(),
   utm: z.string().trim().max(500).optional(),
 });
 
@@ -36,6 +37,7 @@ export async function requestEarlyAccess(_prev: EarlyAccessState, form: FormData
   const parsed = schema.safeParse({
     email: form.get("email"),
     position: form.get("position") || undefined,
+    variant: form.get("variant") || undefined,
     utm: form.get("utm") || undefined,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the email address and try again." };
@@ -47,24 +49,29 @@ export async function requestEarlyAccess(_prev: EarlyAccessState, form: FormData
     `New early-access request for ${site.appName}`,
     "",
     `Email: ${d.email}`,
-    d.position ? `Form: ${d.position}` : "",
+    d.position ? `Form: ${d.position}${d.variant ? ` (button: ${d.variant})` : ""}` : "",
     d.utm ? `Campaign: ${d.utm}` : "",
     "",
-    "Reply to set up the walkthrough.",
+    "Next step: reply with an invitation to book their setup call.",
   ]
     .filter((l, i, a) => l !== "" || (i > 0 && a[i - 1] !== ""))
     .join("\n");
 
   // Recorded in the outbox even when SMTP isn't configured, so no request is lost.
   // Filed under the first (owner) agency so it shows in Settings → Email.
-  const owner = await prisma.agency.findFirst({ orderBy: { createdAt: "asc" }, select: { id: true } });
-  await sendEmail({
-    agencyId: owner?.id ?? null,
-    to: site.contactEmail ?? "early-access@unconfigured",
-    replyTo: d.email,
-    subject: `Early access request: ${d.email}`,
-    text,
-    kind: "lead",
-  });
+  try {
+    const owner = await prisma.agency.findFirst({ orderBy: { createdAt: "asc" }, select: { id: true } });
+    await sendEmail({
+      agencyId: owner?.id ?? null,
+      to: site.contactEmail ?? "early-access@unconfigured",
+      replyTo: d.email,
+      subject: `Early access request: ${d.email}`,
+      text,
+      kind: "lead",
+    });
+  } catch (e) {
+    console.error("early access request not saved", e);
+    return { error: `Something went wrong saving your request. Try again in a minute${site.contactEmail ? ` or email ${site.contactEmail}` : ""}.` };
+  }
   return { ok: true };
 }

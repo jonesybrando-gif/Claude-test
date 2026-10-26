@@ -17,7 +17,7 @@ const QUESTIONS: { id: string; ask: string; answer: Answer }[] = [
     id: "leads",
     ask: "Why are new patient leads down this month?",
     answer: {
-      headline: "Most of the drop is organic, not paid. Two high-intent keywords slipped out of the top 3.",
+      headline: "Most of the drop came through organic search, in the same weeks two high-intent keywords slipped out of the top 3.",
       observations: [
         { source: "Analytics", text: "Website goals 152, down from 188 (-19%). From organic search: 38, down from 57 (-33%). From paid search: 114 vs 131." },
         { source: "Search Console", text: "Clicks from Google Search 1,702, down from 2,315 (-26%), with impressions about the same." },
@@ -98,7 +98,23 @@ export function AiDemo() {
       </div>
 
       <div className="mn-demo-body">
-        <div className="mn-demo-asks" role="tablist" aria-label="Questions">
+        <div
+          className="mn-demo-asks"
+          role="tablist"
+          aria-label="Example questions"
+          aria-orientation="vertical"
+          onKeyDown={(e) => {
+            const i = QUESTIONS.findIndex((x) => x.id === active);
+            const n = QUESTIONS.length;
+            const to = { ArrowDown: i + 1, ArrowRight: i + 1, ArrowUp: i - 1, ArrowLeft: i - 1, Home: 0, End: n - 1 }[e.key];
+            if (to === undefined) return;
+            e.preventDefault();
+            const next = QUESTIONS[(to + n) % n];
+            setActive(next.id);
+            track("demo_question", { question: next.id });
+            document.getElementById(`ask-${next.id}`)?.focus();
+          }}
+        >
           {QUESTIONS.map((x) => (
             <button
               key={x.id}
@@ -106,6 +122,7 @@ export function AiDemo() {
               role="tab"
               id={`ask-${x.id}`}
               aria-selected={x.id === active}
+              tabIndex={x.id === active ? 0 : -1}
               aria-controls="demo-answer"
               className="mn-ask"
               onClick={() => {

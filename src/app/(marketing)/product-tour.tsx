@@ -66,7 +66,7 @@ function Panel({ step }: { step: StepId }) {
         </div>
         <div className="mn-insight">
           <span className="mn-insight-kind">What may explain it</span>
-          <strong>Lower positions, not lower demand</strong>
+          <strong>Possibly lower positions, not lower demand</strong>
           <p>People still see the site in search but click it less often from position 6 than from position 2.</p>
         </div>
         <div className="mn-insight mn-insight-action">
@@ -101,14 +101,30 @@ export function ProductTour() {
 
   return (
     <div className="mn-tour">
-      <ol className="mn-tour-steps" role="tablist" aria-label="Product tour">
+      <ol
+        className="mn-tour-steps"
+        role="tablist"
+        aria-label="Product tour"
+        aria-orientation="vertical"
+        onKeyDown={(e) => {
+          const n = STEPS.length;
+          const to = { ArrowDown: idx + 1, ArrowRight: idx + 1, ArrowUp: idx - 1, ArrowLeft: idx - 1, Home: 0, End: n - 1 }[e.key];
+          if (to === undefined) return;
+          e.preventDefault();
+          const next = STEPS[(to + n) % n];
+          setStep(next.id);
+          track("tour_step", { step: STEPS.indexOf(next) + 1 });
+          document.getElementById(`tour-${next.id}`)?.focus();
+        }}
+      >
         {STEPS.map((s, i) => (
-          <li key={s.id}>
+          <li key={s.id} role="presentation">
             <button
               type="button"
               role="tab"
               id={`tour-${s.id}`}
               aria-selected={s.id === step}
+              tabIndex={s.id === step ? 0 : -1}
               aria-controls="tour-panel"
               onClick={() => {
                 setStep(s.id);

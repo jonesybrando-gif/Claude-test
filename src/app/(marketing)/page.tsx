@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth";
 import { appLink, site } from "@/lib/site";
@@ -6,6 +7,7 @@ import { AiDemo } from "./ai-demo";
 import { EarlyAccessForm } from "./early-access-form";
 import { PacingBoard } from "./pacing-board";
 import { ProductTour } from "./product-tour";
+import { CTA_COOKIE, isCtaVariant, type CtaVariant } from "./signup-copy";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +55,10 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     a: "Yes. Send branded reports weekly or monthly by private link or PDF, or give each client a login to their own dashboard.",
   },
   {
+    q: "What happens after I enter my email?",
+    a: "We email you an invitation to book a setup call. On the call we connect your first client's ad accounts, Google Analytics, Search Console and rankings together, so you start with your own data. There's nothing to install and no card to enter.",
+  },
+  {
     q: "What does it cost?",
     a: "Marketing Nexus is in early access while we onboard agencies one at a time. We'll walk you through pricing on your setup call, before you commit to anything.",
   },
@@ -61,16 +67,20 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
 export default async function HomePage() {
   const user = await getCurrentUser();
   if (user) redirect(user.role === "CLIENT_USER" && user.clientId ? `/clients/${user.clientId}` : "/dashboard");
+  // CTA label test: a returning visitor keeps their variant; new visitors are split 50/50.
+  const saved = (await cookies()).get(CTA_COOKIE)?.value;
+  const variant: CtaVariant = isCtaVariant(saved) ? saved : Math.random() < 0.5 ? "benefit" : "plain";
 
   return (
     <>
       <section className="mn-hero mn-wrap" aria-labelledby="hero-title">
+        <p className="mn-eyebrow">AI-Powered Marketing Intelligence for Agencies</p>
         <h1 id="hero-title">All your marketing data. Finally, answers you can act on.</h1>
         <p className="mn-lede">
           {site.appName} brings your paid ads, Google Analytics 4, Search Console and keyword rankings together, then uses AI to explain what changed,
           why it matters and exactly what to do next.
         </p>
-        <EarlyAccessForm position="hero" note="Early access. We'll set up your first client with you on a short call." />
+        <EarlyAccessForm position="hero" variant={variant} />
       </section>
 
       <section className="mn-wrap mn-demo-wrap" aria-label="Try it: ask about a sample client">
@@ -119,7 +129,7 @@ export default async function HomePage() {
             the website still converts. You get one answer instead of five dashboards.
           </p>
           <ul className="mn-checks">
-            <li>Spot problems in the channel that caused them, not the one that reported them</li>
+            <li>See every channel&apos;s change side by side, so you know where to look first</li>
             <li>Find where paid search can cover an organic gap, and where it&apos;s wasted</li>
             <li>Never double-count: ad conversions and website goals are kept apart</li>
           </ul>
@@ -136,8 +146,8 @@ export default async function HomePage() {
             <div className="mn-channel"><span className="mn-src src-ga">Website</span><strong>152</strong><span>goals completed</span><em className="tone-down">-19%</em></div>
           </div>
           <div className="mn-connect">
-            <span className="mn-insight-kind">What connects them</span>
-            <p>Organic search lost 19 website goals after two rankings slipped on Oct 12. Paid search lost 17. Fixing the rankings is the bigger opportunity.</p>
+            <span className="mn-insight-kind">What lines up</span>
+            <p>Website goals from organic search fell by 19 in the same weeks two rankings slipped; goals from paid search fell by 17. The rankings are the first thing to check.</p>
           </div>
         </figure>
       </section>
@@ -145,10 +155,10 @@ export default async function HomePage() {
       <section className="mn-wrap mn-feature mn-feature-flip" aria-labelledby="f2">
         <div className="mn-feature-copy">
           <p className="mn-kicker">SEO and keyword rankings</p>
-          <h2 id="f2" className="mn-h2">Know when rankings move, and what it costs in leads.</h2>
+          <h2 id="f2" className="mn-h2">Know when rankings move, and what moved with them.</h2>
           <p className="mn-body">
-            Daily keyword positions sit beside Search Console clicks and the website goals they bring in, so a ranking drop shows up as lost leads, not just a
-            number on a rank report.
+            Daily keyword positions sit beside Search Console clicks and Google Analytics goals from organic search, so you can see whether a ranking change
+            lines up with a change in traffic and leads, and decide what to look into first.
           </p>
           <ul className="mn-checks">
             <li>Daily rank tracking for the keywords that matter to each client</li>
@@ -239,15 +249,15 @@ export default async function HomePage() {
             <h2 id="start-title">See your own clients&apos; answers this week.</h2>
             <ol className="mn-start-steps">
               <li><strong>Enter your work email.</strong> That&apos;s the whole form.</li>
-              <li><strong>Book a short setup call.</strong> We&apos;ll email you a time.</li>
+              <li><strong>Get an invitation by email.</strong> Pick a time for your setup call.</li>
               <li><strong>Connect your first client together.</strong> Ads, Analytics, Search Console and rankings.</li>
-              <li><strong>Leave with real answers.</strong> Insights, a pacing forecast and a first report.</li>
+              <li><strong>Start with your own data.</strong> Insights, a pacing forecast and a first report.</li>
             </ol>
           </div>
           <div className="mn-start-form">
             <p className="mn-start-label">Early access</p>
             <p className="mn-start-sub">We&apos;re onboarding agencies one at a time.</p>
-            <EarlyAccessForm position="start" tone="dark" />
+            <EarlyAccessForm position="start" variant={variant} tone="dark" />
             <p className="mn-start-signin">
               Already have an account? <a href={appLink("/login")}>Sign in</a>
             </p>
@@ -270,7 +280,7 @@ export default async function HomePage() {
       <section className="mn-wrap mn-final" aria-labelledby="final-title">
         <h2 id="final-title">Stop reading reports. Start acting on them.</h2>
         <p>All your marketing data in one place, with answers you can act on.</p>
-        <EarlyAccessForm position="final" />
+        <EarlyAccessForm position="final" variant={variant} />
       </section>
     </>
   );
