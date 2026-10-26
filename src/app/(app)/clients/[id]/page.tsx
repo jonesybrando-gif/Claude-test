@@ -22,6 +22,7 @@ import { SectionSkeleton } from "@/components/ui/skeleton";
 import { ExecutiveSummary } from "@/components/reports/executive-summary";
 import { ClientDashboardsTab } from "@/components/dashboards/client-dashboards-tab";
 import { ClientFacingDashboards } from "@/components/dashboards/dashboard-section";
+import { ConnectedDataSection } from "@/components/dashboards/connected-data-section";
 import { listClientDashboards } from "@/server/dashboards/access";
 import { CampaignsSection, DataFreshness, hiddenMarker, HistorySection, KpiSection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
 
@@ -181,6 +182,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             {(rep) => (
               <>
                 <NoAccountsState rep={rep} staff />
+                <ConnectedDataSection rep={rep} canEdit={canEdit} query={sp} />
                 <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />
               </>
             )}
@@ -194,6 +196,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             {(rep) => (
               <>
                 <KpiSection rep={rep} marker={mark("kpis")} editable={canEdit} />
+                <ConnectedDataSection rep={rep} canEdit={canEdit} query={sp} />
                 <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand hover:underline">Open Insights</Link>} />
                 <NoteSection rep={rep} marker={mark("summary")} />
                 <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />
@@ -268,6 +271,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             {[
               { href: `${base}/accounts`, Icon: Plug, title: "Ad accounts", body: "Link or unlink this client's advertising accounts." },
               { href: `${base}/campaigns?${rangeQs}`, Icon: ListChecks, title: "Campaigns", body: "Choose which campaigns count in reports and pacing." },
+              { href: "/integrations", Icon: Plug, title: "Data sources", body: "Link CallRail, GA4, Search Console, Business Profile and social to this client." },
               { href: `${base}/budgets`, Icon: Wallet, title: "Budgets", body: "Monthly budgets, distribution and pacing thresholds." },
               { href: `${base}/report`, Icon: FileSliders, title: "Customize report", body: "KPIs, sections and the default range the client sees." },
               { href: `${base}/share`, Icon: Link2, title: "Share links", body: "Links the client can open without signing in." },

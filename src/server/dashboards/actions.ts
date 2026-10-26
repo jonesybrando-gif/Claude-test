@@ -11,7 +11,7 @@ import { loadDashboardFor } from "./access";
 import { contextFromReport, resolveWidgets } from "./data";
 import { linkedSources } from "./sources";
 import { DASHBOARD_TEMPLATES } from "@/lib/dashboards/templates";
-import { cleanName, copyWidgets, planTemplateApplication, resolveTemplateChoice, uniqueName } from "@/lib/dashboards/apply";
+import { cleanName, copyWidgets, planTemplateApplication, resolveTemplateChoices, uniqueName } from "@/lib/dashboards/apply";
 import { parseWidgets, readWidgets } from "@/lib/dashboards/parse";
 import { canManageDashboardTemplates } from "@/lib/dashboards/access";
 import type { WidgetData } from "@/lib/dashboards/widget-data";
@@ -34,9 +34,9 @@ async function agencyTemplates(agencyId: string) {
 /** New client dashboard, blank or from a template ("blank" | "builtin:<key>" | "agency:<id>"). */
 export async function createDashboardAction(clientId: string, _prev: CreateDashboardState, form: FormData): Promise<CreateDashboardState> {
   const user = await requireClientEdit(clientId);
-  const choice = String(form.get("template") ?? "blank");
-  const tpl = resolveTemplateChoice(choice, DASHBOARD_TEMPLATES, choice.startsWith("agency:") ? await agencyTemplates(user.agencyId) : []);
-  if (!tpl) return { error: "That template no longer exists. Pick another." };
+  const choices = form.getAll("template").map(String);
+  const tpl = resolveTemplateChoices(choices, DASHBOARD_TEMPLATES, choices.some((c) => c.startsWith("agency:")) ? await agencyTemplates(user.agencyId) : []);
+  if (!tpl) return { error: "One of those templates no longer exists. Pick again." };
   const existing = await prisma.dashboard.findMany({ where: { clientId, isTemplate: false }, select: { name: true, position: true } });
   const typed = String(form.get("name") ?? "").trim();
   const [plan] = planTemplateApplication(
@@ -114,7 +114,7 @@ export async function setDashboardVisibilityAction(id: string, visible: boolean)
   return { ok: true };
 }
 
-/** Saves the editor's widgets after validating them (12-column grid, at most 40). */
+/** Saves the editor's widgets after validating them (12-column grid, at most 80). */
 export async function saveDashboardWidgetsAction(id: string, widgets: unknown, name?: string): Promise<DashboardResult> {
   const user = await requireUser();
   const d = await loadDashboardFor(user, id, "edit");
@@ -176,9 +176,10 @@ export async function applyTemplateAction(templateId: string, clientIds: string[
 /** New agency template, blank or from a built-in template. Admins only. */
 export async function createTemplateAction(_prev: CreateDashboardState, form: FormData): Promise<CreateDashboardState> {
   const admin = await requireAdmin();
-  const choice = String(form.get("template") ?? "blank");
-  const tpl = resolveTemplateChoice(choice, DASHBOARD_TEMPLATES, []);
-  if (!tpl) return { error: "That template no longer exists." };
+  const choices = form.getAll("template").map(String);
+  const tpl = resolveTemplateChoices(choices, DASHBOARD_TEMPLATES, []);
+  if (!tpl) return { error: "One of those templates no longer exists." };
+  const blank = tpl.widgets.length === 0;
   const existing = await prisma.dashboard.findMany({ where: { agencyId: admin.agencyId, isTemplate: true }, select: { name: true } });
   const typed = String(form.get("name") ?? "").trim();
   const t = await prisma.dashboard.create({
@@ -186,7 +187,7 @@ export async function createTemplateAction(_prev: CreateDashboardState, form: Fo
       agencyId: admin.agencyId,
       clientId: null,
       isTemplate: true,
-      name: uniqueName(typed || (choice === "blank" ? "New template" : tpl.name), existing.map((e) => e.name)),
+      name: uniqueName(typed || (blank ? "New template" : tpl.name), existing.map((e) => e.name)),
       widgets: json(copyWidgets(tpl.widgets)),
       createdById: admin.id,
     },
@@ -207,4 +208,26 @@ export async function previewWidgetAction(clientId: string, widget: unknown, par
   ]);
   const data = await resolveWidgets(parsed.widgets, contextFromReport(rep, linked));
   return data[parsed.widgets[0].id];
+}
+
+/**
+ * Opens a client's dashboard for one built-in template (e.g. CallRail), making
+ * it first if the client doesn't have one yet. Used by the Overview's
+ * "Connected data" cards. New ones start hidden from the client.
+ */
+export async function openTemplateDashboardAction(clientId: string, templateKey: string): Promise<void> {
+  const user = await requireClientEdit(clientId);
+  const tpl = DASHBOARD_TEMPLATES.find((t) => t.key === templateKey);
+  if (!tpl) redirect(`/clients/${clientId}?tab=dashboards`);
+  const existing = await prisma.dashboard.findMany({ where: { clientId, isTemplate: false }, select: { id: true, name: true, position: true } });
+  let id = existing.find((d) => d.name.toLowerCase() === tpl.name.toLowerCase())?.id;
+  if (!id) {
+    const [plan] = planTemplateApplication(tpl, [{ clientId, existingNames: existing.map((d) => d.name), maxPosition: existing.reduce((m, d) => Math.max(m, d.position), -1) }]);
+    const d = await prisma.dashboard.create({
+      data: { agencyId: user.agencyId, clientId, name: plan.name, position: plan.position, defaultRange: plan.defaultRange, widgets: json(plan.widgets), createdById: user.id, clientVisible: false },
+    });
+    id = d.id;
+    revalidateClient(clientId);
+  }
+  redirect(`/clients/${clientId}?tab=dashboards&d=${id}`);
 }

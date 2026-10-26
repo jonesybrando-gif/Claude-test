@@ -6,7 +6,7 @@ import type { DashboardWidget, WidgetKind } from "./types";
 import { isKnownMetric, sourceOf } from "./metrics";
 
 export const GRID_COLS = 12;
-export const MAX_WIDGETS = 40;
+export const MAX_WIDGETS = 80;
 export const MAX_ROWS = 400;
 export const MAX_H = 16;
 export const MAX_TEXT = 5000;
@@ -63,7 +63,7 @@ export interface ParseOptions {
 const isInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v);
 
 /**
- * Strictly validates widgets for saving: at most 40, unique ids, known kinds
+ * Strictly validates widgets for saving: at most 80, unique ids, known kinds
  * and metrics, and every widget inside the 12-column grid. Returns clean
  * copies (unknown fields dropped).
  */

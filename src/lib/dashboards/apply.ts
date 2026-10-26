@@ -36,6 +36,38 @@ export function resolveTemplateChoice(choice: string, builtins: DashboardTemplat
   return null;
 }
 
+/**
+ * Several template choices → one dashboard: each template's widgets stacked
+ * under a heading, in the order picked. "blank" entries are ignored; nothing
+ * picked means a blank dashboard. Null if any choice no longer exists.
+ */
+export function resolveTemplateChoices(choices: string[], builtins: DashboardTemplateDef[], agency: AgencyTemplateRef[]): TemplateSource | null {
+  const picked = [...new Set(choices.filter((c) => c && c !== "blank"))];
+  if (picked.length <= 1) return resolveTemplateChoice(picked[0] ?? "blank", builtins, agency);
+  const parts: TemplateSource[] = [];
+  for (const c of picked) {
+    const t = resolveTemplateChoice(c, builtins, agency);
+    if (!t) return null;
+    parts.push(t);
+  }
+  return combineTemplates(parts);
+}
+
+/** Stacks templates top to bottom, each under a full-width heading. */
+export function combineTemplates(parts: TemplateSource[]): TemplateSource {
+  const widgets: DashboardWidget[] = [];
+  let top = 0;
+  parts.forEach((p, i) => {
+    widgets.push({ id: `s${i}-heading`, kind: "text", text: `## ${p.name}`, x: 0, y: top, w: 12, h: 1 });
+    top += 1;
+    const rows = p.widgets.reduce((m, w) => Math.max(m, w.y + w.h), 0);
+    for (const w of p.widgets) widgets.push({ ...w, id: `s${i}-${w.id}`, y: w.y + top });
+    top += rows;
+  });
+  const joined = parts.map((p) => p.name).join(" + ");
+  return { name: joined.length <= MAX_NAME ? joined : "Combined dashboard", widgets, defaultRange: parts.find((p) => p.defaultRange)?.defaultRange };
+}
+
 export function cleanName(name: unknown, fallback = "Untitled dashboard"): string {
   const s = typeof name === "string" ? name.replace(/\s+/g, " ").trim().slice(0, MAX_NAME) : "";
   return s || fallback;
