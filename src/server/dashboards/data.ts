@@ -1,14 +1,14 @@
 import "server-only";
 import { getClientPerformance, type ClientPerformance } from "../reporting";
 import { metricBreakdown, metricSeries, metricTotals } from "../metrics/query";
-import { keywordRankTable, type KeywordRankTableFn } from "./sources";
+import { callLog, keywordRankTable, type CallLogFn, type KeywordRankTableFn } from "./sources";
 import type { ClientReport } from "../client-report";
 import { comparisonRange, resolveRange, type CompareMode, type DateRange, type RangePreset } from "@/lib/date-ranges";
 import { eachDay, type IsoDate } from "@/lib/pacing/dates";
 import { dailyKpiValue, KPI_BY_KEY, kpiValues, type KpiKey } from "@/lib/kpis";
 import type { MetricTotals } from "@/lib/metrics";
 import type { DailyValue } from "@/lib/metrics-registry/aggregate";
-import type { MetricSource } from "@/lib/metrics-registry";
+import { DIMENSIONS, type MetricSource } from "@/lib/metrics-registry";
 import { PLATFORM_LABEL, type PlatformKey } from "@/lib/platforms";
 import { adKpiKey, changeOf, dimensionLabel, metricInfo, SOURCE_LABEL, sourceOf, type MetricInfo } from "@/lib/dashboards/metrics";
 import type { DashboardWidget } from "@/lib/dashboards/types";
@@ -39,6 +39,8 @@ export interface ResolveContext {
   ads: AdData | null;
   /** Sources linked to the client ("ads" = any ad account). */
   linked: MetricSource[];
+  /** Agency staff (not a client login or shared link): sees call recordings. */
+  staff?: boolean;
 }
 
 export interface ResolverDeps {
@@ -46,10 +48,11 @@ export interface ResolverDeps {
   metricSeries: typeof metricSeries;
   metricBreakdown: typeof metricBreakdown;
   keywordRankTable: KeywordRankTableFn;
+  callLog: CallLogFn;
   adPerformance: (clientId: string, range: DateRange) => Promise<ClientPerformance>;
 }
 
-export const defaultResolverDeps: ResolverDeps = { metricTotals, metricSeries, metricBreakdown, keywordRankTable, adPerformance: getClientPerformance };
+export const defaultResolverDeps: ResolverDeps = { metricTotals, metricSeries, metricBreakdown, keywordRankTable, callLog, adPerformance: getClientPerformance };
 
 /** The ad part of a loaded client report, in the shape the resolver needs. */
 export function adDataFromReport(rep: Pick<ClientReport, "perf" | "cmpPerf" | "client">): AdData | null {
@@ -62,8 +65,8 @@ export function adDataFromReport(rep: Pick<ClientReport, "perf" | "cmpPerf" | "c
   };
 }
 
-export function contextFromReport(rep: ClientReport, linked: MetricSource[]): ResolveContext {
-  return { clientId: rep.client.id, today: rep.today, range: rep.range, cmpRange: rep.cmpRange, compareMode: rep.compareMode, ads: adDataFromReport(rep), linked };
+export function contextFromReport(rep: ClientReport, linked: MetricSource[], staff = false): ResolveContext {
+  return { clientId: rep.client.id, today: rep.today, range: rep.range, cmpRange: rep.cmpRange, compareMode: rep.compareMode, ads: adDataFromReport(rep), linked, staff };
 }
 
 interface Period {
@@ -179,6 +182,17 @@ export async function resolveWidgets(widgets: DashboardWidget[], ctx: ResolveCon
       ).catch(() => FAILED),
     );
   }
+  const logs = new Map<string, Promise<WidgetData>>();
+  for (const w of widgets) {
+    if (w.kind !== "calllog") continue;
+    const p = periodOf(w);
+    logs.set(
+      w.id,
+      deps.callLog(ctx.clientId, { from: p.range.from, to: p.range.to, limit: 100, staff: !!ctx.staff }).then((r): WidgetData =>
+        r.rows.length ? { kind: "calllog", rows: r.rows, total: r.total, timeZone: r.timeZone } : emptyFor("callrail", ctx.linked, "No calls in this period."),
+      ).catch(() => FAILED),
+    );
+  }
   await Promise.all(jobs);
 
   // 3. Build each widget.
@@ -186,7 +200,7 @@ export async function resolveWidgets(widgets: DashboardWidget[], ctx: ResolveCon
   for (const w of widgets) {
     const p = periodOf(w);
     try {
-      out[w.id] = await buildWidget(w, p, ctx, { totals: totals.get(p.key), series: series.get(p.key), ad: adPerf.get(p.key) ?? null, breakdown: breakdowns.get(w.id), rankings: rankings.get(w.id) });
+      out[w.id] = await buildWidget(w, p, ctx, { totals: totals.get(p.key), series: series.get(p.key), ad: adPerf.get(p.key) ?? null, breakdown: breakdowns.get(w.id), rankings: rankings.get(w.id), calllog: logs.get(w.id) });
     } catch {
       out[w.id] = FAILED;
     }
@@ -200,6 +214,7 @@ interface Loaded {
   ad: { cur: ClientPerformance; cmp: ClientPerformance | null } | null;
   breakdown?: Promise<WidgetData>;
   rankings?: Promise<WidgetData>;
+  calllog?: Promise<WidgetData>;
 }
 
 async function buildWidget(w: DashboardWidget, p: Period, ctx: ResolveContext, l: Loaded): Promise<WidgetData> {
@@ -211,6 +226,8 @@ async function buildWidget(w: DashboardWidget, p: Period, ctx: ResolveContext, l
       return ctx.ads ? { kind: w.kind } : emptyFor("ads", ctx.linked);
     case "rankings":
       return l.rankings!;
+    case "calllog":
+      return l.calllog!;
     case "table":
     case "pie":
       return l.breakdown!;
@@ -299,7 +316,10 @@ async function resolveBreakdown(w: DashboardWidget, p: Period, ctx: ResolveConte
     if (!rows.length) return emptyFor("ads", ctx.linked, "No ad activity in this period.");
     return { kind: "breakdown", metrics, dimensionLabel: label, rows };
   }
-  const table = await deps.metricBreakdown(ctx.clientId, dim, keys, p.range.from, p.range.to, BREAKDOWN_LIMIT);
+  const ordered = DIMENSIONS.some((d) => d.source === source && d.dimension === dim && d.ordered);
+  const table = await deps.metricBreakdown(ctx.clientId, dim, keys, p.range.from, p.range.to, ordered ? 100 : BREAKDOWN_LIMIT);
   if (!table.length) return emptyFor(source, ctx.linked);
-  return { kind: "breakdown", metrics, dimensionLabel: label, rows: table.map((r) => ({ label: r.value || "(not set)", values: r.metrics })) };
+  // Natural-order dimensions (weekday, hour) list every value in order; "1 Mon" shows as "Mon".
+  const rows = ordered ? [...table].sort((a, b) => a.value.localeCompare(b.value)).map((r) => ({ ...r, value: r.value.replace(/^\d+ /, "") })) : table;
+  return { kind: "breakdown", metrics, dimensionLabel: label, rows: rows.map((r) => ({ label: r.value || "(not set)", values: r.metrics })) };
 }

@@ -6,13 +6,13 @@ import type { DashboardWidget, WidgetKind } from "./types";
 import { isKnownMetric, sourceOf } from "./metrics";
 
 export const GRID_COLS = 12;
-export const MAX_WIDGETS = 80;
+export const MAX_WIDGETS = 100;
 export const MAX_ROWS = 400;
 export const MAX_H = 16;
 export const MAX_TEXT = 5000;
 export const MAX_TITLE = 120;
 
-export const WIDGET_KINDS: WidgetKind[] = ["kpi", "line", "bar", "table", "pie", "rankings", "text", "pacing", "campaigns"];
+export const WIDGET_KINDS: WidgetKind[] = ["kpi", "line", "bar", "table", "pie", "rankings", "calllog", "text", "pacing", "campaigns"];
 
 /** Kinds that chart or tabulate metrics, and how many metrics each takes. */
 export const METRIC_LIMITS: Partial<Record<WidgetKind, { min: number; max: number }>> = {
@@ -31,6 +31,7 @@ export const MIN_SIZE: Record<WidgetKind, { w: number; h: number }> = {
   table: { w: 3, h: 3 },
   pie: { w: 3, h: 3 },
   rankings: { w: 4, h: 3 },
+  calllog: { w: 6, h: 4 },
   text: { w: 2, h: 1 },
   pacing: { w: 6, h: 4 },
   campaigns: { w: 6, h: 4 },
@@ -44,6 +45,7 @@ export const DEFAULT_SIZE: Record<WidgetKind, { w: number; h: number }> = {
   table: { w: 6, h: 5 },
   pie: { w: 4, h: 4 },
   rankings: { w: 6, h: 5 },
+  calllog: { w: 12, h: 8 },
   text: { w: 4, h: 2 },
   pacing: { w: 12, h: 6 },
   campaigns: { w: 12, h: 7 },
@@ -63,7 +65,7 @@ export interface ParseOptions {
 const isInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v);
 
 /**
- * Strictly validates widgets for saving: at most 80, unique ids, known kinds
+ * Strictly validates widgets for saving: at most 100, unique ids, known kinds
  * and metrics, and every widget inside the 12-column grid. Returns clean
  * copies (unknown fields dropped).
  */

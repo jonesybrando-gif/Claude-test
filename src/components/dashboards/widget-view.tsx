@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowDownRight, ArrowUpRight, Minus, Plug } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Minus, PlayCircle, Plug } from "lucide-react";
 import { formatMetric } from "@/lib/dashboards/metrics";
 import { widgetTitle } from "@/lib/dashboards/describe";
 import type { DashboardWidget } from "@/lib/dashboards/types";
-import type { WidgetData } from "@/lib/dashboards/widget-data";
+import type { CallLogRow, WidgetData } from "@/lib/dashboards/widget-data";
 import { formatPct } from "@/lib/money";
 import { SeriesChart } from "@/components/charts/series-chart";
 import { BreakdownBarChart, MetricPieChart } from "@/components/charts/breakdown-charts";
@@ -52,7 +52,7 @@ export function WidgetView({ widget, data, currency, slots, staff = false, fill 
           <h3 className="truncate text-sm font-semibold" title={title}>{title}</h3>
         </header>
       )}
-      <div className={cn("min-h-0 flex-1 px-4 pb-3", !title && "pt-3", (widget.kind === "table" || widget.kind === "rankings") && "overflow-auto px-0", widget.kind === "text" && "overflow-auto")}>
+      <div className={cn("min-h-0 flex-1 px-4 pb-3", !title && "pt-3", (widget.kind === "table" || widget.kind === "rankings" || widget.kind === "calllog") && "overflow-auto px-0", widget.kind === "text" && "overflow-auto")}>
         <WidgetBody widget={widget} data={data} currency={currency} staff={staff} />
       </div>
     </section>
@@ -117,9 +117,87 @@ function WidgetBody({ widget, data, currency, staff }: { widget: DashboardWidget
           </TBody>
         </Table>
       );
+    case "calllog":
+      return <CallLog rows={data.rows} total={data.total} timeZone={data.timeZone} />;
     default:
       return null;
   }
+}
+
+const STATUS: Record<CallLogRow["status"], { label: string; cls: string }> = {
+  answered: { label: "Answered", cls: "bg-good-bg text-good-ink" },
+  missed: { label: "Missed", cls: "bg-critical-bg text-critical-ink" },
+  voicemail: { label: "Voicemail", cls: "bg-warning-bg text-warning-ink" },
+};
+
+function callTime(iso: string, timeZone: string | null): string {
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
+  try {
+    return new Intl.DateTimeFormat("en-US", { ...opts, ...(timeZone ? { timeZone } : {}) }).format(new Date(iso));
+  } catch {
+    return new Intl.DateTimeFormat("en-US", opts).format(new Date(iso));
+  }
+}
+
+function duration(sec: number): string {
+  if (!sec) return "—";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`;
+}
+
+/** Recent calls, newest first (CallRail). */
+function CallLog({ rows, total, timeZone }: { rows: CallLogRow[]; total: number; timeZone: string | null }) {
+  const withRecordings = rows.some((r) => r.recordingUrl);
+  return (
+    <div className="flex flex-col">
+      <Table>
+        <THead>
+          <tr>
+            <TH className="pl-4">Date</TH>
+            <TH>Caller</TH>
+            <TH>Source</TH>
+            <TH className="text-right">Duration</TH>
+            <TH className={cn(!withRecordings && "pr-4")}>Status</TH>
+            {withRecordings && <TH className="pr-4"><span className="sr-only">Recording</span></TH>}
+          </tr>
+        </THead>
+        <TBody>
+          {rows.map((r) => (
+            <TR key={r.id}>
+              <TD className="pl-4 whitespace-nowrap text-text-2">{callTime(r.startedAt, timeZone)}</TD>
+              <TD className="max-w-56">
+                <span className="block truncate font-medium" title={r.callerName ?? undefined}>{r.callerName || r.callerNumber || "Unknown caller"}</span>
+                <span className="block truncate text-xs text-text-3">{[r.callerName ? r.callerNumber : null, r.location].filter(Boolean).join(" · ") || "\u00a0"}</span>
+              </TD>
+              <TD className="max-w-60">
+                <span className="block truncate" title={r.source ?? undefined}>{r.source || "—"}</span>
+                <span className="block truncate text-xs text-text-3" title={[r.campaign, r.keyword].filter(Boolean).join(" · ")}>{[r.campaign, r.keyword].filter(Boolean).join(" · ") || "\u00a0"}</span>
+              </TD>
+              <TD className="text-right tabular whitespace-nowrap">{duration(r.durationSec)}</TD>
+              <TD className={cn(!withRecordings && "pr-4")}>
+                <span className="flex flex-wrap items-center gap-1">
+                  <span className={cn("rounded px-1.5 py-0.5 text-[11px] font-medium", STATUS[r.status].cls)}>{STATUS[r.status].label}</span>
+                  {r.firstCall && <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] text-text-2">First-time</span>}
+                  {r.lead && <span className="rounded bg-brand/10 px-1.5 py-0.5 text-[11px] font-medium text-brand">Lead</span>}
+                </span>
+              </TD>
+              {withRecordings && (
+                <TD className="pr-4">
+                  {r.recordingUrl && (
+                    <a href={r.recordingUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline">
+                      <PlayCircle className="h-3.5 w-3.5" aria-hidden /> Listen
+                    </a>
+                  )}
+                </TD>
+              )}
+            </TR>
+          ))}
+        </TBody>
+      </Table>
+      {total > rows.length && <p className="px-4 pt-2 text-xs text-text-3">Showing the latest {rows.length} of {total.toLocaleString("en-US")} calls in this period.</p>}
+    </div>
+  );
 }
 
 function KpiWidget({ title, data, currency, fillCls }: { title: string; data: Extract<WidgetData, { kind: "kpi" }>; currency: string; fillCls: string }) {

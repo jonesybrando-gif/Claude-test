@@ -42,4 +42,10 @@ export interface DimensionDef {
   /** Value stored in MetricDaily.dimension, e.g. "channel" */
   dimension: string;
   label: string;
+  /**
+   * Natural order (e.g. weekdays, hours): breakdowns list every value sorted by
+   * the stored value instead of the top rows by metric. Stored values may carry
+   * a sort prefix ("1 Mon") that is hidden when shown.
+   */
+  ordered?: boolean;
 }

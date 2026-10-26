@@ -114,7 +114,7 @@ export async function setDashboardVisibilityAction(id: string, visible: boolean)
   return { ok: true };
 }
 
-/** Saves the editor's widgets after validating them (12-column grid, at most 80). */
+/** Saves the editor's widgets after validating them (12-column grid, at most 100). */
 export async function saveDashboardWidgetsAction(id: string, widgets: unknown, name?: string): Promise<DashboardResult> {
   const user = await requireUser();
   const d = await loadDashboardFor(user, id, "edit");

@@ -82,7 +82,37 @@ describe("call → daily bucket mapping", () => {
     expect(pick(rows, "callrail.calls", d, "campaign", "Website pool")).toBe(1);
     expect(pick(rows, "callrail.calls", d, "campaign", "+15555550100")).toBe(1);
     expect(pick(rows, "callrail.calls", d, "keyword", "dentist near me")).toBe(1);
-    expect(rows.filter((r) => r.dimension === "keyword")).toHaveLength(1);
+    expect(new Set(rows.filter((r) => r.dimension === "keyword").map((r) => r.dimensionValue))).toEqual(new Set(["dentist near me"]));
+    expect(pick(rows, "callrail.voicemails", d)).toBe(1);
+    expect(pick(rows, "callrail.missed", d, "source", "Google Ads")).toBe(1);
+    expect(pick(rows, "callrail.calls", d, "weekday", "1 Mon")).toBe(4); // Oct 5 2026 is a Monday
+    expect(pick(rows, "callrail.calls", d, "hour", "10:00")).toBe(4);
+  });
+
+  it("maps medium, landing page, city, tags and value, and builds call-log records", async () => {
+    const { callsToRecords, localWeekdayHour, valueCents } = await import("./metrics");
+    expect(valueCents("$1,250.00")).toBe(125000);
+    expect(valueCents(null)).toBe(0);
+    expect(localWeekdayHour("2026-10-05T07:30:00Z", "America/Los_Angeles")).toEqual({ weekday: "1 Mon", hour: "00:00" });
+    expect(localWeekdayHour("2026-10-05T07:30:00Z", "America/New_York")).toEqual({ weekday: "1 Mon", hour: "03:00" });
+    const calls: CallRailCall[] = [
+      { id: "z1", start_time: "2026-10-06T14:05:00-07:00", answered: true, duration: 95, first_call: true, source: "Google Ads", medium: "cpc", landing_page_url: "https://www.example.com/implants/?gclid=abc", customer_city: "Austin", customer_state: "TX", customer_name: "Jane Doe", customer_phone_number: "+15125550100", tags: [{ name: "New patient" }], value: "300", recording_player: "https://app.callrail.com/calls/CAL1/recording?access_key=k", lead_status: "good_lead" },
+      { id: "z2", start_time: "2026-10-06T15:00:00-07:00", answered: false, voicemail: true, recording_player: "https://evil.example.com/x" },
+    ];
+    const opts = { timeZone: "America/Los_Angeles", from: "2026-10-06", to: "2026-10-06" };
+    const rows = callsToRows(calls, opts);
+    const d = "2026-10-06";
+    expect(pick(rows, "callrail.calls", d, "medium", "cpc")).toBe(1);
+    expect(pick(rows, "callrail.calls", d, "landingPage", "example.com/implants")).toBe(1);
+    expect(pick(rows, "callrail.calls", d, "city", "Austin, TX")).toBe(1);
+    expect(pick(rows, "callrail.calls", d, "tag", "New patient")).toBe(1);
+    expect(pick(rows, "callrail.value", d)).toBe(30000);
+    expect(pick(rows, "callrail.calls", d, "weekday", "2 Tue")).toBe(2);
+    const recs = callsToRecords(calls, opts);
+    expect(recs).toHaveLength(2);
+    expect(recs[0]).toMatchObject({ externalId: "z1", callerName: "Jane Doe", city: "Austin", state: "TX", answered: true, firstCall: true, durationSec: 95, leadStatus: "good_lead", tags: ["New patient"], landingPage: "example.com/implants", date: d });
+    expect(recs[0].recordingUrl).toContain("app.callrail.com");
+    expect(recs[1]).toMatchObject({ answered: false, voicemail: true, recordingUrl: null });
   });
 
   it("maps form submissions by source", () => {
@@ -114,7 +144,7 @@ describe("pagination and rate limits", () => {
       from: "2026-10-05",
       to: "2026-10-05",
     };
-    const rows = await fetchCallRailMetrics(ctx, { fetch: fn, sleep: noSleep });
+    const rows = await fetchCallRailMetrics(ctx, { fetch: fn, sleep: noSleep, writeCalls: async () => {} });
     expect(pick(rows, "callrail.calls", "2026-10-05")).toBe(2);
     expect(pick(rows, "callrail.missed", "2026-10-05")).toBe(1);
     expect(rows.some((r) => r.metric === "callrail.forms")).toBe(false); // forms not enabled → skipped
@@ -165,7 +195,7 @@ describe("pagination and rate limits", () => {
 
   it("never sends the key to a non-CallRail host from a pagination link", async () => {
     const { fn, calls } = fakeFetch([(u) => (u.host === "api.callrail.com" ? json({ has_next_page: true, next_page: "https://evil.example.com/steal", calls: [] }) : json({}))]);
-    await expect(fetchCallRailMetrics({ connection: { externalId: "A" } as DataSourceConnection, asset: { externalId: "C", timezone: null, settings: null } as unknown as DataAsset, secret: KEY, from: "2026-10-01", to: "2026-10-01" }, { fetch: fn, sleep: noSleep })).rejects.toThrow(CallRailError);
+    await expect(fetchCallRailMetrics({ connection: { externalId: "A" } as DataSourceConnection, asset: { externalId: "C", timezone: null, settings: null } as unknown as DataAsset, secret: KEY, from: "2026-10-01", to: "2026-10-01" }, { fetch: fn, sleep: noSleep, writeCalls: async () => {} })).rejects.toThrow(CallRailError);
     expect(calls.every((c) => c.url.host === "api.callrail.com")).toBe(true);
   });
 });
