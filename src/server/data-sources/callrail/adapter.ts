@@ -2,13 +2,28 @@ import "server-only";
 import { addDays, type IsoDate } from "@/lib/pacing/dates";
 import type { DataSourceAdapter, MetricRow, RemoteAsset, SyncContext } from "../types";
 import { CALLRAIL_API, CallRailError, callrailList, listCallRailAccounts, listCallRailCompanies, type CallRailClientOptions } from "./client";
-import { callsToRows, formsToRows, type CallRailCall, type CallRailFormSubmission } from "./metrics";
+import { callsToRecords, callsToRows, formsToRows, type CallRailCall, type CallRailFormSubmission, type CallRecordRow } from "./metrics";
 
 // CallRail (API key). One DataAsset per CallRail company (CALLRAIL_COMPANY);
 // settings.accountId holds the owning account. Requests run sequentially and
 // retry 429s per Retry-After (see ./client.ts).
 
-const CALL_FIELDS = ["first_call", "source", "source_name", "keywords", "campaign", "lead_status", "company_time_zone"].join(",");
+// Defaults already include answered, voicemail, duration, start_time, customer_* and recording_player.
+const CALL_FIELDS = ["first_call", "source", "source_name", "keywords", "campaign", "lead_status", "company_time_zone", "medium", "landing_page_url", "tags", "value"].join(",");
+
+/** Call-log storage, injectable for tests. Replaces the asset's calls for the window's dates. */
+export type CallRecordWriter = (assetId: string, clientId: string, from: IsoDate, to: IsoDate, records: CallRecordRow[]) => Promise<void>;
+
+const RETAIN_DAYS = 400;
+
+export const writeCallRecords: CallRecordWriter = async (assetId, clientId, from, to, records) => {
+  const { prisma } = await import("../../db");
+  const day = (d: IsoDate) => new Date(`${d}T00:00:00.000Z`);
+  await prisma.$transaction([
+    prisma.callRecord.deleteMany({ where: { assetId, OR: [{ date: { gte: day(from), lte: day(to) } }, { date: { lt: day(addDays(to, -RETAIN_DAYS)) } }] } }),
+    prisma.callRecord.createMany({ data: records.map((r) => ({ ...r, assetId, clientId, date: day(r.date) })), skipDuplicates: true }),
+  ]);
+};
 
 function requireKey(secret: string | undefined): string {
   if (!secret) throw new CallRailError("No CallRail API key is stored for this connection. Paste a key on the Integrations page.", 401);
@@ -57,13 +72,14 @@ export async function fetchCallRailForms(key: string, accountId: string, company
   return callrailList<CallRailFormSubmission>(key, url, "form_submissions", opts);
 }
 
-export async function fetchCallRailMetrics(ctx: SyncContext, opts?: CallRailClientOptions): Promise<MetricRow[]> {
+export async function fetchCallRailMetrics(ctx: SyncContext, opts?: CallRailClientOptions & { writeCalls?: CallRecordWriter }): Promise<MetricRow[]> {
   const key = requireKey(ctx.secret);
   const accountId = accountIdFor(ctx);
   const companyId = ctx.asset.externalId;
   const calls = await fetchCallRailCalls(key, accountId, companyId, ctx.from, ctx.to, opts);
   const timeZone = timeZoneFor(ctx) ?? calls.find((c) => c.company_time_zone)?.company_time_zone ?? null;
   const rows = callsToRows(calls, { timeZone, from: ctx.from, to: ctx.to });
+  await (opts?.writeCalls ?? writeCallRecords)(ctx.asset.id, ctx.asset.clientId, ctx.from, ctx.to, callsToRecords(calls, { timeZone, from: ctx.from, to: ctx.to }));
   // Form tracking is an optional CallRail add-on: skip quietly when the account doesn't have it.
   try {
     const forms = await fetchCallRailForms(key, accountId, companyId, ctx.from, ctx.to, opts);

@@ -29,7 +29,7 @@ export function adSlots({ rep, staff, basePath, query }: SlotOptions, widgets: P
 export async function DashboardBody({ dashboard, linked, ...opts }: SlotOptions & { dashboard: Pick<Dashboard, "widgets">; linked?: MetricSource[] }) {
   const widgets = readWidgets(dashboard.widgets);
   if (widgets.length === 0) return null;
-  const data = await resolveWidgets(widgets, contextFromReport(opts.rep, linked ?? (await linkedSources(opts.rep.client.id))));
+  const data = await resolveWidgets(widgets, contextFromReport(opts.rep, linked ?? (await linkedSources(opts.rep.client.id)), opts.staff));
   return <DashboardGrid widgets={widgets} data={data} currency={opts.rep.client.currency} slots={adSlots(opts, widgets)} staff={opts.staff} />;
 }
 

@@ -8,6 +8,7 @@ export type WidgetKind =
   | "table"      // breakdown by a dimension (e.g. top GSC queries, GA4 channels, call sources)
   | "pie"        // share by dimension
   | "rankings"   // tracked keyword positions (rank source)
+  | "calllog"    // recent individual calls (CallRail)
   | "text"       // free text / heading / note
   | "pacing"     // existing budget pacing block (ads)
   | "campaigns"; // existing campaign table (ads)

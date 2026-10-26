@@ -39,3 +39,16 @@ describe("resolveTemplateChoices", () => {
     expect(r.ok).toBe(true);
   });
 });
+
+describe("segmentLayout", () => {
+  it("splits at full-width tables and rebases the grid runs", async () => {
+    const { segmentLayout } = await import("@/components/dashboards/dashboard-grid");
+    const ads = DASHBOARD_TEMPLATES.find((t) => t.key === "ads-overview")!.widgets;
+    const segs = segmentLayout(ads);
+    expect(segs.map((s) => ("flow" in s ? s.flow.kind : `grid:${s.grid.length}`))).toEqual(["grid:8", "pacing", "campaigns"]);
+    const cr = segmentLayout(DASHBOARD_TEMPLATES.find((t) => t.key === "callrail-calls")!.widgets);
+    const firstGridAfterCampaign = cr.findIndex((s) => "flow" in s && s.flow.id === "cr-campaign-table") + 1;
+    const g = cr[firstGridAfterCampaign];
+    expect("grid" in g && Math.min(...g.grid.map((w) => w.y))).toBe(0);
+  });
+});

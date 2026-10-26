@@ -8,6 +8,7 @@ export const KIND_LABEL: Record<WidgetKind, string> = {
   table: "Table",
   pie: "Pie chart",
   rankings: "Keyword rankings",
+  calllog: "Call log",
   text: "Text",
   pacing: "Budget pacing",
   campaigns: "Campaigns table",
@@ -29,6 +30,8 @@ export function widgetTitle(w: Pick<DashboardWidget, "kind" | "title" | "metrics
       return w.dimension ? `${labels[0] ?? "Metric"} by ${dimensionLabel(sourceOf(w.metrics?.[0] ?? ""), w.dimension).toLowerCase()}` : labels[0] ?? KIND_LABEL[w.kind];
     case "rankings":
       return "Keyword rankings";
+    case "calllog":
+      return "Call log";
     case "text":
       return "";
     case "pacing":

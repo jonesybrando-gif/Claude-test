@@ -709,6 +709,7 @@ model DataAsset {
 
   metrics  MetricDaily[]
   keywords TrackedKeyword[]
+  calls    CallRecord[]
 
   @@unique([kind, externalId, clientId])
   @@index([clientId])
@@ -791,4 +792,38 @@ model Dashboard {
 
   @@index([agencyId, isTemplate])
   @@index([clientId, position])
+}
+
+/// One tracked call (CallRail), for call logs. Kept 13 months, refreshed with each sync window.
+model CallRecord {
+  id             String    @id @default(cuid())
+  assetId        String
+  asset          DataAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  clientId       String
+  externalId     String
+  startedAt      DateTime
+  /// Local calendar date in the company's time zone (for range filters).
+  date           DateTime  @db.Date
+  callerName     String?
+  callerNumber   String?
+  city           String?
+  state          String?
+  source         String?
+  medium         String?
+  campaign       String?
+  keyword        String?
+  landingPage    String?
+  trackingNumber String?
+  durationSec    Int       @default(0)
+  answered       Boolean   @default(false)
+  voicemail      Boolean   @default(false)
+  firstCall      Boolean   @default(false)
+  leadStatus     String?
+  tags           String[]  @default([])
+  /// CallRail's shareable recording player link (staff only).
+  recordingUrl   String?
+
+  @@unique([assetId, externalId])
+  @@index([clientId, date])
+  @@index([assetId, date])
 }
