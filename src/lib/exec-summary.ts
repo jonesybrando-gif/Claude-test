@@ -43,8 +43,11 @@ export function autoExecutiveSummary(i: AiContextInput): ExecutiveSummaryContent
 export function contextResults(i: AiContextInput) {
   const lines = i.accounts.map((a) => a.totals).filter((x): x is MetricTotals => !!x);
   const cur = lines.length ? lines : i.totals;
-  const g = resolveGoal(i.goal, cur, i.previous);
-  return { current: resultsFor(g.goal, cur, g.guessed), previous: i.previous ? resultsFor(g.goal, i.previous, g.guessed) : null };
+  // The comparison is counted the same way (per account) when per-account figures exist.
+  const prevLines = i.accounts.map((a) => a.previousTotals).filter((x): x is MetricTotals => !!x);
+  const prev = i.previous ? (prevLines.length ? prevLines : i.previous) : null;
+  const g = resolveGoal(i.goal, cur, prev);
+  return { current: resultsFor(g.goal, cur, g.guessed), previous: prev ? resultsFor(g.goal, prev, g.guessed) : null };
 }
 
 /** The headline paragraphs: results for the period first, then what drove them, and the budget. */

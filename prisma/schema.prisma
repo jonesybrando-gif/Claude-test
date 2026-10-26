@@ -161,7 +161,7 @@ model Client {
   timezone  String  @default("America/New_York")
   /// What the client wants from advertising; null = guessed from the data.
   goal      ClientGoal?
-  /// Alert types muted for this client (still recorded, not shown or sent).
+  /// Alert types muted for this client (not raised, shown or emailed; open ones close).
   mutedAlertTypes AlertType[] @default([])
   currency  String  @default("USD") @db.Char(3)
   primaryManagerId String?

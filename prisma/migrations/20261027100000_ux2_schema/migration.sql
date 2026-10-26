@@ -18,3 +18,6 @@ ALTER TABLE "Budget" ADD COLUMN "repeatsMonthly" BOOLEAN NOT NULL DEFAULT true;
 UPDATE "Budget" SET "repeatsMonthly" = false
 WHERE NOT (EXTRACT(DAY FROM "periodStart") = 1
        AND "periodEnd" = (date_trunc('month', "periodStart") + interval '1 month - 1 day')::date);
+-- Past months never repeat: only budgets for the current month (or later) carry forward,
+-- so deploying mid-month can't recreate last month's budgets for this month.
+UPDATE "Budget" SET "repeatsMonthly" = false WHERE "periodEnd" < date_trunc('month', now())::date;

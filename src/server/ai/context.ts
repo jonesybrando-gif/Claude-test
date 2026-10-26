@@ -35,7 +35,7 @@ export function contextInput(rep: ClientReport): AiContextInput {
           : meta?.stale
             ? `stale: last synced ${meta.lastSuccessfulSyncAt ? formatDate(meta.lastSuccessfulSyncAt.slice(0, 10)) : "never"}`
             : null;
-      return { platform: PLATFORM_LABEL[a.platform], name: a.name, totals: perf.byAccount[a.id] ?? null, spendVerified: a.spendIsVerified, dataNote };
+      return { platform: PLATFORM_LABEL[a.platform], name: a.name, totals: perf.byAccount[a.id] ?? null, previousTotals: cmpPerf?.byAccount[a.id] ?? null, spendVerified: a.spendIsVerified, dataNote };
     }),
     campaigns: client.accounts.flatMap((a) =>
       a.campaigns

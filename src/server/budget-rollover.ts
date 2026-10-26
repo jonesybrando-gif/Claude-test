@@ -30,7 +30,7 @@ const budgetSelect = {
   weekdayWeights: true,
   forecastModel: true,
   repeatsMonthly: true,
-  campaign: { select: { excludedAt: true } },
+  campaign: { select: { excludedAt: true, status: true } },
   revisions: { orderBy: [{ effectiveDate: "desc" }, { createdAt: "desc" }], take: 1, select: { amountMinor: true } },
 } satisfies Prisma.BudgetSelect;
 
@@ -59,7 +59,7 @@ async function clientBudgets(db: Db, clientId: string, from: IsoDate, to: IsoDat
   return rows.map(toPlan);
 }
 
-const usable = (p: PlannedCopy<PlanBudget>) => p.source.row.revisions.length > 0 && !(p.source.scope === "CAMPAIGN" && p.source.row.campaign?.excludedAt);
+const usable = (p: PlannedCopy<PlanBudget>) => p.source.row.revisions.length > 0 && !(p.source.scope === "CAMPAIGN" && (p.source.row.campaign?.excludedAt || p.source.row.campaign?.status === "REMOVED"));
 
 async function writeCopies(tx: Prisma.TransactionClient, plans: PlannedCopy<PlanBudget>[], note: string, createdById: string | null, repeatsMonthly: (b: PlanBudget) => boolean) {
   for (const p of plans.filter(usable)) {
@@ -86,19 +86,24 @@ async function writeCopies(tx: Prisma.TransactionClient, plans: PlannedCopy<Plan
   return plans.filter(usable).length;
 }
 
-/** Locks one client's budgets for the rest of the transaction. */
-async function lockClient(tx: Prisma.TransactionClient, clientId: string) {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`budget-rollover:${clientId}`}))`;
+/**
+ * Locks one client's budgets for the rest of the transaction. Never waits: if
+ * another request is already rolling this client forward, returns false and
+ * the caller skips (that request does the work).
+ */
+async function lockClient(tx: Prisma.TransactionClient, clientId: string): Promise<boolean> {
+  const rows = await tx.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(hashtext(${`budget-rollover:${clientId}`})) AS locked`;
+  return rows[0]?.locked === true;
 }
 
 async function rollClient(clientId: string, today: IsoDate): Promise<number> {
   const from = previousMonth(today).start;
   const to = monthBounds(today).end;
   return prisma.$transaction(async (tx) => {
-    await lockClient(tx, clientId);
+    if (!(await lockClient(tx, clientId))) return 0;
     const plans = planRollForward(await clientBudgets(tx, clientId, from, to), today);
     return writeCopies(tx, plans, "Repeated from last month", null, () => true);
-  });
+  }, { timeout: 30_000, maxWait: 5_000 });
 }
 
 /**
@@ -196,10 +201,10 @@ export async function copyBudgetsToNextMonth(clientWhere: Prisma.ClientWhereInpu
   let created = 0;
   for (const p of pending) {
     const n = await prisma.$transaction(async (tx) => {
-      await lockClient(tx, p.clientId);
+      if (!(await lockClient(tx, p.clientId))) return 0;
       const budgets = await clientBudgets(tx, p.clientId, monthBounds(p.today).start, nextMonth(p.today).end);
       return writeCopies(tx, planCopyToNextMonth(budgets, p.today), "Copied from last month", createdById, (b) => b.repeatsMonthly);
-    });
+    }, { timeout: 30_000, maxWait: 5_000 });
     if (n > 0) {
       clients += 1;
       created += n;

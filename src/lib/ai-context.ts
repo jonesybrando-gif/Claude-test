@@ -45,7 +45,7 @@ export interface AiContextInput {
   kpis: KpiKey[];
   totals: MetricTotals;
   previous: MetricTotals | null;
-  accounts: { platform: string; name: string; totals: MetricTotals | null; spendVerified: boolean; dataNote: string | null }[];
+  accounts: { platform: string; name: string; totals: MetricTotals | null; previousTotals?: MetricTotals | null; spendVerified: boolean; dataNote: string | null }[];
   campaigns: { name: string; platform: string; status: string; totals: MetricTotals; previous: MetricTotals | null; budget?: CampaignBudget | null }[];
   pacing: AiPacing | null;
   /** Final budget result when the reporting period is exactly a past budget month. */

@@ -197,7 +197,8 @@ describe("muted alert types", () => {
 describe("performance alerts", () => {
   // Spend $100/day throughout; results per day vary by test.
   const perf = (prevPerDay: number, curPerDay: number, o: Partial<AccountInput> = {}) =>
-    account({ dailyResults: { ...daily("2026-09-20", "2026-10-09", prevPerDay), ...daily("2026-10-10", D, curPerDay) }, ...o });
+    // Windows end 3 days before the last complete day (late-counted results), so the switch is on Oct 7.
+    account({ dailyResults: { ...daily("2026-09-20", "2026-10-06", prevPerDay), ...daily("2026-10-07", D, curPerDay) }, ...o });
   const kinds = (a: AccountInput, settings = DEFAULT_ALERT_SETTINGS) => run([], [a], [], settings).map((x) => x.kind);
 
   it("raises a cost-per-result spike when each result costs ≥40% more with ≥10 results in both weeks", () => {
@@ -210,20 +211,20 @@ describe("performance alerts", () => {
   it("needs at least 10 results in each week", () => {
     expect(kinds(perf(1, 0.6))).toEqual([]); // 7 vs 4.2 results
   });
-  it("raises a results drop of ≥40% when the earlier week had ≥10", () => {
+  it("raises a results drop of ≥40% when the earlier week had ≥20", () => {
     expect(kinds(perf(4, 2))).toEqual(["CPA_SPIKE", "RESULTS_DROP"]);
     expect(kinds(perf(4, 3))).toEqual([]); // −25%
   });
   it("raises tracking-zero when an account spends with no conversions after converting before", () => {
-    const a = account({ dailyResults: { ...daily("2026-09-20", "2026-10-13", 1), ...daily("2026-10-14", D, 0) } });
+    const a = account({ dailyResults: { ...daily("2026-09-20", "2026-10-10", 2), ...daily("2026-10-11", D, 0) } });
     const out = run([], [a]);
     expect(out.map((x) => x.kind)).toEqual(["TRACKING_ZERO"]); // the results drop it causes is not repeated
     expect(out[0].severity).toBe("critical");
   });
-  it("tracking-zero needs $100 of spend and ≥5 prior results", () => {
-    const quiet = { ...daily("2026-09-20", "2026-10-13", 1), ...daily("2026-10-14", D, 0) };
+  it("tracking-zero needs $100 of spend and ≥25 prior results", () => {
+    const quiet = { ...daily("2026-09-20", "2026-10-10", 2), ...daily("2026-10-11", D, 0) };
     expect(kinds(account({ dailyResults: quiet, daily: daily("2026-09-20", D, 3000) }))).toEqual([]); // $90 in 3 days
-    expect(kinds(account({ dailyResults: { ...daily("2026-10-01", "2026-10-13", 0.3), ...daily("2026-10-14", D, 0) } }))).toEqual([]); // ~3.9 prior
+    expect(kinds(account({ dailyResults: { ...daily("2026-09-20", "2026-10-10", 1), ...daily("2026-10-11", D, 0) } }))).toEqual([]); // ~13 prior
   });
   it("can be turned off in settings", () => {
     expect(kinds(perf(4, 2), { ...DEFAULT_ALERT_SETTINGS, cpaSpikeAlerts: 0, resultsDropAlerts: 0 })).toEqual([]);

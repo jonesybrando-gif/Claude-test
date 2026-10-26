@@ -75,9 +75,14 @@ export const PERFORMANCE_RULES = {
   /** Results, last 7 complete days vs the 7 before, down at least this %, with ≥ minResults before. */
   resultsDropPct: 40,
   minResults: 10,
+  /** Results drops need a bigger base: 10 → 6 is ordinary week-to-week noise. */
+  resultsDropMinPrior: 20,
+  /** Platforms keep adding conversions for days; compare windows that end this many days before the data's last complete day. */
+  lateCountDays: 3,
   /** Spend over the last 3 complete days with zero results, after ≥ trackingPriorResults in the 14 days before. */
   trackingMinSpendMinor: 10000,
-  trackingPriorResults: 5,
+  /** ≈25 in 14 days ⇒ ≈5 expected in 3 days, so three empty days are unlikely by chance. */
+  trackingPriorResults: 25,
 } as const;
 
 /** Plain descriptions of the performance alerts, for Settings › Alerts. */
@@ -290,9 +295,11 @@ export function evaluateAlerts(input: {
     if (a.dailyResults && s.trackingZeroAlerts) {
       // Tracking: real spend over the last 3 days with no results, after results before.
       const R = PERFORMANCE_RULES;
-      const spend3 = sumDays(a.daily, addDays(d, -2), d);
-      const results3 = sumDays(a.dailyResults, addDays(d, -2), d);
-      const prior14 = sumDays(a.dailyResults, addDays(d, -16), addDays(d, -3));
+      // Window ends 2 days before the last complete day: the newest days are often still being counted.
+      const t = addDays(d, -2);
+      const spend3 = sumDays(a.daily, addDays(t, -2), t);
+      const results3 = sumDays(a.dailyResults, addDays(t, -2), t);
+      const prior14 = sumDays(a.dailyResults, addDays(t, -16), addDays(t, -3));
       if (spend3 >= R.trackingMinSpendMinor && results3 === 0 && prior14 >= R.trackingPriorResults) {
         out.push({
           ...base,
@@ -348,8 +355,10 @@ function performanceAlerts(accounts: AccountInput[], s: AlertSettings, raised: A
   const byClient = new Map<string, { name: string; currency: string; isDemo: boolean; cur: { spend: number; results: number }; prev: { spend: number; results: number } }>();
   for (const a of accounts) {
     if (!a.monitored || !a.dailyResults || !a.dataCompleteThrough || a.status !== "ACTIVE") continue;
-    const d = a.dataCompleteThrough;
+    // Compare windows that end a few days back: recent conversions are still being counted.
+    const d = addDays(a.dataCompleteThrough, -R.lateCountDays);
     const c = byClient.get(a.clientId) ?? { name: a.clientName, currency: a.currency, isDemo: false, cur: { spend: 0, results: 0 }, prev: { spend: 0, results: 0 } };
+    if (a.currency !== c.currency) continue; // never add spend across currencies
     c.cur.spend += sumDays(a.daily, addDays(d, -6), d);
     c.cur.results += sumDays(a.dailyResults, addDays(d, -6), d);
     c.prev.spend += sumDays(a.daily, addDays(d, -13), addDays(d, -7));
@@ -371,18 +380,18 @@ function performanceAlerts(accounts: AccountInput[], s: AlertSettings, raised: A
           severity: "warning",
           dedupeKey: `CPA_SPIKE:${clientId}`,
           title: alertTitle(`cost per result up ${Math.round((now / before - 1) * 100)}%`, "last 7 days"),
-          detail: `Each result cost ≈${formatMoney(Math.round(now), c.currency)} over the last 7 complete days, up from ≈${formatMoney(Math.round(before), c.currency)} the week before (${Math.round(c.cur.results)} vs ${Math.round(c.prev.results)} results). Check search terms, audiences, bids and landing pages.`,
+          detail: `Each result cost ≈${formatMoney(Math.round(now), c.currency)} over 7 days (ending 3 days before the latest data, so late-counted results are included), up from ≈${formatMoney(Math.round(before), c.currency)} the week before (${Math.round(c.cur.results)} vs ${Math.round(c.prev.results)} results). Check search terms, audiences, bids and landing pages.`,
         });
       }
     }
-    if (s.resultsDropAlerts && c.prev.results >= R.minResults && c.cur.results <= c.prev.results * (1 - R.resultsDropPct / 100)) {
+    if (s.resultsDropAlerts && c.prev.results >= R.resultsDropMinPrior && c.cur.results <= c.prev.results * (1 - R.resultsDropPct / 100)) {
       out.push({
         ...base,
         kind: "RESULTS_DROP",
         severity: "warning",
         dedupeKey: `RESULTS_DROP:${clientId}`,
         title: alertTitle(`results down ${Math.round((1 - c.cur.results / c.prev.results) * 100)}%`, "last 7 days"),
-        detail: `${Math.round(c.cur.results)} results over the last 7 complete days, down from ${Math.round(c.prev.results)} the week before, while spend went from ${formatMoney(c.prev.spend, c.currency, { whole: true })} to ${formatMoney(c.cur.spend, c.currency, { whole: true })}. Check tracking, budgets and campaign changes.`,
+        detail: `${Math.round(c.cur.results)} results over 7 days (ending 3 days before the latest data), down from ${Math.round(c.prev.results)} the week before, while spend went from ${formatMoney(c.prev.spend, c.currency, { whole: true })} to ${formatMoney(c.cur.spend, c.currency, { whole: true })}. Check tracking, budgets and campaign changes.`,
       });
     }
   }

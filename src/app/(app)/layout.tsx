@@ -15,7 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId }, select: { name: true, brandColor: true, logoUrl: true } }),
     prisma.client.findMany({ where: visibleClientsWhere(user), select: { id: true, name: true }, orderBy: { name: "asc" } }),
     // Integrator: swap for openAlertIssueCount() from src/server/alerts.ts once merged.
-    user.role === "CLIENT_USER" ? Promise.resolve(0) : openAlertIssueCount(user.agencyId, user.id).then((r) => r.issues),
+    user.role === "CLIENT_USER" ? Promise.resolve(0) : openAlertIssueCount(user.agencyId, user.id).then((r) => r.issues).catch(() => 0),
   ]);
   const staff = user.role !== "CLIENT_USER";
   // Order: Home, All clients, Clients, Alerts, Integrations, Settings.

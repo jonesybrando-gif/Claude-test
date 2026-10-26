@@ -6,7 +6,7 @@ import { prisma } from "@/server/db";
 import { requireClientEdit } from "@/server/access";
 import { validateNewBudget, validateRevision } from "@/lib/budget-validation";
 import { parseMoneyToMinor } from "@/lib/money";
-import { dateToIso, isoToDate } from "@/lib/pacing/dates";
+import { addDays, dateToIso, isoToDate } from "@/lib/pacing/dates";
 import { isWholeMonth } from "@/lib/budget-rollover";
 
 export type FormState = { ok?: string; errors?: string[] } | undefined;
@@ -121,7 +121,19 @@ export async function reviseBudget(clientId: string, _prev: FormState, form: For
 export async function deleteBudget(clientId: string, form: FormData): Promise<void> {
   await requireClientEdit(clientId);
   const budgetId = String(form.get("budgetId"));
-  await prisma.budget.deleteMany({ where: { id: budgetId, clientId } });
+  const budget = await prisma.budget.findFirst({ where: { id: budgetId, clientId } });
+  if (!budget) return;
+  // Deleting a month's budget must stick: stop the previous month's matching
+  // budget from repeating, or the roll-forward would recreate this one.
+  const start = dateToIso(budget.periodStart);
+  const prevEnd = addDays(start, -1);
+  await prisma.$transaction([
+    prisma.budget.updateMany({
+      where: { clientId, scope: budget.scope, accountId: budget.accountId, campaignId: budget.campaignId, periodEnd: isoToDate(prevEnd), repeatsMonthly: true },
+      data: { repeatsMonthly: false },
+    }),
+    prisma.budget.delete({ where: { id: budget.id } }),
+  ]);
   revalidatePath(`/clients/${clientId}`, "layout");
   revalidatePath("/dashboard");
 }

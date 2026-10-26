@@ -128,6 +128,8 @@ export async function evaluateAgencyAlerts(agencyId: string, now: Date = new Dat
   return reconcile(agencyId, candidates, now);
 }
 
+const PERFORMANCE_KINDS = new Set<string>(["CPA_SPIKE", "RESULTS_DROP", "TRACKING_ZERO"]);
+
 async function reconcile(agencyId: string, candidates: AlertCandidate[], now: Date): Promise<AlertRunResult> {
   const existing = await prisma.alert.findMany({ where: { agencyId, status: { in: ["OPEN", "ACKNOWLEDGED"] } } });
   const byKey = new Map(existing.map((a) => [a.dedupeKey, a]));
@@ -153,7 +155,13 @@ async function reconcile(agencyId: string, candidates: AlertCandidate[], now: Da
   const stale = existing.filter((a) => !seen.has(a.dedupeKey)).map((a) => a.id);
   if (stale.length) await prisma.alert.updateMany({ where: { id: { in: stale } }, data: { status: "RESOLVED", resolvedAt: now } });
 
-  const emailsQueued = created.length ? await notify(agencyId, created) : 0;
+  // Performance alerts can clear and come back as numbers wobble: don't re-email
+  // one whose key was resolved in the last 7 days (it still shows in the app).
+  const recentlyResolved = created.length
+    ? new Set((await prisma.alert.findMany({ where: { agencyId, status: "RESOLVED", resolvedAt: { gte: new Date(now.getTime() - 7 * 864e5) }, dedupeKey: { in: created.map((x) => x.c.dedupeKey) } }, select: { dedupeKey: true } })).map((a) => a.dedupeKey))
+    : new Set<string>();
+  const toNotify = created.filter((x) => !(PERFORMANCE_KINDS.has(x.c.kind) && recentlyResolved.has(x.c.dedupeKey)));
+  const emailsQueued = toNotify.length ? await notify(agencyId, toNotify) : 0;
   return { agencyId, created: created.length, refreshed, resolved: stale.length, emailsQueued };
 }
 
