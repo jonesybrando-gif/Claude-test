@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { site } from "@/lib/site";
+import { appLink, site } from "@/lib/site";
 import { BrandMark } from "@/components/brand-mark";
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
@@ -11,7 +11,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           <nav className="flex items-center gap-4 text-sm text-text-2" aria-label="Site">
             <Link href="/privacy" className="hover:text-text">Privacy</Link>
             <Link href="/terms" className="hover:text-text">Terms</Link>
-            <Link href="/login" className="rounded-md bg-brand px-3 py-1.5 font-medium text-brand-ink hover:opacity-90">Sign in</Link>
+            <a href={appLink("/login")} className="rounded-md bg-brand px-3 py-1.5 font-medium text-brand-ink hover:opacity-90">Sign in</a>
           </nav>
         </div>
       </header>

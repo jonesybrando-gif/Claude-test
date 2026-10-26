@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "./db";
 import type { ClientReport } from "./client-report";
-import { contextForReport, contextInput } from "./ai/context";
+import { aiContextForReport, contextInput } from "./ai/context";
 import { AI_MODEL, aiConfigured, draftExecutiveSummary } from "./ai/assistant";
 import { autoExecutiveSummary, type ExecutiveSummaryContent } from "@/lib/exec-summary";
 import { diffDays } from "@/lib/pacing/dates";
@@ -60,7 +60,7 @@ export async function getExecutiveSummary(rep: ClientReport, opts: { generate: b
     if (!p) {
       p = (async () => {
         const agency = await prisma.agency.findUniqueOrThrow({ where: { id: rep.client.agencyId }, select: { name: true } });
-        const summary = await draftExecutiveSummary(contextForReport(rep), { agencyName: agency.name, days: diffDays(rep.range.from, rep.range.to) + 1 });
+        const summary = await draftExecutiveSummary(await aiContextForReport(rep), { agencyName: agency.name, days: diffDays(rep.range.from, rep.range.to) + 1 });
         await prisma.aiInsight.create({ data: { clientId: rep.client.id, kind: KIND, content: { v: VERSION, summary: { ...summary }, compare: compareKey(rep) }, model: AI_MODEL, rangeFrom: rep.range.from, rangeTo: rep.range.to } });
         return summary;
       })().finally(() => inFlight.delete(key));

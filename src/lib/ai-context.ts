@@ -57,6 +57,35 @@ export interface AiContextInput {
   today?: string;
   /** The range ends so recently that platforms may still add late-counted results. */
   stillCounting?: boolean;
+  /** Website, organic search and keyword ranking data for the same period, when those sources are connected. */
+  web?: AiWebContext | null;
+}
+
+/** A metric's value now and in the comparison period, already formatted as the AI should quote it. */
+export interface AiWebMetric {
+  label: string;
+  value: string;
+  previous: string | null;
+  /** Percent change vs the comparison period; null when either side is missing or zero. */
+  changePct: number | null;
+}
+
+/** Non-ad sources: Google Analytics 4, Search Console and tracked keyword ranks. */
+export interface AiWebContext {
+  analytics: AiWebMetric[] | null;
+  /** Visits and website goals by channel (e.g. "Organic Search", "Paid Search"). */
+  channels: { channel: string; visits: AiWebMetric; goals: AiWebMetric }[];
+  search: AiWebMetric[] | null;
+  rankings: {
+    tracked: number;
+    inTop3: number;
+    inTop10: number;
+    improved: number;
+    declined: number;
+    changeDays: number;
+    /** Biggest moves, best first; change is positions gained (+) or lost (-). */
+    movers: { keyword: string; position: number | null; change: number }[];
+  } | null;
 }
 
 const VERDICT_NOTE: Record<Verdict, string> = {
@@ -162,6 +191,30 @@ export function buildAiContext(i: AiContextInput): string {
     lines.push("", "## Data notes");
     for (const n of i.notes) lines.push(`- ${n}`);
   }
+  if (i.web) {
+    const w = i.web;
+    const line = (x: AiWebMetric) => `${x.label}: ${x.value}${x.previous === null ? "" : `; comparison ${x.previous}`}${x.changePct === null ? "" : `; change ${pct(x.changePct)}`}`;
+    lines.push("", "## Website and organic search (same period; from Google Analytics, Search Console and the rank tracker)");
+    if (w.analytics) {
+      lines.push("Website (Google Analytics 4, all traffic sources):");
+      for (const x of w.analytics) lines.push(`- ${line(x)}`);
+    } else lines.push("- Google Analytics is not connected for this client.");
+    if (w.channels.length) {
+      lines.push("Website visits and goals by channel:");
+      for (const ch of w.channels) lines.push(`- ${ch.channel}: visits ${ch.visits.value}${ch.visits.changePct === null ? "" : ` (${pct(ch.visits.changePct)})`}; website goals ${ch.goals.value}${ch.goals.changePct === null ? "" : ` (${pct(ch.goals.changePct)})`}`);
+    }
+    if (w.search) {
+      lines.push("Google organic search (Search Console):");
+      for (const x of w.search) lines.push(`- ${line(x)}`);
+    } else lines.push("- Search Console is not connected for this client.");
+    const r = w.rankings;
+    if (r && r.tracked > 0) {
+      lines.push(`Tracked keyword rankings (${r.tracked} keywords): ${r.inTop3} in the top 3, ${r.inTop10} in the top 10; over the last ${r.changeDays} days ${r.improved} moved up and ${r.declined} moved down.`);
+      for (const m of r.movers) lines.push(`- "${m.keyword}": now ${m.position === null ? "not in the top 100" : `position ${m.position}`} (${m.change > 0 ? `up ${m.change}` : `down ${-m.change}`} positions)`);
+    } else lines.push("- No keyword rankings are tracked for this client.");
+    lines.push("Website goals are key events counted by Google Analytics; ad conversions are counted by each ad platform. They overlap, so never add them together.");
+  }
+
   lines.push("", "## What the metrics mean (use these plain explanations when you mention a metric)");
   for (const k of [...new Set([...i.kpis, ...ACCOUNT_KPIS, ...CAMPAIGN_KPIS])]) lines.push(`- ${KPI_BY_KEY[k].label}: ${KPI_BY_KEY[k].plain}`);
   lines.push("", "Conversions and conversion value are reported by each platform under its own attribution settings; platforms count them differently.");

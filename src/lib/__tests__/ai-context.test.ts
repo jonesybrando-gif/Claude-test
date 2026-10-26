@@ -90,3 +90,32 @@ describe("AI grounding context", () => {
     expect(text).toContain("$118 over 15 remaining days");
   });
 });
+
+describe("AI grounding context: website and organic search", () => {
+  const web = {
+    analytics: [
+      { label: "Website visits", value: "4,210", previous: "4,880", changePct: -13.7 },
+      { label: "Website goals", value: "96", previous: "121", changePct: -20.7 },
+    ],
+    channels: [{ channel: "Organic Search", visits: { label: "Website visits", value: "1,940", previous: "2,610", changePct: -25.7 }, goals: { label: "Website goals", value: "38", previous: "57", changePct: -33.3 } }],
+    search: [{ label: "Clicks from Google Search", value: "1,702", previous: "2,315", changePct: -26.5 }],
+    rankings: { tracked: 24, inTop3: 4, inTop10: 11, improved: 3, declined: 7, changeDays: 30, movers: [{ keyword: "emergency plumber", position: 9, change: -6 }] },
+  };
+
+  it("adds website, channel, search and ranking lines with changes", () => {
+    const text = buildAiContext({ ...base, web });
+    expect(text).toContain("## Website and organic search");
+    expect(text).toContain("- Website visits: 4,210; comparison 4,880; change -13.7%");
+    expect(text).toContain("- Organic Search: visits 1,940 (-25.7%); website goals 38 (-33.3%)");
+    expect(text).toContain("Tracked keyword rankings (24 keywords): 4 in the top 3, 11 in the top 10; over the last 30 days 3 moved up and 7 moved down.");
+    expect(text).toContain('- "emergency plumber": now position 9 (down 6 positions)');
+    expect(text).toContain("never add them together");
+  });
+
+  it("says which sources aren't connected, and leaves the section out when none are", () => {
+    const text = buildAiContext({ ...base, web: { analytics: null, channels: [], search: null, rankings: null } });
+    expect(text).toContain("Google Analytics is not connected");
+    expect(text).toContain("No keyword rankings are tracked");
+    expect(buildAiContext(base)).not.toContain("## Website and organic search");
+  });
+});
