@@ -40,7 +40,7 @@ describe("parseWidgets", () => {
   it(`allows at most ${MAX_WIDGETS} widgets`, () => {
     const many = Array.from({ length: MAX_WIDGETS }, (_, i) => kpi(`k${i}`, (i % 6) * 2, Math.floor(i / 6) * 2));
     expect(parseWidgets(many).ok).toBe(true);
-    expect(err([...many, kpi("extra", 0, 100)])).toMatch(/at most 40/);
+    expect(err([...many, kpi("extra", 0, 100)])).toMatch(new RegExp(`at most ${MAX_WIDGETS}`));
   });
 
   it("rejects bad ids, kinds, metrics and breakdowns", () => {
