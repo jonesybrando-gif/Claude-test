@@ -27,7 +27,7 @@ const TABS = [
   { key: "resolved", label: "Resolved (14 days)" },
 ] as const;
 
-type Sp = { view?: string; tab?: string; type?: string; client?: string; label?: string; owner?: string };
+type Sp = { view?: string; status?: string; tab?: string; type?: string; client?: string; label?: string; owner?: string };
 
 const alertSelect = {
   id: true,
@@ -67,7 +67,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
     return (
       <div className="mx-auto flex max-w-[1100px] flex-col gap-6">
         <InsightsHeader view="opportunities" admin={user.role === "AGENCY_ADMIN"} issueCount={null} />
-        <OpportunitiesList clients={visibleClients.map((c) => ({ id: c.id, name: c.name }))} />
+        <OpportunitiesList user={user} status={sp.status} clients={visibleClients.map((c) => ({ id: c.id, name: c.name }))} />
       </div>
     );
   }

@@ -1,4 +1,5 @@
 import "server-only";
+import { clientNextStepLines } from "@/server/next-steps";
 import type { PacingResult, PacingSeriesPoint } from "@/lib/pacing/engine";
 import { reportResults, type ClientReport } from "../client-report";
 import { contextInput } from "../ai/context";
@@ -280,7 +281,8 @@ export async function renderClientReportPdf(
 
   if (on.executive && opts.executiveSummary) {
     sectionTitle(doc, "Executive summary");
-    const es = opts.executiveSummary;
+    // The client's copy lists only next steps a person approved, never the AI's drafts.
+    const es = opts.internal ? opts.executiveSummary : { ...opts.executiveSummary, nextSteps: await clientNextStepLines(rep.client.id, rep.client.timezone) };
     for (const para of es.overview.split(/\n{2,}/)) {
       paragraph(doc, para, { size: 10, color: C.text });
       doc.moveDown(0.5);

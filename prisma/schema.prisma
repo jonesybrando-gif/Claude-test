@@ -187,6 +187,8 @@ model Client {
   chartNotes  ChartNote[]
   dataAssets  DataAsset[]
   dashboards  Dashboard[]
+  insightStatuses InsightStatus[]
+  nextSteps   NextStep[]
 
   @@index([agencyId])
 }
@@ -867,4 +869,46 @@ model FormRecord {
   @@unique([assetId, externalId])
   @@index([clientId, date])
   @@index([assetId, date])
+}
+
+/// What the agency did with one AI recommendation for a client. Recommendations are
+/// regenerated, so they're matched by a fingerprint of their title.
+model InsightStatus {
+  id          String   @id @default(cuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fingerprint String
+  title       String
+  /// "REVIEWED" | "PLANNED" | "DONE" | "DISMISSED" (no row = new)
+  status      String
+  reason      String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([clientId, fingerprint])
+}
+
+/// A next step the agency tells the client about. AI may draft one; only a person
+/// approves it (PLANNED, shown to the client) and only a person marks it DONE, with a date.
+model NextStep {
+  id           String    @id @default(cuid())
+  clientId     String
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  text         String
+  /// "DRAFT" (agency only) | "PLANNED" | "DONE"
+  status       String    @default("DRAFT")
+  /// Where a draft came from: the recommendation it was planned from, or the AI summary.
+  source       String?
+  sourceText   String?
+  targetDate   DateTime? @db.Date
+  doneOn       DateTime? @db.Date
+  createdById  String?
+  approvedById String?
+  approvedAt   DateTime?
+  doneById     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([clientId, status])
 }

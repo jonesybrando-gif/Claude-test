@@ -31,7 +31,7 @@ afterEach(() => setAiClientForTests(null));
 
 describe("AI assistant", () => {
   it("sends grounded data with structured output and a refusal fallback", async () => {
-    const calls = fakeApi(() => ({ json: message(JSON.stringify({ suggestions: [{ title: "Cut daily spend", priority: "high", category: "budget", detail: "d", evidence: "Pacing 125%" }] })) }));
+    const calls = fakeApi(() => ({ json: message(JSON.stringify({ suggestions: [{ title: "Cut daily spend", priority: "high", category: "budget", detail: "d", evidence: "Pacing 125%", impact: null }] })) }));
     const out = await generateSuggestions("Client: ABC\nPacing 125%");
     expect(out.suggestions[0]).toMatchObject({ title: "Cut daily spend", priority: "high" });
     const { body, headers } = calls[0];
@@ -45,7 +45,7 @@ describe("AI assistant", () => {
   });
 
   it("caps suggestions at six", async () => {
-    const s = { title: "t", priority: "low", category: "data", detail: "d", evidence: "e" };
+    const s = { title: "t", priority: "low", category: "data", detail: "d", evidence: "e", impact: null };
     fakeApi(() => ({ json: message(JSON.stringify({ suggestions: Array(9).fill(s) })) }));
     expect((await generateSuggestions("x")).suggestions).toHaveLength(6);
   });

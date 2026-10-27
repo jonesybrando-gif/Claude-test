@@ -87,10 +87,19 @@ export const SuggestionsSchema = z.object({
       category: z.enum(["budget", "performance", "tracking", "data"]),
       detail: z.string().describe("Two to four sentences: what to do and why"),
       evidence: z.string().describe("The specific figures from the data that support this"),
+      impact: z
+        .string()
+        .nullable()
+        .describe("Expected impact only when the data supports a reasonable estimate, as a range with its assumption (e.g. 'about 4–5 more leads this month if spent at the current cost per lead'); null when it can't be estimated. Never a promise."),
     }),
   ),
 });
 export type Suggestions = z.infer<typeof SuggestionsSchema>;
+
+/** Reads stored suggestions, including ones saved before `impact` existed. */
+export const StoredSuggestionsSchema = z.object({
+  suggestions: z.array(SuggestionsSchema.shape.suggestions.element.extend({ impact: z.string().nullable().optional() })),
+});
 
 export async function generateSuggestions(data: string): Promise<Suggestions> {
   const out = await generate(
@@ -98,7 +107,8 @@ export async function generateSuggestions(data: string): Promise<Suggestions> {
     `Review this client's advertising data and give the account manager up to 6 proactive, specific recommendations, most important first.
 Look for: budget pacing risks and how much to change daily spend; campaigns or platforms whose cost per result is clearly worse or better than the rest; meaningful changes against the comparison period; tracking gaps (spend with no conversions or leads); stale or estimated data that limits conclusions.
 When website, organic search or keyword ranking data is present, also look across channels: organic clicks or rankings falling where paid search could cover the gap (or the reverse), paid traffic rising while website goals fall (a possible landing page or tracking issue), and keywords that moved in or out of the top 10.
-In "detail", give the action and, separately, what may explain the finding, using "may".
+In "detail", give the action and, separately, what may explain the finding, using "may". Never state a cause the data doesn't show, and never say anything has already been done.
+In "impact", estimate the effect only when the figures support it (for example unspent budget at the current cost per result), as a range with the assumption; otherwise null.
 Each recommendation must cite the figures it rests on in "evidence". Skip anything the data doesn't support. If nothing needs attention, return one low-priority suggestion saying so.`,
     data,
     "high",
