@@ -62,6 +62,15 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
     prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId }, select: { alertSettings: true } }),
   ]);
   const clientById = new Map(visibleClients.map((c) => [c.id, c]));
+  if (view === "opportunities") {
+    // Recommendations only: no alert queries, and alert notifications stay unread.
+    return (
+      <div className="mx-auto flex max-w-[1100px] flex-col gap-6">
+        <InsightsHeader view="opportunities" admin={user.role === "AGENCY_ADMIN"} issueCount={null} />
+        <OpportunitiesList clients={visibleClients.map((c) => ({ id: c.id, name: c.name }))} />
+      </div>
+    );
+  }
   // Filters: type, client, label and owner (the client's primary account manager).
   const clientIds = visibleClients
     .filter((c) => !sp.client || c.id === sp.client)
@@ -178,35 +187,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
     );
   }
 
-  const viewHref = (v: "issues" | "opportunities") => (v === "issues" ? "/insights" : "/insights?view=opportunities");
-  const header = (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">AI Insights</h1>
-          <p className="max-w-[70ch] text-sm text-text-2">What needs fixing, what could be better, and what to do next, across every client. Nothing here has been acted on until someone on your team does it.</p>
-        </div>
-        {view === "issues" && user.role === "AGENCY_ADMIN" && <CheckNowButton />}
-      </div>
-      <div role="tablist" aria-label="AI Insights" className="inline-flex self-start rounded-lg bg-surface-2 p-1">
-        {(["issues", "opportunities"] as const).map((v) => (
-          <Link key={v} role="tab" aria-selected={view === v} href={viewHref(v)} className={`min-h-9 rounded-md px-3 py-1.5 text-sm ${view === v ? "bg-surface font-semibold text-text shadow-sm" : "text-text-2 hover:text-text"}`}>
-            {v === "issues" ? "Issues" : "Opportunities"}
-            {v === "issues" && open.length > 0 && <span className="ml-1.5 tabular text-text-3">{issues.length}</span>}
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-
-  if (view === "opportunities") {
-    return (
-      <div className="mx-auto flex max-w-[1100px] flex-col gap-6">
-        {header}
-        <OpportunitiesList clients={visibleClients.map((c) => ({ id: c.id, name: c.name }))} />
-      </div>
-    );
-  }
+  const header = <InsightsHeader view="issues" admin={user.role === "AGENCY_ADMIN"} issueCount={tab === "open" ? issues.length : null} />;
 
   return (
     <div className="mx-auto flex max-w-[1100px] flex-col gap-6">
@@ -261,6 +242,28 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function InsightsHeader({ view, admin, issueCount }: { view: "issues" | "opportunities"; admin: boolean; issueCount: number | null }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">AI Insights</h1>
+          <p className="max-w-[70ch] text-sm text-text-2">What needs fixing, what could be better, and what to do next, across every client. Nothing here has been acted on until someone on your team does it.</p>
+        </div>
+        {view === "issues" && admin && <CheckNowButton />}
+      </div>
+      <div role="tablist" aria-label="AI Insights" className="inline-flex self-start rounded-lg bg-surface-2 p-1">
+        {(["issues", "opportunities"] as const).map((v) => (
+          <Link key={v} role="tab" aria-selected={view === v} href={v === "issues" ? "/insights" : "/insights?view=opportunities"} className={`min-h-9 rounded-md px-3 py-1.5 text-sm ${view === v ? "bg-surface font-semibold text-text shadow-sm" : "text-text-2 hover:text-text"}`}>
+            {v === "issues" ? "Issues" : "Opportunities"}
+            {v === "issues" && issueCount ? <span className="ml-1.5 tabular text-text-3">{issueCount}</span> : null}
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

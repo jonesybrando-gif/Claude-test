@@ -22,7 +22,7 @@ export default async function ClientReportBuilderPage({ params, searchParams }: 
   const { id } = await params;
   const q = await searchParams;
   const { reset } = q;
-  const back = clientBackHref(id, q, "setup");
+  const back = clientBackHref(id, q, "settings");
   const user = await requireClientEdit(id);
   const client = await prisma.client.findUniqueOrThrow({ where: { id }, select: { name: true, goal: true } });
   const [{ template, custom }, rep] = await Promise.all([getClientTemplate(user.agencyId, id), loadClientReport(id, {})]);

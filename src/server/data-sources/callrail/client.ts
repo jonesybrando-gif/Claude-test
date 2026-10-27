@@ -43,7 +43,7 @@ function retryAfterMs(res: Response, attempt: number): number {
 }
 
 function describeStatus(status: number): string {
-  if (status === 401) return "CallRail rejected the API key (401 unauthorized). Paste a new key on the Integrations page.";
+  if (status === 401) return "CallRail rejected the API key (401 unauthorized). Paste a new key in Settings › Connections.";
   if (status === 403) return "This CallRail API key isn't allowed to read that data (403 forbidden).";
   if (status === 404) return "CallRail couldn't find that account or company (404).";
   if (status === 429) return "CallRail's rate limit was reached (429). Syncing will retry later.";

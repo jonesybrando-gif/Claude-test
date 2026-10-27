@@ -24,12 +24,14 @@ export async function OpportunitiesList({ clients }: { clients: { id: string; na
     );
   }
   const name = new Map(clients.map((c) => [c.id, c.name]));
-  const latest = await prisma.aiInsight.findMany({
-    where: { clientId: { in: clients.map((c) => c.id) }, kind: "suggestions" },
-    orderBy: { createdAt: "desc" },
-    distinct: ["clientId"],
-    select: { clientId: true, content: true, createdAt: true, rangeFrom: true, rangeTo: true },
-  });
+  // The latest review per client, without loading every older one.
+  const newest = await prisma.aiInsight.groupBy({ by: ["clientId"], where: { clientId: { in: clients.map((c) => c.id) }, kind: "suggestions" }, _max: { createdAt: true } });
+  const latest = newest.length
+    ? await prisma.aiInsight.findMany({
+        where: { kind: "suggestions", OR: newest.map((n) => ({ clientId: n.clientId, createdAt: n._max.createdAt! })) },
+        select: { clientId: true, content: true, createdAt: true, rangeFrom: true, rangeTo: true },
+      })
+    : [];
   const items = latest.flatMap((row) => {
     const parsed = SuggestionsSchema.safeParse(row.content);
     if (!parsed.success) return [];

@@ -40,7 +40,11 @@ async function AnalyticsContent({ clientId, range, cmpRange, canEdit }: { client
   const to = through ? minDate(range.to, through) : range.to;
   const days = diffDays(range.from, to) + 1;
   const cur = { from: range.from, to };
-  const prev = cmpRange ? { from: cmpRange.from, to: addDays(cmpRange.from, days - 1) } : null;
+  // Same number of days as the current window, never past the comparison range's own end.
+  const prev = cmpRange ? { from: cmpRange.from, to: minDate(addDays(cmpRange.from, days - 1), cmpRange.to) } : null;
+  if (days < 1) {
+    return <NotConnected title="No complete Google Analytics days in this range yet" body={`The latest complete day is ${through ? short(through) : "not available yet"}. Choose a longer range, such as the last 30 days.`} actions={[]} />;
+  }
   const keys = ["ga4.sessions", "ga4.keyEvents", "ga4.engagementRate", "ga4.newUsers"];
   const [now, before, channels, channelsBefore, pages, pagesBefore] = await Promise.all([
     metricTotals(clientId, keys, cur.from, cur.to),

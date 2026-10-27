@@ -28,7 +28,7 @@ export async function addChartNoteAction(clientId: string, prev: NoteState, form
     : null;
   await prisma.chartNote.create({ data: { clientId, date: isoToDate(date), text, clientVisible: form.get("clientVisible") === "on", authorId: user.id, taggedUserId: tagged?.id ?? null } });
   if (tagged && tagged.id !== user.id) {
-    const link = appUrl(`/clients/${clientId}?tab=trends`);
+    const link = appUrl(`/clients/${clientId}?tab=paid`);
     await sendEmail({
       agencyId: client.agencyId,
       to: tagged.email,

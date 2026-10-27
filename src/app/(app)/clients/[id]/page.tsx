@@ -227,9 +227,13 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       )}
 
       {tab === "paid" && client.accounts.length === 0 && (
-        <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
-          <WithReport report={full}>{(rep) => <NoAccountsState rep={rep} staff />}</WithReport>
-        </Suspense>
+        <>
+          <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
+            <WithReport report={full}>{(rep) => <NoAccountsState rep={rep} staff />}</WithReport>
+          </Suspense>
+          {/* Notes on the data work without ad accounts too (SEO- or analytics-only clients). */}
+          <NotesCard clientId={id} agencyId={user.agencyId} defaultDate={rep.range.to} />
+        </>
       )}
 
       {tab === "paid" && client.accounts.length > 0 && (

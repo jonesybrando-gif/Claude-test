@@ -31,7 +31,7 @@ export async function saveRankProject(clientId: string, _prev: RankFormState, fo
   const languageCode = /^[a-z]{2}(-[a-z]{2,4})?$/i.test(String(form.get("language") ?? "")) ? String(form.get("language")).toLowerCase() : "en";
 
   const connection = await agencyDataForSeoConnection(user.agencyId);
-  if (!connection) return { errors: ["DataForSEO isn't connected. An administrator can connect it on the Integrations page."] };
+  if (!connection) return { errors: ["DataForSEO isn't connected. An administrator can connect it in Settings › Connections."] };
   const next = { locationCode, languageCode, device, searchEngine: "google" as const };
   const existing = await clientRankProject(clientId);
   const asset = existing

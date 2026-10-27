@@ -48,18 +48,24 @@ async function SeoContent({ clientId, range, cmpRange, canEdit }: { clientId: st
   const gscThrough = gsc?.dataCompleteThrough ? dateToIso(gsc.dataCompleteThrough) : null;
   const to = gscThrough ? minDate(range.to, gscThrough) : range.to;
   const days = diffDays(range.from, to) + 1;
+  const rangeDays = Math.max(diffDays(range.from, range.to) + 1, 1);
   const cur = { from: range.from, to };
-  const prev = cmpRange ? { from: cmpRange.from, to: addDays(cmpRange.from, days - 1) } : null;
+  // Same number of days as the current window, never past the comparison range's own end.
+  const prev = cmpRange ? { from: cmpRange.from, to: minDate(addDays(cmpRange.from, days - 1), cmpRange.to) } : null;
 
+  if (gsc && days < 1 && !rank) {
+    return <NotConnected title="No complete Search Console days in this range yet" body={`Google publishes Search Console data 2–3 days late${gscThrough ? `; the latest complete day is ${short(gscThrough)}` : ""}. Choose a longer range, such as the last 30 days.`} actions={[]} />;
+  }
   const keys = ["gsc.clicks", "gsc.impressions", "gsc.ctr", "gsc.position"];
   const [now, before, queriesNow, queriesBefore, pagesNow, pagesBefore, keywords] = await Promise.all([
-    gsc ? metricTotals(clientId, keys, cur.from, cur.to) : null,
-    gsc && prev ? metricTotals(clientId, keys, prev.from, prev.to) : null,
-    gsc ? metricBreakdown(clientId, "query", ["gsc.clicks", "gsc.impressions", "gsc.position"], cur.from, cur.to, 200) : [],
-    gsc && prev ? metricBreakdown(clientId, "query", ["gsc.clicks", "gsc.position"], prev.from, prev.to, 400) : [],
-    gsc ? metricBreakdown(clientId, "page", ["gsc.clicks", "gsc.impressions"], cur.from, cur.to, 10) : [],
-    gsc && prev ? metricBreakdown(clientId, "page", ["gsc.clicks"], prev.from, prev.to, 200) : [],
-    rank ? keywordRankTable(clientId, { to: range.to, days: Math.max(diffDays(range.from, range.to) + 1, 7), changeDays: Math.max(diffDays(range.from, range.to) + 1, 7) }) : [],
+    gsc && days >= 1 ? metricTotals(clientId, keys, cur.from, cur.to) : null,
+    gsc && prev && days >= 1 ? metricTotals(clientId, keys, prev.from, prev.to) : null,
+    gsc && days >= 1 ? metricBreakdown(clientId, "query", ["gsc.clicks", "gsc.impressions", "gsc.position"], cur.from, cur.to, 200) : [],
+    gsc && prev && days >= 1 ? metricBreakdown(clientId, "query", ["gsc.clicks", "gsc.position"], prev.from, prev.to, 400) : [],
+    gsc && days >= 1 ? metricBreakdown(clientId, "page", ["gsc.clicks", "gsc.impressions"], cur.from, cur.to, 10) : [],
+    gsc && prev && days >= 1 ? metricBreakdown(clientId, "page", ["gsc.clicks"], prev.from, prev.to, 200) : [],
+    // Change is measured from the day before the range starts, so "was" and "now" share one baseline.
+    rank ? keywordRankTable(clientId, { to: range.to, days: rangeDays, changeDays: rangeDays }) : [],
   ]);
 
   const qBefore = new Map(queriesBefore.map((q) => [q.value, q.metrics]));
@@ -67,22 +73,25 @@ async function SeoContent({ clientId, range, cmpRange, canEdit }: { clientId: st
   const clicks = now?.["gsc.clicks"] ?? null;
   const clicksBefore = before?.["gsc.clicks"] ?? null;
 
-  // The query behind most of the change in clicks, when one stands out.
+  // The query behind most of the change in clicks, when one stands out. Only queries in this period's
+  // list count (one missing from it isn't necessarily at zero), and only when clicks really moved.
   const net = clicks !== null && clicksBefore !== null ? clicks - clicksBefore : null;
-  const movers = queriesNow
-    .map((q) => ({ query: q.value, now: q.metrics["gsc.clicks"] ?? 0, before: qBefore.get(q.value)?.["gsc.clicks"] ?? 0 }))
-    .concat(queriesBefore.filter((q) => !queriesNow.some((x) => x.value === q.value)).map((q) => ({ query: q.value, now: 0, before: q.metrics["gsc.clicks"] ?? 0 })))
-    .map((q) => ({ ...q, delta: q.now - q.before }));
-  const driver = net !== null && net !== 0 ? movers.filter((m) => Math.sign(m.delta) === Math.sign(net)).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0] : undefined;
-  const driverShare = driver && net ? driver.delta / net : 0;
+  const changed = net !== null && clicksBefore ? Math.abs(net / clicksBefore) >= 0.05 : false;
+  const movers = queriesNow.map((q) => ({ query: q.value, now: q.metrics["gsc.clicks"] ?? 0, before: qBefore.get(q.value)?.["gsc.clicks"] ?? 0 })).map((q) => ({ ...q, delta: q.now - q.before }));
+  const driver = changed && net ? movers.filter((m) => Math.sign(m.delta) === Math.sign(net)).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0] : undefined;
+  const driverShare = driver && net ? Math.min(driver.delta / net, 1) : 0;
 
-  // Tracked keywords: where they rank now vs the start of the period.
-  const ranked = keywords.map((k) => ({ ...k, start: k.history[0]?.position ?? null }));
+  // Tracked keywords: where they rank now vs just before the period (the same baseline as `change`).
+  // A keyword that dropped out of the top 100 keeps its last known position as its start.
+  const lastKnown = (k: KeywordRankRow) => [...k.history].reverse().find((h) => h.position !== null)?.position ?? null;
+  const ranked = keywords.map((k) => ({ ...k, start: k.position !== null && k.change !== null ? k.position - k.change : k.position === null ? lastKnown(k) : null }));
   const inTop = (p: number | null, n: number) => p !== null && p <= n;
   const top3 = ranked.filter((k) => inTop(k.position, 3)).length;
   const top10 = ranked.filter((k) => inTop(k.position, 10)).length;
+  const comparable = ranked.filter((k) => k.start !== null || k.position === null);
   const top10Before = ranked.filter((k) => inTop(k.start, 10)).length;
-  const biggestDrop = ranked.filter((k) => k.change !== null && k.change > 0).sort((a, b) => b.change! - a.change!)[0];
+  const drop = (k: (typeof ranked)[number]) => (k.start === null ? 0 : (k.position ?? 101) - k.start);
+  const biggestDrop = [...ranked].sort((a, b) => drop(b) - drop(a))[0];
 
   const lead: string[] = [];
   if (clicks !== null && clicksBefore !== null && clicksBefore > 0) {
@@ -95,15 +104,15 @@ async function SeoContent({ clientId, range, cmpRange, canEdit }: { clientId: st
     lead.push(`${n0(clicks)} clicks from Google search ${short(cur.from)}–${short(cur.to)}.`);
   }
   if (ranked.length) {
-    lead.push(`${top10} of ${ranked.length} tracked keywords are on Google's first page${top10 !== top10Before ? ` (${top10Before} at the start of the period)` : ""}.`);
-    if (biggestDrop && biggestDrop.change! >= 3) lead.push(`“${biggestDrop.keyword}” moved from ${pos(biggestDrop.position! - biggestDrop.change!)} to ${pos(biggestDrop.position)}.`);
+    lead.push(`${top10} of ${ranked.length} tracked keywords are on Google's first page${comparable.length === ranked.length && top10 !== top10Before ? ` (${top10Before} just before this period)` : ""}.`);
+    if (biggestDrop && drop(biggestDrop) >= 3) lead.push(`“${biggestDrop.keyword}” moved from ${pos(biggestDrop.start)} to ${biggestDrop.position === null ? "outside the top 100" : pos(biggestDrop.position)}.`);
   }
 
   const cmp = prev ? `vs ${short(prev.from)}–${short(prev.to)}` : null;
   const ctrNow = now?.["gsc.ctr"] ?? null;
   const ctrBefore = before?.["gsc.ctr"] ?? null;
 
-  const movedKeywords = [...ranked].sort((a, b) => Math.abs(b.change ?? 0) - Math.abs(a.change ?? 0) || (a.position ?? 999) - (b.position ?? 999)).slice(0, 10);
+  const movedKeywords = [...ranked].sort((a, b) => Math.abs(drop(b)) - Math.abs(drop(a)) || (a.position ?? 999) - (b.position ?? 999)).slice(0, 10);
   const clicksFor = (k: KeywordRankRow) => queriesNow.find((q) => q.value.toLowerCase() === k.keyword.toLowerCase())?.metrics["gsc.clicks"] ?? null;
   const topQueries = queriesNow.slice(0, 10);
 
@@ -126,7 +135,7 @@ async function SeoContent({ clientId, range, cmpRange, canEdit }: { clientId: st
           <Figure label="Times shown in Google" info="Impressions: how often the site appeared in Google search results." value={n0(now["gsc.impressions"])} sub={<ChangeText c={change(now["gsc.impressions"], before?.["gsc.impressions"] ?? null, "up", (x) => formatNumber(x, 0))} />} />
           <Figure label="Click rate" info="Clicks ÷ times shown." value={ctrNow === null ? "—" : formatPct(ctrNow)} sub={ctrBefore !== null && <span className="text-[13px] text-text-2">was {formatPct(ctrBefore)}</span>} />
           {ranked.length ? (
-            <Figure label="Tracked keywords in top 10" info="Keywords you track whose latest daily check is on Google's first page." value={<>{top10} <span className="text-base font-medium text-text-3">of {ranked.length}</span></>} sub={<span className="text-[13px] text-text-2">{top3} in the top 3 · was {top10Before} in top 10</span>} />
+            <Figure label="Tracked keywords in top 10" info="Keywords you track whose latest daily check is on Google's first page." value={<>{top10} <span className="text-base font-medium text-text-3">of {ranked.length}</span></>} sub={<span className="text-[13px] text-text-2">{top3} in the top 3{comparable.length === ranked.length ? ` · was ${top10Before} in top 10` : ""}</span>} />
           ) : (
             <Figure label="Average position" info="Average Search Console position across all searches, weighted by times shown. Lower is better." value={pos(now["gsc.position"])} sub={before?.["gsc.position"] != null && <span className="text-[13px] text-text-2">was {pos(before["gsc.position"])} · lower is better</span>} />
           )}
@@ -142,7 +151,7 @@ async function SeoContent({ clientId, range, cmpRange, canEdit }: { clientId: st
             cells={(k) => [
               <span key="k" className="font-medium">{k.keyword}</span>,
               k.position === null ? <span key="p" className="text-text-3">Not in top 100</span> : formatNumber(k.position, 0),
-              <PositionChange key="c" change={k.change} />,
+              <PositionChange key="c" change={k.change} out={k.position === null && k.start !== null} />,
               n0(clicksFor(k)),
               <span key="u" className="block max-w-64 truncate text-text-2" title={k.url ?? undefined}>{k.url ? pathOf(k.url) : "—"}</span>,
             ]}
@@ -151,7 +160,7 @@ async function SeoContent({ clientId, range, cmpRange, canEdit }: { clientId: st
                 <span className="text-sm font-medium">{k.keyword}</span>
                 <span className="text-lg font-semibold tabular">{k.position ?? "—"}</span>
                 <span className="text-[13px] text-text-2">{clicksFor(k) !== null ? `${n0(clicksFor(k))} clicks` : k.url ? pathOf(k.url) : ""}</span>
-                <PositionChange change={k.change} />
+                <PositionChange change={k.change} out={k.position === null && k.start !== null} />
               </div>
             )}
           />
@@ -230,7 +239,8 @@ function pathOf(url: string): string {
 }
 
 /** Position change: lower is better, so a negative change is an improvement. */
-function PositionChange({ change }: { change: number | null }) {
+function PositionChange({ change, out = false }: { change: number | null; out?: boolean }) {
+  if (out) return <span className="text-[13px] font-medium text-critical-ink">dropped out of the top 100</span>;
   if (change === null) return <span className="text-[13px] text-text-3">—</span>;
   if (change === 0) return <span className="text-[13px] text-text-2">no change</span>;
   const up = change < 0;

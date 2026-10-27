@@ -38,7 +38,7 @@ export const writeCallRecords: CallRecordWriter = async (assetId, clientId, from
 };
 
 function requireKey(secret: string | undefined): string {
-  if (!secret) throw new CallRailError("No CallRail API key is stored for this connection. Paste a key on the Integrations page.", 401);
+  if (!secret) throw new CallRailError("No CallRail API key is stored for this connection. Paste a key in Settings › Connections.", 401);
   return secret;
 }
 

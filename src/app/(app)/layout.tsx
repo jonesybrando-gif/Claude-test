@@ -49,7 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         { href: "/account", label: "Your account", kind: "Page" as const },
         ...clients.flatMap((c) => [
           { href: `/clients/${c.id}`, label: c.name, kind: "Client" as const },
-          { href: `/clients/${c.id}?tab=setup`, label: `${c.name} — Setup`, kind: "Client" as const, searchOnly: true },
+          { href: `/clients/${c.id}?tab=settings`, label: `${c.name} — Settings`, kind: "Client" as const, searchOnly: true },
           { href: `/clients/${c.id}/budgets`, label: `${c.name} — Budgets`, kind: "Client" as const, searchOnly: true },
           { href: `/clients/${c.id}/share`, label: `${c.name} — Share`, kind: "Client" as const, searchOnly: true },
         ]),

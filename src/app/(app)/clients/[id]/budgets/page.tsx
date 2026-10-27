@@ -20,7 +20,7 @@ const DIST_LABEL = { EVEN: "Even", BUSINESS_DAYS: "Business days", WEEKEND_WEIGH
 
 export default async function BudgetsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { id } = await params;
-  const back = clientBackHref(id, await searchParams, "setup");
+  const back = clientBackHref(id, await searchParams, "settings");
   await requireClientEdit(id);
   const client = await prisma.client.findUniqueOrThrow({
     where: { id },

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SettingsTabs } from "../settings/tabs";
 import { requireAgencyStaff } from "@/server/access";
 import { prisma } from "@/server/db";
 import { integrationStatus, type IntegrationState } from "@/server/integrations/registry";
@@ -50,6 +51,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       <div>
         {user.role === "AGENCY_ADMIN" && <p className="mb-0.5 text-xs text-text-3"><Link href="/settings" className="hover:text-text hover:underline">Settings</Link> ›</p>}
         <h1 className="text-2xl font-semibold tracking-tight">Connections</h1>
+        {user.role === "AGENCY_ADMIN" && <SettingsTabs />}
         <p className="text-sm text-text-2">Only official APIs and supported authentication are used. No scraping, no unofficial endpoints.</p>
       </div>
       {error && (

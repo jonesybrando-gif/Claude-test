@@ -33,7 +33,7 @@ const STATUS: Record<string, { label: string; variant: "good" | "warning" | "cri
 export default async function ClientAccountsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ linked?: string; replaced?: string } & Record<string, string | undefined>> }) {
   const { id } = await params;
   const sp = await searchParams;
-  const back = clientBackHref(id, sp, "setup");
+  const back = clientBackHref(id, sp, "settings");
   const user = await requireClientEdit(id);
   const admin = user.role === "AGENCY_ADMIN";
   const [client, accounts, connections] = await Promise.all([

@@ -21,7 +21,7 @@ function actionFor(kind: AttentionKind, id: string): { href: string; label: stri
     case "under":
       return { href: `/clients/${id}/budgets`, label: "Review budget" };
     case "stale":
-      return { href: `/clients/${id}?tab=setup`, label: "Check data" };
+      return { href: `/clients/${id}?tab=settings`, label: "Check data" };
     default:
       return { href: `/clients/${id}`, label: "Investigate" };
   }
