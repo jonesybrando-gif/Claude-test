@@ -1,9 +1,11 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { getAdapter, platformForSlug } from "@/server/integrations/registry";
 import { OAUTH_NONCE_COOKIE, publicUrl, redirectUri, verifyOAuthState } from "@/server/integrations/oauth-state";
 import { storeTokens } from "@/server/integrations/tokens";
+import { reattachAccounts } from "@/server/integrations/reattach";
+import { syncAccount } from "@/server/sync/sync-account";
 import { IntegrationError } from "@/server/integrations/errors";
 import { PLATFORM_LABEL } from "@/lib/platforms";
 
@@ -47,6 +49,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
       data: { agencyId: user.agencyId, platform, label: client ? `${label} — ${client.name}` : `${label} — connected by ${user.name}`, status: "ACTIVE", createdById: user.id },
     });
     await storeTokens(connection.id, tokens);
+    // A reconnect: move accounts left on the old, dead connection onto this one.
+    const moved = await reattachAccounts(user.agencyId, connection.id);
+    if (moved.length) {
+      after(async () => {
+        for (const id of moved) await syncAccount(id, "scheduled");
+      });
+    }
     const next = client ? `/clients/${client.id}/accounts/${slug}?connection=${connection.id}` : `/integrations/${slug}/${connection.id}`;
     const res = NextResponse.redirect(publicUrl(next, req.url));
     res.cookies.delete({ name: OAUTH_NONCE_COOKIE, path: "/api/integrations" });

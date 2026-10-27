@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { cronAuthorized } from "@/server/cron-auth";
+import { reattachAllAccounts } from "@/server/integrations/reattach";
 import { syncDueAccounts } from "@/server/sync/sync-account";
 import { syncDueDataAssets } from "@/server/data-sources/sync";
 import { runAllAlerts } from "@/server/alerts";
@@ -24,6 +25,8 @@ async function run(req: NextRequest) {
   } catch (e) {
     budgetRollover = { error: (e as Error).message };
   }
+  // Accounts stranded on a dead connection move to a live one that can reach them.
+  await reattachAllAccounts();
   const results = await syncDueAccounts();
   const count = (s: string) => results.filter((r) => r.status === s).length;
   let alerts: unknown;
