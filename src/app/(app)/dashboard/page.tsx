@@ -101,7 +101,7 @@ async function Home({ user }: { user: Awaited<ReturnType<typeof requireAgencySta
   const insights = homeInsights({
     currency: main,
     totals: mtd.totals,
-    clients: inMain.map((c) => ({ id: c.client.id, name: c.client.name, current: mtd.byClient.get(c.client.id)?.current ?? { spendMinor: 0, results: 0 }, previous: mtd.byClient.get(c.client.id)?.previous ?? { spendMinor: 0, results: 0 } })),
+    clients: inMain.map((c) => ({ id: c.client.id, name: c.client.name, goal: mtd.byClient.get(c.client.id)?.goal, current: mtd.byClient.get(c.client.id)?.current ?? { spendMinor: 0, results: 0 }, previous: mtd.byClient.get(c.client.id)?.previous ?? { spendMinor: 0, results: 0 } })),
     budgets: inMain
       .filter((c) => c.connectedTotal && c.connectedTotal.phase === "ACTIVE")
       .map((c) => ({ id: c.client.id, name: c.client.name, varianceMinor: c.connectedTotal!.projectedVarianceMinor, off: forecastOffBudget(c.connectedTotal!.budgetMinor, c.connectedTotal!.projectedVarianceMinor) })),

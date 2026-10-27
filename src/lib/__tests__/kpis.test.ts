@@ -68,8 +68,8 @@ describe("KPI catalog", () => {
   });
 
   it("puts changes in words, with small samples and late results held neutral", () => {
-    const cur = t({ costMinor: 12000, clicks: 100, conversions: 8, leads: 30 });
-    const prev = t({ costMinor: 10000, clicks: 100, conversions: 20, leads: 20 });
+    const cur = t({ costMinor: 12000, clicks: 100, conversions: 8, leads: 30, leadCostMinor: 12000 });
+    const prev = t({ costMinor: 10000, clicks: 100, conversions: 20, leads: 20, leadCostMinor: 10000 });
     const [spend, conv, cpl, leads] = kpiValues(["spend", "conversions", "costPerLead", "leads"], cur, prev);
     expect(kpiChangeWords(spend, "USD").text).toBe("Up 20% from $100");
     expect(kpiChangeWords(spend, "USD").aria).toContain("neither good nor bad on its own");
@@ -83,9 +83,20 @@ describe("KPI catalog", () => {
   it("divides only lead-platform spend by leads for cost per lead", () => {
     const blend = emptyTotals();
     addInto(blend, { ...t({ costMinor: 30000, clicks: 300, conversions: 20 }) }); // Google Ads: buys conversions, reports no leads
-    addInto(blend, { ...t({ costMinor: 10000, clicks: 100, conversions: 10, leads: 10 }), leadsReported: true }); // Meta
+    addInto(blend, { ...t({ costMinor: 10000, clicks: 100, conversions: 10, leads: 10 }), leadsReported: true, leadCostMinor: undefined }); // Meta line
     const [cpl] = kpiValues(["costPerLead"], blend, null);
     expect(cpl.value).toBe(1000); // $100 of Meta spend ÷ 10 leads, not $400 ÷ 10
+    // Re-adding totals (e.g. daily rows into a period) keeps lead-platform spend exact, even a day at $0.
+    const day1 = addInto(emptyTotals(), { ...t({ costMinor: 10000 }), leadCostMinor: undefined });
+    addInto(day1, { ...t({ costMinor: 0 }), leadsReported: true, leadCostMinor: undefined });
+    const day2 = addInto(emptyTotals(), { ...t({ costMinor: 10000 }), leadCostMinor: undefined });
+    addInto(day2, { ...t({ costMinor: 5000, leads: 5 }), leadsReported: true, leadCostMinor: undefined });
+    const period = addInto(addInto(emptyTotals(), day1), day2);
+    expect(kpiValues(["costPerLead"], period, null)[0].value).toBe(1000); // $50 ÷ 5 leads
+    // Leads that cost nothing have no cost per lead.
+    const free = addInto(emptyTotals(), { ...t({ costMinor: 30000 }), leadCostMinor: undefined });
+    addInto(free, { ...t({ costMinor: 0, leads: 20 }), leadsReported: true, leadCostMinor: undefined });
+    expect(kpiValues(["costPerLead"], free, null)[0].value).toBeNull();
   });
 
   it("knows which tiles a client doesn't track", () => {

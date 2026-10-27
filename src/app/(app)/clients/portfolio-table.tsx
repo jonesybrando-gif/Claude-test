@@ -72,7 +72,7 @@ const FILTERS: { key: FilterKey; label: string; test: (r: PortfolioRow) => boole
   { key: "over", label: "Over budget", test: (r) => OVER.has(r.pacing) },
   { key: "under", label: "Under budget", test: (r) => UNDER.has(r.pacing) },
   // Nothing flagged and cost per result steady or better.
-  { key: "well", label: "Performing well", test: (r) => r.reasons.length === 0 && r.results > 0 && (r.costPerResultChange?.verdict === "better" || r.costPerResultChange?.verdict === "same") },
+  { key: "well", label: "Performing well", test: (r) => r.reasons.length === 0 && r.results > 0 && (r.costPerResultChange?.verdict === "better" || r.costPerResultChange?.verdict === "same" || (r.costPerResultChange?.verdict === "counting" && (r.costPerResultChange.pct ?? 0) < 0)) },
   { key: "missing", label: "Missing data", test: (r) => r.pacing === "NOT_CONNECTED" || r.platforms.length === 0 || r.stale },
 ];
 

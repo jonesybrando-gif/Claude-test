@@ -79,6 +79,7 @@ export async function portfolioResultsFor(where: Prisma.ClientWhereInput, range:
           conversionValueMinor: Number(s._sum.conversionValueMinor ?? 0),
           leads: Number(s._sum.leads ?? 0),
           leadsReported: reportsLeads(a.platform),
+          leadCostMinor: reportsLeads(a.platform) ? Number(s._sum.costMinor ?? 0) : 0,
         },
       ]);
     }
@@ -91,7 +92,10 @@ export async function portfolioResultsFor(where: Prisma.ClientWhereInput, range:
   for (const c of clients) {
     const now = curLines.get(c.id) ?? [];
     const before = prevLines.get(c.id) ?? [];
-    const { goal, guessed } = resolveGoal(c.goal, now, before);
+    // Clicks count as results only when the agency chose the awareness goal. A guessed "awareness"
+    // (nothing tracked) would hide broken conversion tracking behind a healthy click count.
+    const resolved = resolveGoal(c.goal, now, before);
+    const { goal, guessed } = resolved.guessed && resolved.goal === "AWARENESS" ? { goal: "LEADS" as const, guessed: true } : resolved;
     const a = resultsFor(goal, now, guessed);
     const b = resultsFor(goal, before, guessed);
     byClient.set(c.id, {

@@ -132,7 +132,8 @@ export function medianCostPerResult(clients: ClientResults[]): Map<string, numbe
 
 /** Cost per result ≥1.3× the client's previous period, or ≥1.3× the agency median (≥10 results). */
 export function costPerResultHigh(c: ClientResults, medians: Map<string, number>): boolean {
-  if (c.current.results < MIN_RESULTS_TO_COMPARE) return false;
+  // Awareness clients' results are clicks: a high cost per click isn't an efficiency problem to fix first.
+  if (c.current.results < MIN_RESULTS_TO_COMPARE || c.goal === "AWARENESS") return false;
   const cpr = c.current.spendMinor / c.current.results;
   const prev = c.previous.results >= MIN_RESULTS_TO_COMPARE ? c.previous.spendMinor / c.previous.results : null;
   const median = medians.get(c.currency);
@@ -209,11 +210,12 @@ export function attentionReasons(i: AttentionInput): AttentionReason[] {
   const r = i.results;
   if (r && r.current.results >= MIN_RESULTS_TO_COMPARE && r.previous.results >= MIN_RESULTS_TO_COMPARE) {
     const up = pctChange(costPerResult(r.current)!, costPerResult(r.previous)!);
-    if (up !== null && up >= CPR_UP_PCT) out.push({ kind: "cpr_up", label: `Cost per result up ${Math.round(up)}%`, tone: "warning" });
+    if (up !== null && up >= CPR_UP_PCT) out.push({ kind: "cpr_up", label: `Cost per ${r.unit ?? "result"} up ${Math.round(up)}%`, tone: "warning" });
   }
   if (r && r.previous.results >= MIN_RESULTS_TO_COMPARE) {
     const ch = pctChange(r.current.results, r.previous.results);
-    if (ch !== null && ch <= -RESULTS_DOWN_PCT) out.push({ kind: "results_down", label: `Results down ${Math.round(-ch)}% (${formatNumber(r.current.results, 0)} vs ${formatNumber(r.previous.results, 0)})`, tone: "warning" });
+    const noun = r.unit ? `${r.unit[0].toUpperCase()}${r.unit.slice(1)}s` : "Results";
+    if (ch !== null && ch <= -RESULTS_DOWN_PCT) out.push({ kind: "results_down", label: `${noun} down ${Math.round(-ch)}% (${formatNumber(r.current.results, 0)} vs ${formatNumber(r.previous.results, 0)})`, tone: "warning" });
   }
   if (!i.disconnected && i.oldestSyncHours !== null && i.oldestSyncHours > STALE_ATTENTION_HOURS) {
     out.push({ kind: "stale", label: Number.isFinite(i.oldestSyncHours) ? `Data ${Math.round(i.oldestSyncHours)} hours old` : "Data never synced", tone: "warning" });

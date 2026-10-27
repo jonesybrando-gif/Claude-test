@@ -50,8 +50,6 @@ export function chunkRange(from: IsoDate, to: IsoDate, maxDays = CHUNK_DAYS): { 
 
 /** Once a day the re-fetch reaches this far back, to pick up conversions credited weeks after the click. */
 export const DEEP_RESTATEMENT_DAYS = 35;
-/** UTC hour of the daily deep re-fetch (quiet time for US agencies). */
-export const DEEP_RESTATEMENT_UTC_HOUR = 9;
 
 /**
  * Which dates to (re)fetch. First sync or backfill: the adapter's full history
@@ -98,7 +96,12 @@ export async function syncAccount(accountId: string, kind: SyncKind, deps: SyncD
 
   const tz = account.timezone ?? account.client.timezone;
   const today = todayInTimeZone(tz, now);
-  const range = syncRange(adapter, today, kind, account.dataCompleteThrough ? dateToIso(account.dataCompleteThrough) : null, now.getUTCHours() === DEEP_RESTATEMENT_UTC_HOUR);
+  // Deep re-fetch when this account hasn't had one in the last 24 hours (spread across the day, never skipped).
+  const deepDone = await prisma.syncRun.findFirst({
+    where: { accountId, status: { in: ["SUCCEEDED", "PARTIAL"] }, startedAt: { gte: new Date(now.getTime() - 86_400_000) }, rangeStart: { lte: isoToDate(addDays(today, -Math.min(DEEP_RESTATEMENT_DAYS - 5, adapter.initialBackfillDays))) } },
+    select: { id: true },
+  });
+  const range = syncRange(adapter, today, kind, account.dataCompleteThrough ? dateToIso(account.dataCompleteThrough) : null, !deepDone);
   const run = await prisma.syncRun.create({ data: { accountId, kind, status: "RUNNING", rangeStart: isoToDate(range.from), rangeEnd: isoToDate(range.to), startedAt: now } });
   await prisma.adAccount.update({ where: { id: accountId }, data: { lastSyncAttemptAt: now } });
 

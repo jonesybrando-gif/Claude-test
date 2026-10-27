@@ -306,8 +306,10 @@ function buildClientPacing(
     const acc = campaignAccount.get(p.unit.campaignIds[0])!;
     campaignGroups.set(acc, [...(campaignGroups.get(acc) ?? []), p]);
   }
+  const campaignAsOf = new Map<string, IsoDate>();
   for (const [accountId, group] of campaignGroups) {
     const combined = combinePacing(group.map((g) => g.result), thresholds)!;
+    if (combined.asOf) campaignAsOf.set(accountId, combined.asOf);
     const acct = accounts.find((a) => a.id === accountId)!;
     const n = group.length;
     const row = makeRow(ctx, `campaigns:${accountId}`, "CAMPAIGNS", `${acct.name} (${n} campaign budget${n === 1 ? "" : "s"})`, [acct], budgetById.get(group[0].unit.budgetId)!.currency, combined, [...periodWarnings, ...group.flatMap((g) => g.warnings)], group.some((g) => g.hasEstimatedSpend));
@@ -323,9 +325,10 @@ function buildClientPacing(
   }
   // Accounts budgeted campaign by campaign: spend on their other campaigns (and account-level rows such as
   // Local Services) is outside every budget line. Report it so budget spend + unbudgeted spend = ad spend.
-  const outside = spendOutsideCampaignBudgets(campaignGroups.keys(), resolution.rollupUnits, rows, period.start, minDate(period.end, yesterday));
+  // Counted through the same day as the account's campaign lines (their data-complete date), so the two add up.
   for (const accountId of campaignGroups.keys()) {
-    const spend = outside.get(accountId) ?? 0;
+    const through = campaignAsOf.get(accountId) ?? minDate(period.end, yesterday);
+    const spend = spendOutsideCampaignBudgets([accountId], resolution.rollupUnits, rows, period.start, through).get(accountId) ?? 0;
     if (spend <= 0) continue;
     const acct = accounts.find((a) => a.id === accountId)!;
     outRows.push(makeRow(ctx, `unbudgeted-campaigns:${accountId}`, "UNBUDGETED", `${acct.name} (campaigns without a budget)`, [acct], acct.currency, null, [], false, spend));

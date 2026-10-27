@@ -45,7 +45,8 @@ export function addInto(t: MetricTotals, r: Omit<MetricTotals, "hasEstimatedCost
   t.leads += r.leads;
   t.hasEstimatedCost ||= !!r.hasEstimatedCost;
   t.leadsReported ||= !!r.leadsReported;
-  t.leadCostMinor = (t.leadCostMinor ?? 0) + (r.leadCostMinor || (r.leadsReported ? r.costMinor : 0));
+  // A total carries its own lead-platform spend (possibly 0); a single platform line falls back to its cost.
+  t.leadCostMinor = (t.leadCostMinor ?? 0) + (r.leadCostMinor ?? (r.leadsReported ? r.costMinor : 0));
   return t;
 }
 
@@ -66,8 +67,8 @@ export function derive(t: MetricTotals): DerivedMetrics {
     cpcMinor: div(t.costMinor, t.clicks),
     cpmMinor: t.impressions > 0 ? (t.costMinor / t.impressions) * 1000 : null,
     costPerConversionMinor: div(t.costMinor, t.conversions),
-    // Without a known lead-platform spend (a hand-built total), fall back to all spend.
-    costPerLeadMinor: div(t.leadCostMinor ? t.leadCostMinor : t.costMinor, t.leads),
+    // Lead-platform spend ÷ leads. Leads that cost nothing (e.g. unpriced Local Services leads) have no cost per lead.
+    costPerLeadMinor: t.leadCostMinor === undefined ? div(t.costMinor, t.leads) : t.leadCostMinor > 0 ? div(t.leadCostMinor, t.leads) : null,
     conversionRate: t.clicks > 0 ? (t.conversions / t.clicks) * 100 : null,
     // No conversion value reported (e.g. lead-gen or LSA) means ROAS is unknown, not zero.
     roas: t.conversionValueMinor > 0 ? div(t.conversionValueMinor, t.costMinor) : null,
