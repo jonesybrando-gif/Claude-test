@@ -1,4 +1,5 @@
 import "server-only";
+import { isAccountDisconnected } from "@/lib/account-health";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { INCLUDED_ROWS } from "./campaign-selection";
@@ -212,7 +213,7 @@ export async function clientAttention(pacing: ClientPacing[], results: Portfolio
           })),
         results: results.byClient.get(p.client.id) ?? null,
         oldestSyncHours: oldest ? (now.getTime() - new Date(oldest).getTime()) / 3_600_000 : null,
-        disconnected: live.some((a) => a.status === "DISCONNECTED" || a.status === "NEEDS_REAUTH"),
+        disconnected: live.some(isAccountDisconnected),
       }),
     );
   }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isAccountDisconnected, isAccountRetired } from "@/lib/account-health";
 import type { ReactNode } from "react";
 import { AlertTriangle, CalendarRange, EyeOff, Plug, RefreshCw, Unplug } from "lucide-react";
 import type { PacingRow } from "@/server/pacing-service";
@@ -406,7 +407,7 @@ export function PlatformSection({ rep, staff, marker, status = false, title = "P
                 {status && (
                   <TD className="pr-5 text-xs">
                     <div className="flex flex-col items-start gap-1">
-                      {a.status === "NEEDS_REAUTH" || a.status === "DISCONNECTED" ? <StaleBadge label="Disconnected" /> : !meta.lastSuccessfulSyncAt ? <StaleBadge label="Not synced yet" /> : meta.stale ? <StaleBadge /> : <span className="text-text-2">Synced {relativeTime(meta.lastSuccessfulSyncAt).toLowerCase()}</span>}
+                      {isAccountRetired(a) ? <span className="text-text-3">No longer synced</span> : isAccountDisconnected(a) ? <StaleBadge label="Disconnected" /> : !meta.lastSuccessfulSyncAt ? <StaleBadge label="Not synced yet" /> : meta.stale ? <StaleBadge /> : <span className="text-text-2">Synced {relativeTime(meta.lastSuccessfulSyncAt).toLowerCase()}</span>}
                       {meta.dataCompleteThrough && <span className="text-text-3">Complete through {formatDate(meta.dataCompleteThrough)}</span>}
                       {a.timezone && a.timezone !== client.timezone && <span className="text-warning-ink">Account time zone: {a.timezone}</span>}
                       {a.isDemo ? <span className="text-info-ink">Demo data</span> : staff && a.connectionId && <RefreshAccountButton accountId={a.id} />}
@@ -574,7 +575,8 @@ export function DataFreshness({ rep, staff, setupHref }: { rep: Pick<ClientRepor
   const through = metas.map((a) => a.dataCompleteThrough).filter((d): d is string => !!d).sort();
   const problems = client.accounts.filter((a) => {
     const m = metas.find((x) => x.id === a.id);
-    return a.status === "NEEDS_REAUTH" || a.status === "DISCONNECTED" || a.syncRuns[0]?.status === "FAILED" || (m && !m.isDemo && (m.stale || !m.lastSuccessfulSyncAt));
+    if (isAccountRetired(a)) return false;
+    return isAccountDisconnected(a) || a.syncRuns[0]?.status === "FAILED" || (m && !m.isDemo && (m.stale || !m.lastSuccessfulSyncAt));
   });
   const warn = staff && problems.length > 0;
   const parts = [

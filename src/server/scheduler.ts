@@ -1,4 +1,5 @@
 import "server-only";
+import { reattachAllAccounts } from "@/server/integrations/reattach";
 import { syncDueAccounts } from "./sync/sync-account";
 import { syncDueDataAssets } from "./data-sources/sync";
 import { runAllAlerts } from "./alerts";
@@ -26,6 +27,8 @@ async function tick() {
     console.error("[scheduler] budget roll-forward failed", e);
   }
   try {
+    // Accounts stranded on a dead connection move to a live one that can reach them.
+    await reattachAllAccounts();
     const results = await syncDueAccounts();
     const failed = results.filter((r) => r.status === "FAILED").length;
     await runAllAlerts();

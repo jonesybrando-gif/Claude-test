@@ -1,4 +1,5 @@
 import "server-only";
+import { isAccountDisconnected } from "@/lib/account-health";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { INCLUDED_ROWS } from "./campaign-selection";
@@ -35,6 +36,8 @@ export interface AccountMeta {
   isDemo: boolean;
   spendIsVerified: boolean;
   status: string;
+  /** False for an account kept only for history (stopped tracking or replaced). */
+  monitored: boolean;
   lastSuccessfulSyncAt: string | null;
   dataCompleteThrough: IsoDate | null;
   timezone: string | null;
@@ -126,6 +129,7 @@ function accountMeta(a: ClientWithAccounts["accounts"][number], now: Date): Acco
     isDemo: a.isDemo,
     spendIsVerified: a.spendIsVerified,
     status: a.status,
+    monitored: a.isDemo || !!a.connectionId,
     lastSuccessfulSyncAt: last?.toISOString() ?? null,
     dataCompleteThrough: a.dataCompleteThrough ? dateToIso(a.dataCompleteThrough) : null,
     timezone: a.timezone,
@@ -205,7 +209,7 @@ function makeRow(
   unbudgetedSpendMinor = 0,
 ): PacingRow {
   const stale = accts.some((a) => a.stale);
-  const disconnected = accts.some((a) => a.status === "DISCONNECTED" || a.status === "NEEDS_REAUTH");
+  const disconnected = accts.some(isAccountDisconnected);
   const syncs = accts.map((a) => a.lastSuccessfulSyncAt).filter((s): s is string => !!s);
   const notConnected = isNotConnected(level, accts);
   const action = notConnected

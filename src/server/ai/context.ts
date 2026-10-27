@@ -1,4 +1,5 @@
 import { displayCampaignName } from "@/lib/campaign-name";
+import { isAccountDisconnected, isAccountRetired } from "@/lib/account-health";
 import "server-only";
 import type { ClientReport } from "../client-report";
 import { buildAiContext, type AiContextInput } from "@/lib/ai-context";
@@ -41,7 +42,9 @@ export function contextInput(rep: ClientReport): AiContextInput {
     accounts: client.accounts.map((a) => {
       const meta = metaById.get(a.id);
       const dataNote =
-        a.status === "NEEDS_REAUTH" || a.status === "DISCONNECTED"
+        isAccountRetired(a)
+          ? "no longer synced; earlier data only"
+          : isAccountDisconnected(a)
           ? "disconnected; data may be missing"
           : meta?.stale
             ? `stale: last synced ${meta.lastSuccessfulSyncAt ? formatDate(meta.lastSuccessfulSyncAt.slice(0, 10)) : "never"}`
