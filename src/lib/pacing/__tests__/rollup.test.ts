@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveBudgetHierarchy, spendForUnit, type BudgetRef, type SpendRow } from "../rollup";
+import { resolveBudgetHierarchy, spendForUnit, spendOutsideCampaignBudgets, type BudgetRef, type SpendRow } from "../rollup";
 
 const accounts = ["accG", "accM"];
 const campaigns = [
@@ -70,5 +70,24 @@ describe("resolveBudgetHierarchy", () => {
     const lsaRows: SpendRow[] = [{ accountId: "accL", campaignId: null, date: "2026-09-01", costMinor: 900 }];
     const r = resolveBudgetHierarchy(["accL"], [], [{ id: "bl", scope: "ACCOUNT", accountId: "accL", campaignId: null }]);
     expect(total(spendForUnit(r.rollupUnits[0], lsaRows))).toBe(900);
+  });
+});
+
+describe("spendOutsideCampaignBudgets", () => {
+  it("budget-line spend + spend outside budget lines = all ad spend (campaign-only accounts)", () => {
+    const withLsa: SpendRow[] = [...rows, { accountId: "accG", campaignId: null, date: "2026-09-02", costMinor: 250 }, { accountId: "accG", campaignId: "g2", date: "2026-10-01", costMinor: 999 }];
+    const budgets: BudgetRef[] = [{ id: "b1", scope: "CAMPAIGN", accountId: "accG", campaignId: "g1" }];
+    const r = resolveBudgetHierarchy(accounts, campaigns, budgets);
+    const inLines = r.rollupUnits.reduce((s, u) => s + total(spendForUnit(u, withLsa.filter((x) => x.date <= "2026-09-30"))), 0);
+    const outside = spendOutsideCampaignBudgets(["accG"], r.rollupUnits, withLsa, "2026-09-01", "2026-09-30");
+    expect(inLines).toBe(1000);
+    expect(outside.get("accG")).toBe(750); // g2 (500) + account-level row (250); October row excluded
+    const accMSpend = withLsa.filter((x) => x.accountId === "accM").reduce((s, x) => s + x.costMinor, 0); // reported as an unbudgeted account
+    const allSeptember = withLsa.filter((x) => x.date <= "2026-09-30").reduce((s, x) => s + x.costMinor, 0);
+    expect(inLines + outside.get("accG")! + accMSpend).toBe(allSeptember);
+  });
+  it("still counts outside spend when budgeted campaigns haven't spent yet", () => {
+    const out = spendOutsideCampaignBudgets(["accG"], [{ budgetId: "b1", scope: "CAMPAIGN", accountIds: [], campaignIds: ["g1"] }], [{ accountId: "accG", campaignId: "g2", date: "2026-09-01", costMinor: 400 }], "2026-09-01", "2026-09-30");
+    expect(out.get("accG")).toBe(400);
   });
 });

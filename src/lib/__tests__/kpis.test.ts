@@ -80,6 +80,14 @@ describe("KPI catalog", () => {
     expect(lateLeads).toMatchObject({ verdict: "counting", tone: "neutral" });
   });
 
+  it("divides only lead-platform spend by leads for cost per lead", () => {
+    const blend = emptyTotals();
+    addInto(blend, { ...t({ costMinor: 30000, clicks: 300, conversions: 20 }) }); // Google Ads: buys conversions, reports no leads
+    addInto(blend, { ...t({ costMinor: 10000, clicks: 100, conversions: 10, leads: 10 }), leadsReported: true }); // Meta
+    const [cpl] = kpiValues(["costPerLead"], blend, null);
+    expect(cpl.value).toBe(1000); // $100 of Meta spend ÷ 10 leads, not $400 ÷ 10
+  });
+
   it("knows which tiles a client doesn't track", () => {
     expect([...untrackedKpis(t({ conversions: 10 }))].sort()).toEqual(["conversionValue", "costPerLead", "leads", "roas"]);
     // The $1-per-conversion placeholder isn't a real value; reported zero leads count as not tracked.

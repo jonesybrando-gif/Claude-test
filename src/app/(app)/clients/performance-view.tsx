@@ -5,7 +5,8 @@ import { visibleClientsWhere } from "@/server/access";
 import { getAgencyPerformance } from "@/server/performance";
 import { loadPacing } from "@/server/pacing-service";
 import { clientAttention, portfolioResults, portfolioResultsFor } from "@/server/portfolio";
-import { attentionWeight, describeChange } from "@/lib/portfolio";
+import { attentionWeight, costPerResult, describeChange } from "@/lib/portfolio";
+import { stillCounting } from "@/lib/results";
 import { displayPacingStatus } from "@/lib/pacing/display-status";
 import { STATUS_SEVERITY } from "@/lib/pacing/status";
 import { pctChange } from "@/lib/metrics";
@@ -43,6 +44,8 @@ export async function PerformanceView({ user, today, range, cmpRange, preset, co
   const reasons = await clientAttention(pacing, attentionResults);
   const pacingBy = new Map(pacing.map((p) => [p.client.id, p]));
   const labelsBy = new Map(pickable.map((c) => [c.id, c.labels]));
+  // Same rule as the client page: recent results may still rise, so no better/worse verdict on them yet.
+  const counting = stillCounting(range.to, today);
   const rangeQuery = `range=${preset}&compare=${compareMode}${preset === "custom" ? `&from=${range.from}&to=${range.to}` : ""}`;
   const hasCmp = !!cmpRange;
 
@@ -58,8 +61,8 @@ export async function PerformanceView({ user, today, range, cmpRange, preset, co
     const why = reasons.get(c.clientId) ?? [];
     const money = (n: number) => formatMoney(n, currency);
     const counts = before ? { current: now.results, previous: before.results } : undefined;
-    const cpr = now.results > 0 ? now.spendMinor / now.results : null;
-    const prevCpr = before && before.results > 0 ? before.spendMinor / before.results : null;
+    const cpr = costPerResult(now);
+    const prevCpr = before ? costPerResult(before) : null;
     const pacingState: BudgetState =
       !p || (p.rows.length > 0 && connected.length === 0) || p.accounts.length === 0 ? "NOT_CONNECTED" : p.connectedTotal ? displayPacingStatus(p.connectedTotal).status : "NO_BUDGET";
     // The most pressing recommendation among the client's budget lines.
@@ -77,9 +80,10 @@ export async function PerformanceView({ user, today, range, cmpRange, preset, co
       spendMinor: c.totals.costMinor,
       spendChangePct: before ? pctChange(c.totals.costMinor, before.spendMinor) : null,
       results: now.results,
-      resultsChange: before ? describeChange({ current: now.results, previous: before.results, better: "up", format: (n) => formatNumber(n, 0), counts }) : null,
+      resultUnit: r?.goal === "AWARENESS" ? "clicks" : null,
+      resultsChange: before ? describeChange({ current: now.results, previous: before.results, better: "up", format: (n) => formatNumber(n, 0), counts, stillCounting: counting }) : null,
       costPerResultMinor: cpr,
-      costPerResultChange: before ? describeChange({ current: cpr, previous: prevCpr, better: "down", format: money, counts }) : null,
+      costPerResultChange: before ? describeChange({ current: cpr, previous: prevCpr, better: "down", format: money, counts, stillCounting: counting }) : null,
       pacing: pacingState,
       varianceMinor: p?.connectedTotal?.projectedVarianceMinor ?? null,
       reasons: why,
@@ -97,16 +101,16 @@ export async function PerformanceView({ user, today, range, cmpRange, preset, co
   const tc = results.currency;
   const { current: tNow, previous: tPrev } = results.totals;
   const tCounts = hasCmp ? { current: tNow.results, previous: tPrev.results } : undefined;
-  const tCpr = tNow.results > 0 ? tNow.spendMinor / tNow.results : null;
+  const tCpr = costPerResult(tNow);
   const inMain = rows.filter((r) => r.currency === tc).length;
   const totals: PortfolioTotals = {
     label: inMain < rows.length ? `All ${tc} clients` : "All clients",
     spend: formatMoney(tNow.spendMinor, tc, { whole: true }),
     spendChangePct: hasCmp ? pctChange(tNow.spendMinor, tPrev.spendMinor) : null,
     results: formatNumber(tNow.results, 0),
-    resultsChange: hasCmp ? describeChange({ current: tNow.results, previous: tPrev.results, better: "up", format: (n) => formatNumber(n, 0), counts: tCounts }) : null,
+    resultsChange: hasCmp ? describeChange({ current: tNow.results, previous: tPrev.results, better: "up", format: (n) => formatNumber(n, 0), counts: tCounts, stillCounting: counting }) : null,
     costPerResult: tCpr === null ? "—" : formatMoney(tCpr, tc),
-    costPerResultChange: hasCmp ? describeChange({ current: tCpr, previous: tPrev.results > 0 ? tPrev.spendMinor / tPrev.results : null, better: "down", format: (n) => formatMoney(n, tc), counts: tCounts }) : null,
+    costPerResultChange: hasCmp ? describeChange({ current: tCpr, previous: costPerResult(tPrev), better: "down", format: (n) => formatMoney(n, tc), counts: tCounts, stillCounting: counting }) : null,
   };
 
   return (

@@ -5,7 +5,7 @@ import { INCLUDED_ROWS } from "./campaign-selection";
 import { addDays, dateToIso, isoToDate, minDate, monthBounds, todayInTimeZone, type IsoDate } from "@/lib/pacing/dates";
 import { combinePacing, computePacing, type PacingResult } from "@/lib/pacing/engine";
 import type { DistributionConfig, DateRange } from "@/lib/pacing/distribution";
-import { resolveBudgetHierarchy, spendForUnit, type PacingUnit, type SpendRow } from "@/lib/pacing/rollup";
+import { resolveBudgetHierarchy, spendForUnit, spendOutsideCampaignBudgets, type PacingUnit, type SpendRow } from "@/lib/pacing/rollup";
 import { DEFAULT_THRESHOLDS, needsAttention, type PacingThresholds } from "@/lib/pacing/status";
 import { recommendAction, type Action } from "@/lib/action-center";
 import { isNotConnected } from "@/lib/pacing/connection";
@@ -320,6 +320,15 @@ function buildClientPacing(
     const acct = accounts.find((a) => a.id === accountId)!;
     const spend = rows.filter((r) => r.accountId === accountId && r.date >= period.start && r.date <= minDate(period.end, yesterday)).reduce((s, r) => s + r.costMinor, 0);
     outRows.push(makeRow(ctx, `unbudgeted:${accountId}`, "UNBUDGETED", acct.name, [acct], acct.currency, null, [], false, spend));
+  }
+  // Accounts budgeted campaign by campaign: spend on their other campaigns (and account-level rows such as
+  // Local Services) is outside every budget line. Report it so budget spend + unbudgeted spend = ad spend.
+  const outside = spendOutsideCampaignBudgets(campaignGroups.keys(), resolution.rollupUnits, rows, period.start, minDate(period.end, yesterday));
+  for (const accountId of campaignGroups.keys()) {
+    const spend = outside.get(accountId) ?? 0;
+    if (spend <= 0) continue;
+    const acct = accounts.find((a) => a.id === accountId)!;
+    outRows.push(makeRow(ctx, `unbudgeted-campaigns:${accountId}`, "UNBUDGETED", `${acct.name} (campaigns without a budget)`, [acct], acct.currency, null, [], false, spend));
   }
 
   const subRows = sub.map((p) => {

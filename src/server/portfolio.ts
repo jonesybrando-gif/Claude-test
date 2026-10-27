@@ -6,12 +6,13 @@ import type { ClientPacing, PacingRow } from "./pacing-service";
 import { recommendAction } from "@/lib/action-center";
 import { comparisonRange, resolveRange, type DateRange } from "@/lib/date-ranges";
 import { isoToDate, type IsoDate } from "@/lib/pacing/dates";
+import { emptyTotals, reportsLeads, type MetricTotals } from "@/lib/metrics";
+import { resolveGoal, resultsFor } from "@/lib/results";
 import {
   attentionReasons,
   CRITICAL_ALERT_TYPES,
   costPerResultHigh,
   medianCostPerResult,
-  resultCount,
   type AttentionReason,
   type ClientResults,
   type PeriodResults,
@@ -30,16 +31,10 @@ export interface PortfolioResults {
   totals: { current: PeriodResults; previous: PeriodResults };
 }
 
-const empty = (): PeriodResults => ({ spendMinor: 0, results: 0 });
 
 /**
  * Spend and results for the last 30 complete days and the 30 before, per
- * client and in total. Results are counted with `resultCount` (ad-platform
- * data only, no double counting).
- *
- * TODO(integration): once Agent B's goal-based `resultsFor(goal, totals)`
- * (src/lib/results.ts) is merged, sum per client with the client's goal
- * instead of `resultCount` — only the loop below changes.
+ * client and in total.
  */
 export async function portfolioResults(where: Prisma.ClientWhereInput, today: IsoDate): Promise<PortfolioResults> {
   const range = resolveRange("last_30", today);
@@ -49,42 +44,81 @@ export async function portfolioResults(where: Prisma.ClientWhereInput, today: Is
 /**
  * The same figures for any range and comparison range (the Clients table uses
  * the range picked on the page). With no comparison, `previous` stays at zero.
+ *
+ * Results follow each client's goal with `resultsFor`, exactly as on the client's
+ * own page: leads, calls, sales or bookings from the ad platforms (each counted
+ * once), or clicks for awareness clients. Agency totals leave awareness clients'
+ * clicks out of "results" when other goals are present (their spend still counts).
  */
 export async function portfolioResultsFor(where: Prisma.ClientWhereInput, range: DateRange, previousRange: DateRange | null): Promise<PortfolioResults> {
-  const clients = await prisma.client.findMany({ where, select: { id: true, currency: true, accounts: { select: { id: true, platform: true } } } });
+  const clients = await prisma.client.findMany({ where, select: { id: true, currency: true, goal: true, accounts: { select: { id: true, platform: true } } } });
   const accountInfo = new Map(clients.flatMap((c) => c.accounts.map((a) => [a.id, { clientId: c.id, platform: a.platform }] as const)));
   const sum = (r: DateRange) =>
     accountInfo.size
       ? prisma.dailyPerformance.groupBy({
           by: ["accountId"],
           where: { accountId: { in: [...accountInfo.keys()] }, date: { gte: isoToDate(r.from), lte: isoToDate(r.to) }, ...INCLUDED_ROWS },
-          _sum: { costMinor: true, conversions: true, leads: true },
+          _sum: { costMinor: true, impressions: true, clicks: true, conversions: true, conversionValueMinor: true, leads: true },
         })
       : Promise.resolve([]);
   const [cur, prev] = await Promise.all([sum(range), previousRange ? sum(previousRange) : Promise.resolve([])]);
 
-  const byClient = new Map<string, ClientResults>(clients.map((c) => [c.id, { clientId: c.id, currency: c.currency, current: empty(), previous: empty() }]));
-  const add = (rows: Awaited<ReturnType<typeof sum>>, key: "current" | "previous") => {
+  // One MetricTotals line per ad account, so leads and conversions combine per platform without double counting.
+  const linesFor = (rows: Awaited<ReturnType<typeof sum>>) => {
+    const out = new Map<string, MetricTotals[]>();
     for (const s of rows) {
       const a = accountInfo.get(s.accountId)!;
-      const p = byClient.get(a.clientId)![key];
-      p.spendMinor += Number(s._sum.costMinor ?? 0);
-      p.results += resultCount(a.platform, { conversions: Number(s._sum.conversions ?? 0), leads: Number(s._sum.leads ?? 0) });
+      out.set(a.clientId, [
+        ...(out.get(a.clientId) ?? []),
+        {
+          ...emptyTotals(),
+          costMinor: Number(s._sum.costMinor ?? 0),
+          impressions: Number(s._sum.impressions ?? 0),
+          clicks: Number(s._sum.clicks ?? 0),
+          conversions: Number(s._sum.conversions ?? 0),
+          conversionValueMinor: Number(s._sum.conversionValueMinor ?? 0),
+          leads: Number(s._sum.leads ?? 0),
+          leadsReported: reportsLeads(a.platform),
+        },
+      ]);
     }
+    return out;
   };
-  add(cur, "current");
-  add(prev, "previous");
+  const curLines = linesFor(cur);
+  const prevLines = linesFor(prev);
+
+  const byClient = new Map<string, ClientResults>();
+  for (const c of clients) {
+    const now = curLines.get(c.id) ?? [];
+    const before = prevLines.get(c.id) ?? [];
+    const { goal, guessed } = resolveGoal(c.goal, now, before);
+    const a = resultsFor(goal, now, guessed);
+    const b = resultsFor(goal, before, guessed);
+    byClient.set(c.id, {
+      clientId: c.id,
+      currency: c.currency,
+      goal,
+      unit: a.singular,
+      current: { spendMinor: a.costMinor, results: a.value },
+      previous: { spendMinor: b.costMinor, results: b.value },
+    });
+  }
 
   // Never add amounts in different currencies: total the most common one and say what was left out.
   const counts = new Map<string, number>();
   for (const c of clients) counts.set(c.currency, (counts.get(c.currency) ?? 0) + 1);
   const currency = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "USD";
-  const totals = { current: empty(), previous: empty() };
-  for (const c of byClient.values()) {
-    if (c.currency !== currency) continue;
+  const same = [...byClient.values()].filter((c) => c.currency === currency);
+  const mixedGoals = new Set(same.map((c) => c.goal)).size > 1;
+  const totals = { current: { spendMinor: 0, results: 0, resultSpendMinor: 0 }, previous: { spendMinor: 0, results: 0, resultSpendMinor: 0 } };
+  for (const c of same) {
+    const countsResults = !(mixedGoals && c.goal === "AWARENESS");
     for (const k of ["current", "previous"] as const) {
       totals[k].spendMinor += c[k].spendMinor;
-      totals[k].results += c[k].results;
+      if (countsResults) {
+        totals[k].results += c[k].results;
+        totals[k].resultSpendMinor += c[k].spendMinor;
+      }
     }
   }
   return {
