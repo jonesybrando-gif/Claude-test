@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/server/auth";
 import { userCanViewClient } from "@/server/access";
 import { loadClientReport } from "@/server/client-report";
 import { renderClientReportPdf } from "@/server/pdf/reports";
-import { getExecutiveSummary } from "@/server/exec-summary";
+import { clientFacingSummary, getExecutiveSummary } from "@/server/exec-summary";
 import { agencyBrand } from "@/server/pdf/brand";
 import { slug } from "@/lib/csv";
 import { clientNextStepLines } from "@/server/next-steps";
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const report = await loadClientReport(id, q);
   // Internal recommendations only for agency staff who ask for them.
   const internal = user.role !== "CLIENT_USER" && q.internal === "1";
-  const pdf = await renderClientReportPdf(report, await agencyBrand(user.agencyId), { internal, executiveSummary: await getExecutiveSummary(report, { generate: true }), clientNextSteps: internal ? undefined : await clientNextStepLines(report.client.id, report.client.timezone) });
+  const pdf = await renderClientReportPdf(report, await agencyBrand(user.agencyId), { internal, executiveSummary: internal ? await getExecutiveSummary(report, { generate: true }) : await clientFacingSummary(report), clientNextSteps: internal ? undefined : await clientNextStepLines(report.client.id, report.client.timezone) });
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",

@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import type { ClientReport } from "@/server/client-report";
-import { getExecutiveSummary, summaryKey, type ExecSummary } from "@/server/exec-summary";
+import { clientFacingSummary, getExecutiveSummary, summaryKey, type ExecSummary } from "@/server/exec-summary";
 import { summaryAsHtml, summaryAsText, summarySections } from "@/lib/exec-summary";
 import { formatDate } from "@/lib/time";
 import { clientNextStepLines } from "@/server/next-steps";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopySummaryButton } from "./copy-summary-button";
 import { RefreshWhenReady } from "./refresh-when-ready";
+import { SummaryApproval } from "./summary-approval";
 
 /** Up to three headline points: the top win, the top issue and the top recommendation (or next step, for clients). */
 function keyPoints(s: ExecSummary, clientFacing: boolean): string[] {
@@ -86,12 +87,15 @@ function withSteps(s: ExecSummary, steps: string[] | undefined): ExecSummary {
 export async function ExecutiveSummary({ rep, marker, copyable = false, compact = false, title = "Executive summary", actions, bare = false, clientFacing = false }: { rep: ClientReport; marker?: ReactNode; copyable?: boolean; compact?: boolean; title?: string; actions?: ReactNode; bare?: boolean; clientFacing?: boolean }) {
   // Clients only ever read next steps a person approved; AI-drafted ones stay with the agency.
   const steps = clientFacing ? await clientNextStepLines(rep.client.id, rep.client.timezone) : undefined;
-  const { pending, ...summary } = await getExecutiveSummary(rep, { generate: "background" });
+  // Clients only ever read AI-written text the agency approved; otherwise the automatic summary.
+  const shown: ExecSummary & { pending?: boolean; insightId?: string; approved?: boolean } = clientFacing ? await clientFacingSummary(rep) : await getExecutiveSummary(rep, { generate: "background" });
+  const { pending, insightId, approved, ...summary } = shown;
   const heading = `${rep.client.name}: performance summary, ${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })}`;
   const body = (
     <>
       <SummaryText summary={withSteps(summary, steps)} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} pending={pending} />
       {pending && <RefreshWhenReady summaryKey={summaryKey(rep)} />}
+      {!clientFacing && insightId && <SummaryApproval clientId={rep.client.id} insightId={insightId} approved={!!approved} />}
     </>
   );
   if (bare) return body;

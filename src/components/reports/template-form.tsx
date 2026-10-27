@@ -243,7 +243,7 @@ export function TemplateForm({
         <p className="text-xs text-text-3">Written fresh for whichever date range is being viewed, using only the report&apos;s figures.</p>
         <label className="flex items-start gap-2 text-sm">
           <input type="radio" name="executiveAi" value="ai" defaultChecked={template.executiveAi} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
-          <span><span className="font-medium">Written by AI</span><span className="block text-xs text-text-3">Reads naturally. Needs ANTHROPIC_API_KEY; until then the automatic version is used. Each new date range is one short AI request, saved for a day.</span></span>
+          <span><span className="font-medium">Written by AI</span><span className="block text-xs text-text-3">Reads naturally. Your team sees it on the client&apos;s page; clients see it only after someone approves it there (until then, the automatic version). Needs ANTHROPIC_API_KEY.</span></span>
         </label>
         <label className="flex items-start gap-2 text-sm">
           <input type="radio" name="executiveAi" value="auto" defaultChecked={!template.executiveAi} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
