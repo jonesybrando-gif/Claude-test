@@ -9,6 +9,8 @@ import { getDataSourceAdapter } from "@/server/data-sources/registry";
 import { dataSourceAccessToken, readSecret } from "@/server/data-sources/credentials";
 import { syncDataAsset } from "@/server/data-sources/sync";
 import type { RemoteAsset } from "@/server/data-sources/types";
+import { googleOAuthClient, revokeGoogleToken } from "@/server/data-sources/google/oauth";
+import { decryptSecret } from "@/server/crypto";
 
 // Shared by every data-source provider (Google, CallRail, Meta organic, …).
 
@@ -100,20 +102,32 @@ export async function linkDataAssets(connectionId: string, _prev: LinkAssetsStat
 }
 
 /**
- * Disconnect a data-source login. Tokens are deleted here but never revoked at
- * the provider: the same Google login may also back a Google Ads connection.
- * Linked assets pause (data kept) and resume when the same login reconnects.
+ * Disconnect a data-source login. Tokens are deleted, and for Google the grant is
+ * revoked at Google. That grant belongs to the separate data-source OAuth client,
+ * so Google Ads connections made with the same login keep working. Linked assets
+ * pause (data kept) unless "Also delete imported data" was ticked, which deletes
+ * them and every figure imported through them.
  */
-export async function disconnectDataSource(connectionId: string): Promise<void> {
+export async function disconnectDataSource(connectionId: string, form?: FormData): Promise<void> {
   const user = await requireAdmin();
-  const connection = await prisma.dataSourceConnection.findFirst({ where: { id: connectionId, agencyId: user.agencyId }, select: { id: true } });
+  const connection = await prisma.dataSourceConnection.findFirst({
+    where: { id: connectionId, agencyId: user.agencyId },
+    select: { id: true, provider: true, encryptedRefreshToken: true, encryptedAccessToken: true },
+  });
   if (!connection) throw new Error("Connection not found");
+  const deleteData = form?.get("deleteData") === "1";
+  if (connection.provider === "GOOGLE" && googleOAuthClient()) {
+    const enc = connection.encryptedRefreshToken ?? connection.encryptedAccessToken;
+    if (enc) await revokeGoogleToken(decryptSecret(enc));
+  }
   await prisma.$transaction([
     prisma.dataSourceConnection.update({
       where: { id: connection.id },
       data: { status: "DISCONNECTED", encryptedAccessToken: null, encryptedRefreshToken: null, accessTokenExpiresAt: null, encryptedSecret: null, lastError: null },
     }),
-    prisma.dataAsset.updateMany({ where: { connectionId: connection.id, status: "ACTIVE" }, data: { status: "NEEDS_REAUTH", lastError: "The login was disconnected." } }),
+    deleteData
+      ? prisma.dataAsset.deleteMany({ where: { connectionId: connection.id } }) // imported figures cascade
+      : prisma.dataAsset.updateMany({ where: { connectionId: connection.id, status: "ACTIVE" }, data: { status: "NEEDS_REAUTH", lastError: "The login was disconnected." } }),
   ]);
   revalidatePath("/integrations", "layout");
 }

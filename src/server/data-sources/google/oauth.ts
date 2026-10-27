@@ -1,15 +1,16 @@
-import { missingGoogleAdsEnv } from "@/server/integrations/google-ads/config";
 import type { FetchLike } from "./http";
 import { googleScopes } from "./modules";
 
 // OAuth for the GOOGLE data-source login (GA4, Search Console, Business
 // Profile). Uses its own OAuth client (GOOGLE_DATA_CLIENT_ID/SECRET, a
 // separate Cloud project so its scopes never touch the Google Ads app's
-// verification). Falls back to the Google Ads client when those aren't set.
+// verification). Never falls back to the Google Ads client: these scopes
+// must not appear on the verified Ads app.
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
+const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 
 export const GOOGLE_DS_CALLBACK_PATH = "/api/data-sources/google/callback";
 /** Platform tag in the signed OAuth state (distinct from the Google Ads flow). */
@@ -19,8 +20,7 @@ export interface GoogleOAuthClient { clientId: string; clientSecret: string }
 
 export function googleOAuthClient(env: NodeJS.ProcessEnv = process.env): GoogleOAuthClient | null {
   if (env.GOOGLE_DATA_CLIENT_ID && env.GOOGLE_DATA_CLIENT_SECRET) return { clientId: env.GOOGLE_DATA_CLIENT_ID, clientSecret: env.GOOGLE_DATA_CLIENT_SECRET };
-  if (missingGoogleAdsEnv(env).length) return null;
-  return { clientId: env.GOOGLE_ADS_CLIENT_ID!, clientSecret: env.GOOGLE_ADS_CLIENT_SECRET! };
+  return null;
 }
 
 function requireClient(c?: GoogleOAuthClient | null): GoogleOAuthClient {
@@ -36,6 +36,8 @@ export function googleAuthorizationUrl(state: string, redirectUri: string, clien
     response_type: "code",
     scope: scopes.join(" "),
     access_type: "offline",
+    // Keeps earlier grants when a product (e.g. Business Profile) is added later with a Reconnect.
+    include_granted_scopes: "true",
     prompt: "consent",
     state,
   });
@@ -107,5 +109,15 @@ export async function googleIdentity(t: GoogleTokenResult, f: FetchLike = fetch)
     return { sub: b.sub ?? fromId.sub, email: b.email ?? fromId.email };
   } catch {
     return fromId;
+  }
+}
+
+/** Revokes this OAuth client's whole grant for the token's Google login. Best effort: false on any failure. */
+export async function revokeGoogleToken(token: string, f: FetchLike = fetch): Promise<boolean> {
+  try {
+    const res = await f(REVOKE_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token }).toString() });
+    return res.ok;
+  } catch {
+    return false;
   }
 }

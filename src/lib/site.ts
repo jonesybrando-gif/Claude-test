@@ -4,7 +4,7 @@ export const site = {
   company: process.env.PUBLIC_COMPANY_NAME || process.env.APP_NAME || "Marketing Nexus",
   contactEmail: process.env.PUBLIC_CONTACT_EMAIL || null,
   // Date the privacy policy and terms last changed.
-  policyDate: "October 17, 2026",
+  policyDate: "October 27, 2026",
 };
 
 /**
