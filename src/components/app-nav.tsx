@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BarChart3, Bell, Building2, FileText, Home, Menu as MenuIcon, Plug, Settings, Sparkles, X } from "lucide-react";
 import { cn } from "./ui/cn";
+import { LinkPending } from "./link-pending";
+import { loadOnHover } from "@/lib/link-hover";
 
 const ICONS = { home: Home, clients: Building2, reports: BarChart3, report: FileText, insights: Sparkles, alerts: Bell, integrations: Plug, settings: Settings } as const;
 
@@ -39,6 +41,7 @@ export function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate?:
             <Link
               href={href}
               onClick={onNavigate}
+              {...loadOnHover}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60",
@@ -47,6 +50,7 @@ export function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate?:
             >
               <Icon className={cn("h-4 w-4 shrink-0", active && "text-brand-text")} aria-hidden />
               {label}
+              <LinkPending />
               {count > 0 && (
                 <span className="ml-auto text-xs font-semibold text-text-2 tabular">
                   <span aria-hidden>{count > 99 ? "99+" : count}</span>

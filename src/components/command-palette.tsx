@@ -1,5 +1,6 @@
 "use client";
 
+import { startNavigationProgress } from "@/components/navigation-progress";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Building2, CornerDownLeft, Plus, Search } from "lucide-react";
@@ -89,6 +90,7 @@ export function CommandPalette({ items, variant = "bar" }: { items: PaletteItem[
   const go = (item: PaletteItem | undefined) => {
     if (!item) return;
     close();
+    startNavigationProgress();
     router.push(item.href);
   };
 

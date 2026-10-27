@@ -1,3 +1,4 @@
+import { loadOnHover } from "@/lib/link-hover";
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import type { AttentionKind, AttentionReason } from "@/lib/portfolio";
@@ -51,7 +52,7 @@ export function NeedsAttention({ clients, total, limit = 5 }: { clients: Attenti
               <li key={c.id} className="flex min-h-14 items-center gap-3 rounded-lg px-3 py-2 hover:bg-surface-2">
                 <Dot tone={c.tier} />
                 <span className="sr-only">{c.tier === "critical" ? "Critical" : "Watch"}:</span>
-                <Link href={`/clients/${c.id}`} className="min-w-0 flex-1">
+                <Link {...loadOnHover} href={`/clients/${c.id}`} className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-text">{c.name}</span>
                   <span className="block text-[13px] text-text-2">
                     {top.label}

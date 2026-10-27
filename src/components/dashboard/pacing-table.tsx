@@ -1,5 +1,6 @@
 "use client";
 
+import { loadOnHover } from "@/lib/link-hover";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, AlertTriangle, Info } from "lucide-react";
@@ -125,7 +126,7 @@ export function PacingTable({ rows, labels = [], labelsByClient = {}, initialSta
             <li key={r.key} className="rounded-lg border border-border p-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <Link href={`/clients/${r.clientId}`} className="block truncate font-medium hover:underline">{r.clientName}</Link>
+                  <Link {...loadOnHover} href={`/clients/${r.clientId}`} className="block truncate font-medium hover:underline">{r.clientName}</Link>
                   <p className="truncate text-xs text-text-3">{r.level === "CLIENT" ? "All accounts" : r.label} · {r.platforms.map((p) => PLATFORM_LABEL[p]).join(" + ") || "no platform"}</p>
                 </div>
                 {r.notConnected ? <NotConnectedBadge label={r.accounts.length ? "Awaiting sync" : "Not connected"} /> : res ? <StatusBadge status={displayPacingStatus(res).status} /> : <NoBudgetBadge />}
@@ -183,7 +184,7 @@ export function PacingTable({ rows, labels = [], labelsByClient = {}, initialSta
             return (
               <TR key={r.key}>
                 <TD className="pl-5">
-                  <Link href={`/clients/${r.clientId}`} className="block truncate font-medium text-text hover:underline" title={r.clientName}>{r.clientName}</Link>
+                  <Link {...loadOnHover} href={`/clients/${r.clientId}`} className="block truncate font-medium text-text hover:underline" title={r.clientName}>{r.clientName}</Link>
                   <div className="truncate text-xs text-text-3" title={r.level === "CLIENT" ? "Combined budget" : r.label}>{r.level === "CLIENT" ? "Combined budget" : r.label}</div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                     {r.platforms.map((p) => <PlatformLabel key={p} platform={p} />)}

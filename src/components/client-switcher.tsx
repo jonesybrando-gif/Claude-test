@@ -1,5 +1,6 @@
 "use client";
 
+import { startNavigationProgress } from "@/components/navigation-progress";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronsUpDown } from "lucide-react";
 import { switchClientHref } from "@/lib/client-nav";
@@ -20,7 +21,10 @@ export function ClientSwitcher({ clientId, clients }: { clientId: string; client
       options={clients}
       defaultValue={clientId}
       ariaLabel="Switch client"
-      onChange={(id) => router.push(switchClientHref(pathname, params.toString(), id))}
+      onChange={(id) => {
+        startNavigationProgress();
+        router.push(switchClientHref(pathname, params.toString(), id));
+      }}
       buttonContent={<ChevronsUpDown className="h-4 w-4 text-text-2" aria-hidden />}
       className="h-10 w-10 shrink-0 justify-center border-transparent px-0 hover:bg-surface-2"
     />

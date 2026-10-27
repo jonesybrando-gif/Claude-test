@@ -1,11 +1,12 @@
-import { Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { ClientReport } from "@/server/client-report";
-import { automaticSummary, getExecutiveSummary, wantsAiSummary, type ExecSummary } from "@/server/exec-summary";
+import { getExecutiveSummary, summaryKey, type ExecSummary } from "@/server/exec-summary";
 import { summaryAsHtml, summaryAsText, summarySections } from "@/lib/exec-summary";
 import { formatDate } from "@/lib/time";
 import { clientNextStepLines } from "@/server/next-steps";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopySummaryButton } from "./copy-summary-button";
+import { RefreshWhenReady } from "./refresh-when-ready";
 
 /** Up to three headline points: the top win, the top issue and the top recommendation (or next step, for clients). */
 function keyPoints(s: ExecSummary, clientFacing: boolean): string[] {
@@ -38,7 +39,7 @@ function SummaryText({ summary, heading, pending, copyable, compact, clientFacin
       )}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
         <p className="text-xs text-text-3" aria-live="polite">
-          {pending ? "Writing a fuller analysis…" : summary.source === "ai" ? "Written by AI from the figures in this report." : "Worked out automatically from the figures in this report."}
+          {pending ? "An AI-written summary is on its way and will replace this in a moment." : summary.source === "ai" ? "Written by AI from the figures in this report." : "Worked out automatically from the figures in this report."}
           {clientFacing ? " Results are counted by each ad platform." : " Recommendations are suggestions; nothing has been changed in the ad accounts."}
         </p>
         {copyable && !pending && <CopySummaryButton html={summaryAsHtml(summary, heading)} text={summaryAsText(summary, heading)} />}
@@ -69,10 +70,6 @@ function FullText({ summary, clientFacing }: { summary: ExecSummary; clientFacin
   );
 }
 
-async function AiSummary({ rep, heading, copyable, compact, clientFacing, steps }: { rep: ClientReport; heading: string; copyable: boolean; compact?: boolean; clientFacing?: boolean; steps?: string[] }) {
-  return <SummaryText summary={withSteps(await getExecutiveSummary(rep, { generate: true }), steps)} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} />;
-}
-
 /** For client-facing copies, "What we're doing next" is the agency's approved steps, never the AI's drafts. */
 function withSteps(s: ExecSummary, steps: string[] | undefined): ExecSummary {
   return steps === undefined ? s : { ...s, nextSteps: steps };
@@ -80,21 +77,22 @@ function withSteps(s: ExecSummary, steps: string[] | undefined): ExecSummary {
 
 /**
  * An overview of the selected date range, what's working, what isn't, and
- * recommendations, as one section. The automatic version shows at once; an
- * AI-written one streams in when the layout asks for it.
+ * recommendations, as one section. Shows the saved AI-written summary when
+ * there is one; otherwise the automatic version at once while the AI writes
+ * one in the background, which then replaces it without a reload. The page
+ * never waits on the AI.
  */
 /** `clientFacing` (client logins, shared links): "What we're doing next" in agency voice replaces Recommendations. */
 export async function ExecutiveSummary({ rep, marker, copyable = false, compact = false, title = "Executive summary", actions, bare = false, clientFacing = false }: { rep: ClientReport; marker?: ReactNode; copyable?: boolean; compact?: boolean; title?: string; actions?: ReactNode; bare?: boolean; clientFacing?: boolean }) {
   // Clients only ever read next steps a person approved; AI-drafted ones stay with the agency.
   const steps = clientFacing ? await clientNextStepLines(rep.client.id, rep.client.timezone) : undefined;
-  const auto = withSteps(automaticSummary(rep), steps);
+  const { pending, ...summary } = await getExecutiveSummary(rep, { generate: "background" });
   const heading = `${rep.client.name}: performance summary, ${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })}`;
-  const body = wantsAiSummary(rep) ? (
-    <Suspense fallback={<SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} pending />}>
-      <AiSummary rep={rep} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} steps={steps} />
-    </Suspense>
-  ) : (
-    <SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} />
+  const body = (
+    <>
+      <SummaryText summary={withSteps(summary, steps)} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} pending={pending} />
+      {pending && <RefreshWhenReady summaryKey={summaryKey(rep)} />}
+    </>
   );
   if (bare) return body;
   return (

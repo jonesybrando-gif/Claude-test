@@ -1,5 +1,7 @@
 "use client";
 
+import { loadOnHover } from "@/lib/link-hover";
+import { startNavigationProgress } from "@/components/navigation-progress";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
@@ -297,7 +299,7 @@ export function PortfolioTable({ rows, totals, labels, initialFilter, combinedHr
       <ul className="flex flex-col gap-2 md:hidden" aria-label="Clients">
         {visible.map((r) => (
           <li key={r.id}>
-            <Link href={r.href} className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4 hover:bg-surface-2">
+            <Link {...loadOnHover} href={r.href} className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4 hover:bg-surface-2">
               <span className="flex items-center gap-2">
                 <AttentionDot r={r} />
                 <span className="min-w-0 flex-1 truncate font-medium">{r.name}</span>
@@ -347,12 +349,12 @@ export function PortfolioTable({ rows, totals, labels, initialFilter, combinedHr
                 <Fragment key={r.id}>
                   <tr
                     className={cn("cursor-pointer border-b border-border/60 text-right hover:bg-surface-2/60", isOpen && "bg-surface-2/60")}
-                    onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button")) router.push(r.href); }}
+                    onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button")) { startNavigationProgress(); router.push(r.href); } }}
                   >
                     <td className="py-3 pl-5 pr-4 text-left">
                       <span className="flex min-w-0 items-center gap-3">
                         <AttentionDot r={r} />
-                        <Link href={r.href} className="truncate font-medium text-text hover:underline">{r.name}</Link>
+                        <Link {...loadOnHover} href={r.href} className="truncate font-medium text-text hover:underline">{r.name}</Link>
                         {r.labels.map((l) => <LabelBadge key={l.id} label={l} />)}
                         {r.isDemo && <span className="text-xs text-text-3">demo</span>}
                       </span>

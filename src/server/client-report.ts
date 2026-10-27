@@ -122,8 +122,7 @@ export async function loadClientReport(clientId: string, params: ReportParams, n
  * `completeClientReport` loads the rest. Same access rule as loadClientReport.
  */
 export async function loadClientReportHead(clientId: string, params: ReportParams, now: Date = new Date()) {
-  const base = await loadReportBase(clientId, params, now);
-  const [pacing] = await loadPacing({ id: clientId }, now);
+  const [base, [pacing]] = await Promise.all([loadReportBase(clientId, params, now), loadPacing({ id: clientId }, now)]);
   return { ...base, pacing };
 }
 
