@@ -3,7 +3,7 @@ import type { DataAssetKind } from "@prisma/client";
 import { getCurrentUser } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { googleOAuthClient } from "@/server/data-sources/google/oauth";
-import { GOOGLE_MODULES } from "@/server/data-sources/google/modules";
+import { GBP_ENABLED, GOOGLE_MODULES } from "@/server/data-sources/google/modules";
 import { relativeTime } from "@/lib/time";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ export async function GoogleDataSourceCard() {
   if (!user) return null;
   const admin = user.role === "AGENCY_ADMIN";
   const configured = !!googleOAuthClient();
+  const productNames = GBP_ENABLED ? "Analytics, Search Console, Business Profile" : "Analytics, Search Console";
   const connections = await prisma.dataSourceConnection.findMany({
     where: { agencyId: user.agencyId, provider: "GOOGLE", status: { not: "DISCONNECTED" } },
     include: { assets: { where: { status: { not: "DISCONNECTED" } }, select: { kind: true, status: true, lastSuccessfulSyncAt: true, lastError: true, name: true } } },
@@ -34,13 +35,13 @@ export async function GoogleDataSourceCard() {
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle>Google Analytics, Search Console &amp; Business Profile</CardTitle>
+          <CardTitle>Google {productNames}</CardTitle>
           <Badge variant={configured ? "info" : "warning"}>{configured ? "Ready to connect" : "Waiting for API credentials"}</Badge>
         </div>
-        <CardDescription>One Google login covers GA4 properties, Search Console sites and Business Profile locations. Uses the official Google Analytics Admin and Data APIs, Search Console API and Business Profile APIs.</CardDescription>
+        <CardDescription>One Google login covers {GBP_ENABLED ? "GA4 properties, Search Console sites and Business Profile locations" : "GA4 properties and Search Console sites"}. Read-only, through the official Google APIs.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
-        {!configured && <p className="text-xs text-warning-ink">Missing server settings: GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET</p>}
+        {!configured && <p className="text-xs text-warning-ink">Missing server settings: GOOGLE_DATA_CLIENT_ID, GOOGLE_DATA_CLIENT_SECRET</p>}
         {connections.map((c) => {
           const cb = CONNECTION_BADGE[c.status] ?? CONNECTION_BADGE.ACTIVE;
           const counts = GOOGLE_MODULES.map((m) => ({ kind: m.kind, n: c.assets.filter((a) => a.kind === m.kind).length }));
@@ -70,7 +71,8 @@ export async function GoogleDataSourceCard() {
                   {(c.status === "NEEDS_REAUTH" || missing.length > 0) && configured && <a href="/api/data-sources/google/connect" className={buttonVariants({ size: "sm" })}>Reconnect</a>}
                   <DisconnectDataSourceButton
                     connectionId={c.id}
-                    confirmText="Disconnect this Google login? Syncing stops for its Analytics, Search Console and Business Profile links. Data is kept, and Google Ads connections made with the same login keep working."
+                    offerDelete
+                    confirmText={`Disconnect this Google login? Access is revoked at Google and syncing stops for its ${productNames} links. Imported data is kept. Google Ads connections made with the same login keep working.`}
                   />
                 </div>
               )}
@@ -86,7 +88,7 @@ export async function GoogleDataSourceCard() {
           </ul>
         </div>
         {admin && configured ? (
-          <a href="/api/data-sources/google/connect" className={`${buttonVariants()} self-start`}>Connect Google (Analytics, Search Console, Business Profile)</a>
+          <a href="/api/data-sources/google/connect" className={`${buttonVariants()} self-start`}>Connect Google ({productNames})</a>
         ) : (
           <span className={`${buttonVariants({ variant: "outline" })} self-start pointer-events-none opacity-50`} aria-disabled>
             {admin ? "Connect (credentials needed)" : "Ask an administrator to connect"}

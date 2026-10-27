@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DataAsset, DataSourceConnection } from "@prisma/client";
 import { createGa4Module, dateChunks, ga4Date, ga4RowsToMetricRows, parseGa4Report, topPerDay, GA4_SCOPE, type Ga4Report } from "../ga4";
 import { googleScopes, GOOGLE_MODULES } from "../modules";
+import { gbpModule } from "../gbp";
 import { createGoogleAdapter } from "../adapter";
 import { decodeIdToken, googleAuthorizationUrl } from "../oauth";
 import type { GoogleKindModule } from "../types";
@@ -124,17 +125,19 @@ describe("Google scopes", () => {
     expect(googleScopes([a, b])).toEqual(["openid", "email", "s1", "s2", "s3"]);
   });
 
-  it("covers GA4, Search Console and Business Profile", () => {
+  it("asks for GA4 and Search Console; Business Profile only when enabled", () => {
     const s = googleScopes(GOOGLE_MODULES);
     expect(s).toContain(GA4_SCOPE);
     expect(s).toContain("https://www.googleapis.com/auth/webmasters.readonly");
-    expect(s).toContain("https://www.googleapis.com/auth/business.manage");
+    expect(s).not.toContain("https://www.googleapis.com/auth/business.manage"); // GOOGLE_GBP_ENABLED is unset in tests
+    expect(googleScopes([...GOOGLE_MODULES, gbpModule])).toContain("https://www.googleapis.com/auth/business.manage");
   });
 
   it("builds an offline, consent authorization URL", () => {
     const u = new URL(googleAuthorizationUrl("st", "https://app.example.com/api/data-sources/google/callback", { clientId: "cid", clientSecret: "x" }, ["openid", "email", GA4_SCOPE]));
     expect(u.searchParams.get("access_type")).toBe("offline");
     expect(u.searchParams.get("prompt")).toBe("consent");
+    expect(u.searchParams.get("include_granted_scopes")).toBe("true");
     expect(u.searchParams.get("scope")).toBe(`openid email ${GA4_SCOPE}`);
     expect(u.searchParams.get("redirect_uri")).toBe("https://app.example.com/api/data-sources/google/callback");
   });
@@ -204,9 +207,21 @@ describe("GA4 dashboard template", () => {
 });
 
 describe("googleOAuthClient", () => {
-  it("prefers the dedicated data-source client and falls back to the Google Ads client", async () => {
+  it("uses only the dedicated data-source client, never the Google Ads client", async () => {
     const { googleOAuthClient } = await import("../oauth");
     expect(googleOAuthClient({ GOOGLE_DATA_CLIENT_ID: "d", GOOGLE_DATA_CLIENT_SECRET: "ds", GOOGLE_ADS_CLIENT_ID: "a", GOOGLE_ADS_CLIENT_SECRET: "as" } as unknown as NodeJS.ProcessEnv)).toEqual({ clientId: "d", clientSecret: "ds" });
-    expect(googleOAuthClient({ GOOGLE_ADS_CLIENT_ID: "a", GOOGLE_ADS_CLIENT_SECRET: "as" } as unknown as NodeJS.ProcessEnv)).toEqual({ clientId: "a", clientSecret: "as" });
+    expect(googleOAuthClient({ GOOGLE_ADS_CLIENT_ID: "a", GOOGLE_ADS_CLIENT_SECRET: "as" } as unknown as NodeJS.ProcessEnv)).toBeNull();
+  });
+
+  it("revokes a token at Google", async () => {
+    const { revokeGoogleToken } = await import("../oauth");
+    const calls: { url: string; body: string }[] = [];
+    const ok = await revokeGoogleToken("tok", async (url, init) => {
+      calls.push({ url: String(url), body: String(init?.body) });
+      return new Response("", { status: 200 });
+    });
+    expect(ok).toBe(true);
+    expect(calls).toEqual([{ url: "https://oauth2.googleapis.com/revoke", body: "token=tok" }]);
+    expect(await revokeGoogleToken("tok", async () => { throw new Error("offline"); })).toBe(false);
   });
 });

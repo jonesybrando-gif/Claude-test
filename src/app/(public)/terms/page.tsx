@@ -17,7 +17,7 @@ export default function TermsPage() {
     >
       <section className="flex flex-col gap-3">
         <h2>The service</h2>
-        <p>{app} reports on advertising accounts that have been connected to it, tracks spend against budgets, and produces reports. It reads data from Google Ads, Meta Ads and Microsoft Advertising with read-only access, and never changes campaigns, ads, budgets or billing in those platforms. Any change to an account is made by a person, separately.</p>
+        <p>{app} reports on advertising accounts that have been connected to it, tracks spend against budgets, and produces reports. It reads data from Google Ads, Meta Ads, Microsoft Advertising, Google Analytics, Google Search Console, Google Business Profile and other connected services, and never changes campaigns, ads, budgets, billing, website settings or business listings in those services. Any change to an account is made by a person, separately.</p>
       </section>
 
       <section className="flex flex-col gap-3">

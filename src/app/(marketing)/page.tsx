@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -234,7 +235,7 @@ export default async function HomePage() {
           </div>
           <div>
             <h3>Hands off your accounts</h3>
-            <p>{site.appName} only reads data. It never changes a campaign, budget or website setting.</p>
+            <p>{site.appName} only reads data. It never changes a campaign, budget or website setting, and data from Google Analytics and Search Console is used only to build your reports. <Link href="/privacy#google">How we handle Google data</Link>.</p>
           </div>
           <div>
             <h3>Built by agency operators</h3>
