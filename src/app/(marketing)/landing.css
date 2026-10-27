@@ -126,6 +126,12 @@
 .mn-signup-dark .mn-form-help { color: var(--dark-ink-2); }
 .mn-signup-dark .mn-reassure { color: var(--dark-ink); }
 .mn-eyebrow { font-size: 15px; font-weight: 600; color: var(--accent); margin-bottom: -6px !important; }
+.mn-eyebrow-caps { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; text-wrap: balance; }
+@media (max-width: 440px) { .mn-eyebrow-caps { font-size: 12px; letter-spacing: 0.08em; } }
+/* Hero headline: one sentence per line from tablet up; on phones each line may wrap on its own, balanced. */
+.mn-hero h1 .mn-h1-line { display: block; text-wrap: balance; }
+.mn-hero h1 .mn-h1-accent { color: var(--accent); }
+@media (min-width: 640px) { .mn-hero h1 { max-width: none; } }
 .mn-done strong { font-weight: 600; color: inherit; }
 .mn-done:focus { outline: none; }
 .mn-done:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
