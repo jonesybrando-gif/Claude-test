@@ -21,7 +21,7 @@ export async function acknowledgeAlert(alertId: string): Promise<void> {
 export async function acknowledgeAlerts(alertIds: string[]): Promise<void> {
   const { user, where } = await scope(alertIds);
   await prisma.alert.updateMany({ where: { ...where, status: "OPEN" }, data: { status: "ACKNOWLEDGED", acknowledgedAt: new Date(), acknowledgedById: user.id } });
-  revalidatePath("/alerts");
+  revalidatePath("/insights");
   revalidatePath("/", "layout");
 }
 
@@ -30,19 +30,19 @@ export async function snoozeAlerts(alertIds: string[], days: number): Promise<vo
   if (![1, 3, 7].includes(days)) return;
   const { where } = await scope(alertIds);
   await prisma.alert.updateMany({ where: { ...where, status: { in: ["OPEN", "ACKNOWLEDGED"] } }, data: { snoozedUntil: new Date(Date.now() + days * 86_400_000) } });
-  revalidatePath("/alerts");
+  revalidatePath("/insights");
 }
 
 export async function unsnoozeAlerts(alertIds: string[]): Promise<void> {
   const { where } = await scope(alertIds);
   await prisma.alert.updateMany({ where, data: { snoozedUntil: null } });
-  revalidatePath("/alerts");
+  revalidatePath("/insights");
 }
 
 export async function checkAlertsNow(): Promise<string> {
   const admin = await requireAdmin();
   const r = await evaluateAgencyAlerts(admin.agencyId);
-  revalidatePath("/alerts");
+  revalidatePath("/insights");
   revalidatePath("/", "layout");
   return `${r.created} new, ${r.refreshed} still open, ${r.resolved} resolved.`;
 }
@@ -63,7 +63,7 @@ export async function muteAlertType(clientId: string, type: string): Promise<voi
     await prisma.client.update({ where: { id: clientId }, data: { mutedAlertTypes: { set: [...c.mutedAlertTypes, type as AlertType] } } });
   }
   await prisma.alert.updateMany({ where: { clientId, agencyId: user.agencyId, type: type as AlertType, status: { in: ["OPEN", "ACKNOWLEDGED"] } }, data: { status: "RESOLVED", resolvedAt: new Date() } });
-  revalidatePath("/alerts");
+  revalidatePath("/insights");
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/", "layout");
 }

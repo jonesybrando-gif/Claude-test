@@ -10,6 +10,7 @@ const TABS = [
   { href: "/settings/dashboards", label: "Dashboards" },
   { href: "/settings/alerts", label: "Alerts" },
   { href: "/settings/email", label: "Email log" },
+  { href: "/integrations", label: "Connections" },
 ];
 
 export function SettingsTabs() {

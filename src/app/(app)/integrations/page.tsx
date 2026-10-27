@@ -12,7 +12,7 @@ import { TokenConnectForm } from "./token-connect-form";
 import { DATA_SOURCE_CARDS } from "@/components/data-sources/cards";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Integrations" };
+export const metadata = { title: "Connections" };
 
 const STATE_BADGE: Record<IntegrationState, { label: string; variant: "neutral" | "warning" | "info" | "good" }> = {
   not_implemented: { label: "Not built yet", variant: "neutral" },
@@ -48,7 +48,8 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   return (
     <div className="mx-auto flex max-w-[1100px] flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
+        {user.role === "AGENCY_ADMIN" && <p className="mb-0.5 text-xs text-text-3"><Link href="/settings" className="hover:text-text hover:underline">Settings</Link> ›</p>}
+        <h1 className="text-2xl font-semibold tracking-tight">Connections</h1>
         <p className="text-sm text-text-2">Only official APIs and supported authentication are used. No scraping, no unofficial endpoints.</p>
       </div>
       {error && (

@@ -12,7 +12,7 @@ import { MuteAlertTypeButton } from "./mute-button";
  * the top reasons, a fix link per type, acknowledge, mute per client and a link
  * to the full list. Renders nothing when there is nothing open or muted.
  */
-export async function ClientAlertsStrip({ clientId, user }: { clientId: string; user: SessionUser }) {
+export async function ClientAlertsStrip({ clientId, user, criticalOnly = false }: { clientId: string; user: SessionUser; criticalOnly?: boolean }) {
   if (user.role === "CLIENT_USER") return null;
   const now = new Date();
   const [client, raw, agency] = await Promise.all([
@@ -35,6 +35,25 @@ export async function ClientAlertsStrip({ clientId, user }: { clientId: string; 
   const issues = groupAlertsByCause(alerts, { campaignNoSpendDays: resolveAlertSettings(agency.alertSettings).campaignNoSpendDays });
   const top = issues.slice(0, 3);
 
+  // On the other client tabs only critical problems show, as one compact banner, so they're never missed.
+  if (criticalOnly) {
+    const critical = issues.filter((i) => i.severity === "critical");
+    if (!critical.length) return null;
+    const first = critical[0];
+    const fix = alertFixLink(first.alerts[0].type, clientId);
+    return (
+      <section role="status" aria-label="Critical issues for this client" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-critical-ink/25 bg-critical-bg px-4 py-2.5 text-sm">
+        <AlertOctagon className="h-4 w-4 shrink-0 text-critical-ink" aria-hidden />
+        <span className="min-w-0 flex-1 basis-60 font-medium text-critical-ink">
+          {first.alerts.length === 1 ? first.alerts[0].message : first.title}
+          {critical.length > 1 && <span className="font-normal"> · +{critical.length - 1} more critical</span>}
+        </span>
+        <Link href={fix.href} className="font-medium text-brand-text hover:underline">{fix.label}</Link>
+        <Link href={`/insights?client=${clientId}`} className="text-text-2 hover:underline">All issues</Link>
+      </section>
+    );
+  }
+
   return (
     <section className="rounded-xl border border-border bg-surface" aria-label="Open alerts for this client">
       {alerts.length > 0 && (
@@ -43,7 +62,7 @@ export async function ClientAlertsStrip({ clientId, user }: { clientId: string; 
             <h2 className="text-sm font-semibold">Open alerts ({alerts.length})</h2>
             <div className="flex items-center gap-2">
               <AcknowledgeButton alertIds={alerts.map((a) => a.id)} label={alerts.length === 1 ? "Acknowledge" : `Acknowledge all ${alerts.length}`} variant="ghost" />
-              <Link href={`/alerts?client=${clientId}`} className="text-sm text-brand-text hover:underline">See all</Link>
+              <Link href={`/insights?client=${clientId}`} className="text-sm text-brand-text hover:underline">See all</Link>
             </div>
           </div>
           <ul className="divide-y divide-border px-4 pb-1">
@@ -68,7 +87,7 @@ export async function ClientAlertsStrip({ clientId, user }: { clientId: string; 
               );
             })}
           </ul>
-          {issues.length > top.length && <p className="px-4 pb-3 text-xs text-text-3">+{issues.length - top.length} more — <Link href={`/alerts?client=${clientId}`} className="text-brand-text hover:underline">see all</Link></p>}
+          {issues.length > top.length && <p className="px-4 pb-3 text-xs text-text-3">+{issues.length - top.length} more — <Link href={`/insights?client=${clientId}`} className="text-brand-text hover:underline">see all</Link></p>}
         </>
       )}
       {muted.length > 0 && (
