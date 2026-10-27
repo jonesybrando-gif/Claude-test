@@ -47,7 +47,7 @@ export async function createDashboardAction(clientId: string, _prev: CreateDashb
     data: { agencyId: user.agencyId, clientId, name: plan.name, position: plan.position, defaultRange: plan.defaultRange, widgets: json(plan.widgets), createdById: user.id, clientVisible: form.get("clientVisible") !== "off" },
   });
   revalidateClient(clientId);
-  redirect(plan.widgets.length ? `/clients/${clientId}?tab=dashboards&d=${d.id}` : `/clients/${clientId}/dashboards/${d.id}/edit`);
+  redirect(plan.widgets.length ? `/clients/${clientId}?tab=reports&d=${d.id}` : `/clients/${clientId}/dashboards/${d.id}/edit`);
 }
 
 export async function renameDashboardAction(id: string, name: string): Promise<DashboardResult> {
@@ -218,7 +218,7 @@ export async function previewWidgetAction(clientId: string, widget: unknown, par
 export async function openTemplateDashboardAction(clientId: string, templateKey: string): Promise<void> {
   const user = await requireClientEdit(clientId);
   const tpl = DASHBOARD_TEMPLATES.find((t) => t.key === templateKey);
-  if (!tpl) redirect(`/clients/${clientId}?tab=dashboards`);
+  if (!tpl) redirect(`/clients/${clientId}?tab=reports`);
   const existing = await prisma.dashboard.findMany({ where: { clientId, isTemplate: false }, select: { id: true, name: true, position: true } });
   let id = existing.find((d) => d.name.toLowerCase() === tpl.name.toLowerCase())?.id;
   if (!id) {
@@ -229,5 +229,5 @@ export async function openTemplateDashboardAction(clientId: string, templateKey:
     id = d.id;
     revalidateClient(clientId);
   }
-  redirect(`/clients/${clientId}?tab=dashboards&d=${id}`);
+  redirect(`/clients/${clientId}?tab=reports&d=${id}`);
 }

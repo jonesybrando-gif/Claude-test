@@ -43,6 +43,9 @@
   --serious-bg: #fdeee7;
   --critical-bg: #fbe9e9;
   --info-bg: #eef3fb;
+  /* Machine-written text (AI) */
+  --ai: #5b4fd9;
+  --ai-bg: #f6f5ff;
   --good-ink: #0a6b0a;
   --warning-ink: #7a5300;
   --serious-ink: #9a4220;
@@ -75,6 +78,8 @@
     --serious-bg: #3a2218;
     --critical-bg: #3a1a1a;
     --info-bg: #17263b;
+    --ai: #a79ff5;
+    --ai-bg: #211d3d;
     --good-ink: #6fd46f;
     --warning-ink: #fbc85a;
     --serious-ink: #f2a483;
@@ -104,6 +109,8 @@
   --serious-bg: #3a2218;
   --critical-bg: #3a1a1a;
   --info-bg: #17263b;
+  --ai: #a79ff5;
+  --ai-bg: #211d3d;
   --good-ink: #6fd46f;
   --warning-ink: #fbc85a;
   --serious-ink: #f2a483;
@@ -137,6 +144,8 @@
   --color-serious-bg: var(--serious-bg);
   --color-critical-bg: var(--critical-bg);
   --color-info-bg: var(--info-bg);
+  --color-ai: var(--ai);
+  --color-ai-bg: var(--ai-bg);
   --color-good-ink: var(--good-ink);
   --color-warning-ink: var(--warning-ink);
   --color-serious-ink: var(--serious-ink);

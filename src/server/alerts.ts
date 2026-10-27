@@ -195,7 +195,7 @@ async function notify(agencyId: string, created: { id: string; c: AlertCandidate
     });
     if (u.emailAlerts) {
       const lines: AlertLine[] = mine.map((x) => ({ severity: x.c.severity, client: x.c.clientName, title: x.c.title, detail: x.c.detail }));
-      await sendEmail({ agencyId, to: u.email, kind: "alert", ...alertEmail(b, lines, appUrl("/alerts")) });
+      await sendEmail({ agencyId, to: u.email, kind: "alert", ...alertEmail(b, lines, appUrl("/insights")) });
       emails++;
     }
   }
@@ -203,7 +203,7 @@ async function notify(agencyId: string, created: { id: string; c: AlertCandidate
   const slack = await agencySlackWebhook(agencyId);
   if (slack) {
     const lines: AlertLine[] = created.map((x) => ({ severity: x.c.severity, client: x.c.clientName, title: x.c.title, detail: x.c.detail }));
-    const r = await postToSlack(slack, slackAlertText(b.name, lines, appUrl("/alerts")));
+    const r = await postToSlack(slack, slackAlertText(b.name, lines, appUrl("/insights")));
     if (!r.ok) console.error("[alerts] Slack delivery failed:", r.error);
   }
   return emails;

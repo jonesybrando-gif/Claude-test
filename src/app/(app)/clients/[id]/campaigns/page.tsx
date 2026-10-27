@@ -64,7 +64,7 @@ export default async function ClientCampaignsPage({ params, searchParams }: { pa
   return (
     <div className="mx-auto flex max-w-[1000px] flex-col gap-6">
       <div>
-        <Link href={clientBackHref(id, { ...sp, range: preset }, "setup")} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
+        <Link href={clientBackHref(id, { ...sp, range: preset }, "settings")} className="inline-flex items-center gap-1 text-sm text-text-2 hover:text-text"><ChevronLeft className="h-4 w-4" /> {client.name}</Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Campaigns</h1>
         <p className="text-sm text-text-2">
           Choose which campaigns count for {client.name}. A removed campaign is left out of the dashboard, reports, share links, exports, budget pacing and alerts. Nothing changes in the ad account, and its data keeps syncing, so you can add it back at any time.

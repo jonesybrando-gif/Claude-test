@@ -18,14 +18,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     user.role === "CLIENT_USER" ? Promise.resolve(0) : openAlertIssueCount(user.agencyId, user.id).then((r) => r.issues).catch(() => 0),
   ]);
   const staff = user.role !== "CLIENT_USER";
-  // Order: Home, Clients, Alerts, Integrations, Settings.
+  // Order: Home, Clients, AI Insights (issues and opportunities; formerly Alerts), Reports, Settings (incl. connections).
+  const admin = user.role === "AGENCY_ADMIN";
   const nav: NavItem[] = staff
     ? [
         { href: "/dashboard", label: "Home", icon: "home" },
         { href: "/clients", label: "Clients", icon: "clients" },
-        { href: "/alerts", label: "Alerts", icon: "alerts", count: unread },
-        { href: "/integrations", label: "Integrations", icon: "integrations" },
-        ...(user.role === "AGENCY_ADMIN" ? [{ href: "/settings", label: "Settings", icon: "settings" } as const] : []),
+        { href: "/insights", label: "AI Insights", icon: "insights", count: unread, match: ["/alerts"] },
+        { href: "/reports", label: "Reports", icon: "report" },
+        // Account managers can't change agency settings, but they manage connections.
+        { href: admin ? "/settings" : "/integrations", label: "Settings", icon: "settings", match: ["/settings", "/integrations"] },
       ]
     : [{ href: `/clients/${user.clientId}`, label: "My reports", icon: "reports" }];
 
@@ -41,12 +43,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               { href: "/settings/team", label: "Team", kind: "Page" as const, hint: "Settings" },
               { href: "/settings/reports", label: "Reports and schedules", kind: "Page" as const, hint: "Settings" },
               { href: "/settings/alerts", label: "Alert settings and Slack", kind: "Page" as const, hint: "Settings" },
+              { href: "/integrations", label: "Connections", kind: "Page" as const, hint: "Settings" },
             ]
           : []),
         { href: "/account", label: "Your account", kind: "Page" as const },
         ...clients.flatMap((c) => [
           { href: `/clients/${c.id}`, label: c.name, kind: "Client" as const },
-          { href: `/clients/${c.id}?tab=setup`, label: `${c.name} — Setup`, kind: "Client" as const, searchOnly: true },
+          { href: `/clients/${c.id}?tab=settings`, label: `${c.name} — Settings`, kind: "Client" as const, searchOnly: true },
           { href: `/clients/${c.id}/budgets`, label: `${c.name} — Budgets`, kind: "Client" as const, searchOnly: true },
           { href: `/clients/${c.id}/share`, label: `${c.name} — Share`, kind: "Client" as const, searchOnly: true },
         ]),

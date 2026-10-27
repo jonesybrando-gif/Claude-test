@@ -30,18 +30,25 @@ import { ConnectedDataSection } from "@/components/dashboards/connected-data-sec
 import { listClientDashboards } from "@/server/dashboards/access";
 import { AdvertisingDetail, CampaignsSection, DataFreshness, hiddenMarker, HistorySection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
 import { AtAGlance } from "@/components/reports/at-a-glance";
+import { SeoTab } from "@/components/seo/seo-tab";
+import { AnalyticsTab } from "@/components/analytics/analytics-tab";
 
 export const dynamic = "force-dynamic";
 
+// Overview | Paid Ads · SEO · Analytics | Budgets · AI Insights · Reports | Settings
 const TABS = [
-  { key: "overview", label: "Overview" },
-  { key: "campaigns", label: "Campaigns" },
-  { key: "trends", label: "Trends" },
-  { key: "dashboards", label: "Dashboards" },
-  { key: "insights", label: "Insights" },
-  { key: "setup", label: "Setup" },
+  { key: "overview", label: "Overview", group: 0 },
+  { key: "paid", label: "Paid Ads", group: 1 },
+  { key: "seo", label: "SEO", group: 1 },
+  { key: "analytics", label: "Analytics", group: 1 },
+  { key: "budgets", label: "Budgets", group: 2 },
+  { key: "insights", label: "AI Insights", group: 2 },
+  { key: "reports", label: "Reports", group: 2 },
+  { key: "settings", label: "Settings", group: 3 },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
+/** Tab names before the v3 navigation, so old links and bookmarks still land in the right place. */
+const LEGACY_TAB: Record<string, Tab> = { campaigns: "paid", trends: "paid", dashboards: "reports", setup: "settings" };
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -69,7 +76,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   full.catch(() => {}); // Each <WithReport> awaits it and surfaces any error; this only avoids an unhandled rejection.
   const { client, preset, compareMode, range, cmpRange, pacing } = rep;
   const isDemo = client.accounts.some((a) => a.isDemo);
-  const tab: Tab = staff && TABS.some((t) => t.key === sp.tab) ? (sp.tab as Tab) : "overview";
+  const asked = sp.tab ? LEGACY_TAB[sp.tab] ?? sp.tab : "overview";
+  const tab: Tab = staff && TABS.some((t) => t.key === asked) ? (asked as Tab) : "overview";
   const base = `/clients/${id}`;
   const tabHref = (t: Tab) => {
     const q = new URLSearchParams(Object.entries(sp).filter(([k, v]) => v && k !== "tab" && k !== "line") as [string, string][]);
@@ -106,7 +114,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
           {pacing.client.managerName && staff && <> · Manager: {pacing.client.managerName}</>}
         </p>
-        <div className="mt-1.5"><DataFreshness rep={rep} staff={staff} setupHref={staff ? tabHref("setup") : undefined} /></div>
+        <div className="mt-1.5"><DataFreshness rep={rep} staff={staff} setupHref={staff ? tabHref("settings") : undefined} /></div>
       </div>
       <div className="flex min-w-0 items-center gap-2 max-md:w-full max-md:justify-between md:flex-wrap">
         <div className="hidden md:block"><RangeControls preset={preset} compare={compareMode} from={range.from} to={range.to} /></div>
@@ -166,25 +174,26 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       <div className="max-md:contents md:sticky md:top-0 md:z-20 md:-mx-10 md:-mt-8 md:flex md:flex-col md:gap-3 md:border-b md:border-border md:bg-background/95 md:px-10 md:pt-8 md:backdrop-blur">
         {header}
         <nav className="sticky top-12 z-20 -mx-4 -mb-px flex gap-1 overflow-x-auto border-b border-border bg-background/95 px-4 backdrop-blur max-md:-mt-3 md:static md:mx-0 md:border-b-0 md:bg-transparent md:px-0 md:backdrop-blur-none" aria-label="Client sections">
-          {TABS.map((t) => (
-            <Link
-              key={t.key}
-              href={tabHref(t.key)}
-              scroll={false}
-              aria-current={tab === t.key ? "page" : undefined}
-              className={`inline-flex min-h-10 items-center border-b-2 px-3 py-2 text-sm whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/60 ${tab === t.key ? "border-brand font-medium text-text" : "border-transparent text-text-2 hover:text-text"}`}
-            >
-              {t.label}
-            </Link>
+          {TABS.map((t, i) => (
+            <span key={t.key} className={`flex items-center ${t.group === 3 ? "md:ml-auto" : ""}`}>
+              {i > 0 && t.group !== TABS[i - 1].group && t.group !== 3 && <span aria-hidden className="mx-1.5 h-4 w-px bg-border max-md:hidden" />}
+              <Link
+                href={tabHref(t.key)}
+                scroll={false}
+                aria-current={tab === t.key ? "page" : undefined}
+                className={`inline-flex min-h-10 items-center border-b-2 px-3 py-2 text-sm whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/60 ${tab === t.key ? "border-brand font-medium text-text" : "border-transparent text-text-2 hover:text-text"}`}
+              >
+                {t.label}
+              </Link>
+            </span>
           ))}
         </nav>
       </div>
 
-      {tab === "overview" && (
-        <Suspense fallback={null}>
-          <ClientAlertsStrip clientId={id} user={user} />
-        </Suspense>
-      )}
+      <Suspense fallback={null}>
+        {/* Overview lists every open alert; the other tabs show critical ones only, so they're never missed. */}
+        <ClientAlertsStrip clientId={id} user={user} criticalOnly={tab !== "overview"} />
+      </Suspense>
 
       {tab === "overview" && client.accounts.length === 0 && (
         <Suspense fallback={<SectionSkeleton cards={2} tallFirst={false} />}>
@@ -208,7 +217,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                 <AtAGlance rep={rep} />
                 <AdvertisingDetail rep={rep} marker={mark("kpis")} editable={canEdit} />
                 <ConnectedDataSection rep={rep} canEdit={canEdit} query={sp} />
-                <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand-text hover:underline">Open Insights</Link>} />
+                <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand-text hover:underline">Open AI Insights</Link>} />
                 <NoteSection rep={rep} marker={mark("summary")} />
                 <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />
               </>
@@ -217,21 +226,28 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </Suspense>
       )}
 
-      {tab === "campaigns" && (
-        <Suspense fallback={<SectionSkeleton cards={1} />}>
-          <WithReport report={full}>
-            {(rep) => (
-              <>
-                <CampaignsSection rep={rep} staff basePath={base} marker={mark("campaigns")} />
-                {client.accounts.length > 1 && <PlatformSection rep={rep} staff marker={mark("platforms")} />}
-              </>
-            )}
-          </WithReport>
-        </Suspense>
+      {tab === "paid" && client.accounts.length === 0 && (
+        <>
+          <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
+            <WithReport report={full}>{(rep) => <NoAccountsState rep={rep} staff />}</WithReport>
+          </Suspense>
+          {/* Notes on the data work without ad accounts too (SEO- or analytics-only clients). */}
+          <NotesCard clientId={id} agencyId={user.agencyId} defaultDate={rep.range.to} />
+        </>
       )}
 
-      {tab === "trends" && (
+      {tab === "paid" && client.accounts.length > 0 && (
         <>
+          <Suspense fallback={<SectionSkeleton cards={1} />}>
+            <WithReport report={full}>
+              {(rep) => (
+                <>
+                  <CampaignsSection rep={rep} staff basePath={base} marker={mark("campaigns")} />
+                  {client.accounts.length > 1 && <PlatformSection rep={rep} staff marker={mark("platforms")} />}
+                </>
+              )}
+            </WithReport>
+          </Suspense>
           <Suspense fallback={<SectionSkeleton cards={1} />}>
             <WithReport report={full}>{(rep) => <TrendsSection rep={rep} marker={mark("trends")} staff />}</WithReport>
           </Suspense>
@@ -243,17 +259,48 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </>
       )}
 
-      {tab === "dashboards" && (
-        <Suspense fallback={<SectionSkeleton tiles={6} cards={2} tallFirst={false} />}>
-          <WithReport report={full}>{(rep) => <ClientDashboardsTab rep={rep} user={user} canEdit={canEdit} query={sp} />}</WithReport>
-        </Suspense>
+      {tab === "seo" && <SeoTab clientId={id} range={range} cmpRange={cmpRange} canEdit={canEdit} settingsHref={tabHref("settings")} />}
+
+      {tab === "analytics" && <AnalyticsTab clientId={id} range={range} cmpRange={cmpRange} canEdit={canEdit} />}
+
+      {tab === "budgets" && (
+        <>
+          <Suspense fallback={<SectionSkeleton cards={1} />}>
+            <WithReport report={full}>{(rep) => <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />}</WithReport>
+          </Suspense>
+          <Link href={keep(`${base}/budgets`)} className="flex min-h-10 flex-col gap-1 self-start rounded-xl border border-border bg-surface px-5 py-4 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60">
+            <span className="flex items-center gap-2 text-sm font-semibold"><Wallet className="h-4 w-4 text-text-2" aria-hidden /> Set up budgets</span>
+            <span className="text-xs text-text-3">Monthly amounts, how they&apos;re split across accounts and campaigns, and when pacing warns you.</span>
+          </Link>
+        </>
+      )}
+
+      {tab === "reports" && (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { href: keep(`${base}/share`), Icon: Link2, title: "Share link", body: "A link the client opens without signing in." },
+              { href: keep(`${base}/share#schedule`), Icon: CalendarClock, title: "Schedule email", body: "Send the report automatically each week or month." },
+              { href: keep(`${base}/email`), Icon: Mail, title: "Email client", body: "Draft an update from this report." },
+              { href: keep(`${base}/report`), Icon: FileSliders, title: "What the client sees", body: "The client's goal, the figures and sections in their report." },
+            ].map(({ href, Icon, title, body }) => (
+              <Link key={title} href={href} className="flex min-h-10 flex-col gap-1 rounded-xl border border-border bg-surface px-5 py-4 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60">
+                <span className="flex items-center gap-2 text-sm font-semibold"><Icon className="h-4 w-4 text-text-2" aria-hidden /> {title}</span>
+                <span className="text-xs text-text-3">{body}</span>
+              </Link>
+            ))}
+          </div>
+          <Suspense fallback={<SectionSkeleton tiles={6} cards={2} tallFirst={false} />}>
+            <WithReport report={full}>{(rep) => <ClientDashboardsTab rep={rep} user={user} canEdit={canEdit} query={sp} />}</WithReport>
+          </Suspense>
+        </>
       )}
 
       {tab === "insights" && (
         // One place for every AI-written insight, with a clear switch for what the client sees.
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-brand-text" aria-hidden /> Insights</CardTitle>
+            <CardTitle className="flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-brand-text" aria-hidden /> AI Insights</CardTitle>
             <CardDescription>The summary can go in the client&apos;s report; suggestions and answers stay with your team.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
@@ -273,7 +320,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </Card>
       )}
 
-      {tab === "setup" && (
+      {tab === "settings" && (
         <>
           <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
             <WithReport report={full}>{(rep) => <PlatformSection rep={rep} staff status title="Ad accounts and data" />}</WithReport>
@@ -282,7 +329,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {[
               { href: keep(`${base}/accounts`), Icon: Plug, title: "Ad accounts", body: "Link or unlink this client's Google, Meta, Microsoft and other ad accounts." },
-              { href: "/integrations", Icon: Database, title: "Connected data sources", body: "Link CallRail, Google Analytics, Search Console, Business Profile and social pages to this client (on the Integrations page)." },
+              { href: "/integrations", Icon: Database, title: "Connected data sources", body: "Link CallRail, Google Analytics, Search Console, Business Profile and social pages to this client (in Settings › Connections)." },
               { href: keep(`${base}/campaigns`), Icon: ListChecks, title: "Campaigns included", body: "Choose which campaigns count in reports, pacing and alerts." },
               { href: keep(`${base}/budgets`), Icon: Wallet, title: "Budgets", body: "Monthly budgets, how they're split and when pacing warns you." },
               { href: keep(`${base}/report`), Icon: FileSliders, title: "Report layout & goal", body: "The client's goal, the figures and sections they see, and the default date range." },

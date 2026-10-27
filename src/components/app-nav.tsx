@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { BarChart3, Bell, Building2, Home, Menu as MenuIcon, Plug, Settings, X } from "lucide-react";
+import { BarChart3, Bell, Building2, FileText, Home, Menu as MenuIcon, Plug, Settings, Sparkles, X } from "lucide-react";
 import { cn } from "./ui/cn";
 
-const ICONS = { home: Home, clients: Building2, reports: BarChart3, alerts: Bell, integrations: Plug, settings: Settings } as const;
+const ICONS = { home: Home, clients: Building2, reports: BarChart3, report: FileText, insights: Sparkles, alerts: Bell, integrations: Plug, settings: Settings } as const;
 
 export interface NavItem {
   href: string;
@@ -14,6 +14,8 @@ export interface NavItem {
   icon: keyof typeof ICONS;
   /** Unread count shown as a badge (alerts). */
   count?: number;
+  /** Other path prefixes that belong to this section (e.g. /integrations under Settings). */
+  match?: string[];
 }
 
 /** Is `href` the current section? Prefix match, so /clients/abc/budgets highlights Clients. */
@@ -25,7 +27,8 @@ export function isActive(pathname: string, href: string): boolean {
 export function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
   const pathname = usePathname() ?? "";
   // The most specific match wins (a client login's /clients/<id> over nothing else).
-  const current = items.filter((i) => isActive(pathname, i.href)).sort((a, b) => b.href.length - a.href.length)[0]?.href;
+  const hit = (i: NavItem) => [i.href, ...(i.match ?? [])].some((h) => isActive(pathname, h));
+  const current = items.filter(hit).sort((a, b) => b.href.length - a.href.length)[0]?.href;
   return (
     <ul className="flex flex-col gap-0.5">
       {items.map(({ href, label, icon, count = 0 }) => {

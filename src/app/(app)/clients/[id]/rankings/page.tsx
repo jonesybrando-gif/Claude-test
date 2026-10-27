@@ -141,7 +141,7 @@ function RankTable({ rows, clientId, showDevice }: { rows: KeywordRankRow[]; cli
 
 export default async function RankingsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { id } = await params;
-  const back = clientBackHref(id, await searchParams, "setup");
+  const back = clientBackHref(id, await searchParams, "settings");
   const user = await requireClientEdit(id);
   const [client, connection, asset] = await Promise.all([
     prisma.client.findUniqueOrThrow({ where: { id }, select: { name: true } }),
@@ -173,7 +173,7 @@ export default async function RankingsPage({ params, searchParams }: { params: P
         <Card>
           <CardHeader>
             <CardTitle>Connect DataForSEO first</CardTitle>
-            <CardDescription>Rank checks run on your agency&apos;s DataForSEO account. {user.role === "AGENCY_ADMIN" ? "Add the API login on the Integrations page." : "Ask an administrator to connect it on the Integrations page."}</CardDescription>
+            <CardDescription>Rank checks run on your agency&apos;s DataForSEO account. {user.role === "AGENCY_ADMIN" ? "Add the API login in Settings › Connections." : "Ask an administrator to connect it in Settings › Connections."}</CardDescription>
           </CardHeader>
           {user.role === "AGENCY_ADMIN" && <CardContent><Link href="/integrations" className={buttonVariants({ size: "sm" })}>Open Integrations</Link></CardContent>}
         </Card>
@@ -193,7 +193,7 @@ export default async function RankingsPage({ params, searchParams }: { params: P
               {asset && <ActionButton action={setRankProjectPaused.bind(null, id, !paused)} label={paused ? "Resume checks" : "Pause checks"} variant="outline" />}
             </div>
             {asset?.lastError && <p className="mt-1 text-xs text-critical-ink" role="alert">{asset.lastError}</p>}
-            {connection.status !== "ACTIVE" && <p className="mt-1 text-xs text-critical-ink">The agency&apos;s DataForSEO login needs reconnecting on the Integrations page.</p>}
+            {connection.status !== "ACTIVE" && <p className="mt-1 text-xs text-critical-ink">The agency&apos;s DataForSEO login needs reconnecting in Settings › Connections.</p>}
           </CardHeader>
           <CardContent>
             <RankProjectForm clientId={id} domain={asset?.externalId} locationCode={asset ? settings.locationCode : DEFAULT_LOCATION_CODE} device={settings.device} isNew={!asset} />
