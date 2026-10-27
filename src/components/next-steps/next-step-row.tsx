@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { deleteNextStepAction, markStepDoneAction, saveNextStepAction, type StepState } from "@/app/(app)/clients/[id]/next-steps-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,23 +65,27 @@ export function NextStepRow({ clientId, step, today, canEdit }: { clientId: stri
           <div className="flex flex-wrap gap-2">
             {step.status === "DRAFT" && <Button type="submit" size="sm" disabled={saving} onClick={submit("approve")}>Approve for client</Button>}
             <Button type="submit" size="sm" variant="outline" disabled={saving} onClick={submit("save")}>Save</Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => setShowDone((v) => !v)}>Mark done…</Button>
+            {step.status === "PLANNED" && <Button type="button" size="sm" variant="outline" onClick={() => setShowDone((v) => !v)}>Mark done…</Button>}
             <Button type="button" size="sm" variant="ghost" onClick={() => startTransition(() => deleteNextStepAction(clientId, step.id))}>Remove</Button>
           </div>
         </form>
       )}
-      {showDone && step.status !== "DONE" && (
+      {showDone && step.status === "PLANNED" && (
         <form
-          className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2"
+          className="flex flex-col gap-2 rounded-lg bg-surface-2 px-3 py-3"
           onSubmit={(e) => {
             e.preventDefault();
             const fd = new FormData(e.currentTarget);
             startTransition(() => markDone(fd));
           }}
         >
-          <label className="flex items-center gap-2 text-sm">When was it done? <Input name="doneOn" type="date" defaultValue={today} max={today} className="h-9 w-40" /></label>
-          <Button type="submit" size="sm" disabled={marking}>Confirm done</Button>
-          <span className="text-xs text-text-3">The client sees it as done on this date.</span>
+          <label htmlFor={`done-${step.id}`} className="text-sm font-medium">What was done?</label>
+          <textarea id={`done-${step.id}`} name="doneText" rows={2} maxLength={400} placeholder="e.g. Moved $300 from Display into search." className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60" />
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-sm">Date <Input name="doneOn" type="date" defaultValue={today} max={today} className="h-9 w-40" /></label>
+            <Button type="submit" size="sm" disabled={marking}>Confirm done</Button>
+          </div>
+          <span className="text-xs text-text-3">The client sees this wording as done on this date. Leave it blank to keep the current wording if it already describes finished work.</span>
         </form>
       )}
       {message && <p role="alert" className="rounded-lg bg-warning-bg px-3 py-2 text-sm text-warning-ink">{message}</p>}
@@ -94,17 +98,19 @@ export function NextStepRow({ clientId, step, today, canEdit }: { clientId: stri
 export function NewStepForm({ clientId }: { clientId: string }) {
   const [state, save, saving] = useActionState<StepState, FormData>(saveNextStepAction.bind(null, clientId, null), undefined);
   const [, startTransition] = useTransition();
+  const ref = useRef<HTMLFormElement>(null);
+  // Clear the box only once the step is saved, so a rejected draft isn't lost.
+  useEffect(() => {
+    if (state?.ok) ref.current?.reset();
+  }, [state]);
   return (
     <form
+      ref={ref}
       className="flex flex-col gap-2 px-5 py-4"
       onSubmit={(e) => {
         e.preventDefault();
-        const form = e.currentTarget;
-        const fd = new FormData(form);
-        startTransition(() => {
-          save(fd);
-          form.reset();
-        });
+        const fd = new FormData(e.currentTarget);
+        startTransition(() => save(fd));
       }}
     >
       <label htmlFor="new-step" className="text-sm font-medium">Write a next step</label>

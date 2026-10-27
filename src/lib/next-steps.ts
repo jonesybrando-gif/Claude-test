@@ -24,24 +24,48 @@ export function insightFingerprint(title: string): string {
     .slice(0, 160);
 }
 
-// Past-tense verbs agencies use for finished work. Regular "-ed" verbs are matched by the pattern below.
-const IRREGULAR_DONE = ["did", "made", "set", "put", "built", "ran", "sent", "wrote", "took", "gave", "cut", "rebuilt", "began", "chose", "found", "got", "kept", "led", "left", "lost", "met", "paid", "shut", "split", "spent", "upped"];
+// Past-tense verbs agencies use for finished work. Irregular ones that are also
+// everyday imperatives ("Set a cap", "Cut spend", "Split test") only count after a subject.
+const IRREGULAR_DONE = ["did", "made", "built", "ran", "sent", "wrote", "took", "gave", "rebuilt", "began", "chose", "found", "got", "kept", "led", "left", "lost", "met", "paid", "shut", "spent", "upped"];
+const AMBIGUOUS = ["set", "put", "cut", "split", "reset", "shut"];
 const NOT_PAST = new Set(["need", "feed", "seed", "speed", "proceed", "exceed", "succeed", "bed", "red", "shed"]);
+// "-ed" words that usually start a noun phrase in a plan ("Targeted ads for…").
+const ADJECTIVES = new Set(["targeted", "automated", "advanced", "dedicated", "detailed", "limited", "branded", "sponsored", "tailored", "focused", "related", "combined", "scheduled", "extended", "localized", "personalized", "customized", "updated", "improved", "expanded", "refined", "streamlined"]);
+const SUBJECT = /^(we|i|our team|the team|your team|catalyst|[a-z]+ team)\b/;
+
+const isPastVerb = (w: string | undefined, afterSubject: boolean): boolean => {
+  if (!w) return false;
+  if (IRREGULAR_DONE.includes(w)) return true;
+  if (AMBIGUOUS.includes(w)) return afterSubject;
+  if (w.length > 3 && w.endsWith("ed") && !NOT_PAST.has(w)) return afterSubject || !ADJECTIVES.has(w);
+  return false;
+};
+
+const PLAN_START = /^(we'll|we will|we're|we are|we plan|we'd|we would|we recommend|we suggest|we want|we need|we intend|we're going to|next,? we|plan to|planning to|to )/;
+const norm = (text: string) => text.trim().toLowerCase().replace(/[’‘]/g, "'").replace(/^[-•*\d.)\s]+/, "");
+
+/** True when a step is worded as something still to come ("We'll…", "We plan to…"). */
+export function readsAsPlan(text: string): boolean {
+  return PLAN_START.test(norm(text));
+}
 
 /**
- * True when a step reads as already finished, e.g. "We added Saturday hours" or
- * "Paused the display campaign". Future or planning wording ("We'll add",
- * "We plan to pause", "We're reviewing") returns false.
+ * True when a step reads as already finished, e.g. "We added Saturday hours",
+ * "We've paused Display", "Budget has been moved" or "Paused the display
+ * campaign". Plans ("We'll add", "We plan to pause", "Set a $50 cap",
+ * "Targeted ads for implants") return false.
  */
 export function claimsDone(text: string): boolean {
-  const t = text.trim().toLowerCase().replace(/^[-•*\d.)\s]+/, "");
-  if (/^(we('|’)ll|we will|we('|’)re|we are|we plan|we('|’)d|we would|we recommend|we suggest|next,? we|plan to|planning to|to )/.test(t)) return false;
-  const words = t.replace(/^(we|i|our team|the team|catalyst|[a-z]+ team)\s+(have\s+|has\s+|already\s+|just\s+)*/, "").split(/[^a-z']+/).filter(Boolean);
-  const verb = words[0];
-  if (!verb) return false;
-  if (/^(we|i)\s+(have|has|already|just)\s/.test(t)) return true;
-  if (IRREGULAR_DONE.includes(verb)) return true;
-  return verb.length > 3 && verb.endsWith("ed") && !NOT_PAST.has(verb);
+  const t = norm(text);
+  if (PLAN_START.test(t)) return false;
+  // Passive or perfect anywhere: "has been moved", "were added", "is now paused", "is live".
+  if (/\b(has|have|had) been \w+ed\b|\b(was|were) \w+ed\b|\bis now (\w+ed|live|running|fixed|done)\b|\b(is|are) (now )?(complete|completed|done|finished|live)\b/.test(t)) return true;
+  // "We've added…", "I've updated…", "We have paused…" (but not "we have to…").
+  const perfect = t.match(/^(we|i|our team|the team)('ve| have| has)\s+(already\s+|just\s+)?([a-z]+)/);
+  if (perfect) return perfect[4] !== "to" && isPastVerb(perfect[4], true);
+  const subj = t.match(SUBJECT);
+  const rest = subj ? t.slice(subj[0].length).trim().replace(/^(already|just|also|then)\s+/, "") : t;
+  return isPastVerb(rest.split(/[^a-z']+/).filter(Boolean)[0], !!subj);
 }
 
 export interface NextStepLike {

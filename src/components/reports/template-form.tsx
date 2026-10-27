@@ -16,13 +16,15 @@ const COMPARE_LABEL = { previous_period: "Previous period", previous_month: "Sam
 const SECTION_HINT: Record<(typeof SECTION_KEYS)[number], string> = {
   executive: "A paragraph or two at the top about the selected date range, rewritten whenever the range changes.",
   summary: "Your own note below, shown as written.",
-  kpis: "The KPI tiles you choose, folded under “Advertising detail”. At a glance always opens the report.",
+  kpis: "The KPI tiles you choose, under “More detail”. The four plain questions always open the client's report.",
   trends: "Daily charts for the trend KPIs, with the comparison period.",
   pacing: "Monthly budget, spend to date and month-end projection.",
   platforms: "One row per connected ad account.",
   campaigns: "Spend and results by campaign.",
   history: "Final spend against budget for the last three months.",
   notes: "How each figure is defined and any data caveats.",
+  search: "Clicks from regular Google search in the opening answers, when Search Console is connected.",
+  website: "Website goals (forms, calls, bookings) in the opening answers, when Google Analytics is connected.",
 };
 
 /** The chosen KPIs in display order: drag, or use the arrows, to rearrange. */

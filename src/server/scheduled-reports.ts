@@ -11,6 +11,7 @@ import { scheduledReportEmail } from "@/lib/email-templates";
 import { formatDate } from "@/lib/time";
 import { slug } from "@/lib/csv";
 import { nextRunAt, SCHEDULE_RANGES, type ScheduleFrequency, type ScheduleRange } from "@/lib/report-schedule";
+import { clientNextStepLines } from "@/server/next-steps";
 
 // Scheduled client reports. Each client can have one schedule, stored as a
 // Report (kind SCHEDULE, config = { range }) with one ReportSchedule. The
@@ -96,8 +97,10 @@ export async function sendScheduledReport(clientId: string, range: ScheduleRange
   const client = await prisma.client.findUniqueOrThrow({ where: { id: clientId }, select: { agencyId: true, primaryManager: { select: { email: true } } } });
   const rep = await loadClientReport(clientId, { range }, now);
   const brand = await agencyBrand(client.agencyId);
-  const summary = await getExecutiveSummary(rep, { generate: true, now });
-  const pdf = await renderClientReportPdf(rep, brand, { internal: false, executiveSummary: summary, generatedAt: now });
+  // Clients only read next steps the agency approved, in the PDF and the email body alike.
+  const steps = await clientNextStepLines(rep.client.id, rep.client.timezone, now);
+  const summary = { ...(await getExecutiveSummary(rep, { generate: true, now })), nextSteps: steps };
+  const pdf = await renderClientReportPdf(rep, brand, { internal: false, executiveSummary: summary, generatedAt: now, clientNextSteps: steps });
   const period = `${rangeLabel(rep.preset, rep.range)} (${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })})`;
   const heading = `${rep.client.name}: performance summary, ${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })}`;
   const email = scheduledReportEmail(

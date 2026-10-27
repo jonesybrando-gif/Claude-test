@@ -1,5 +1,4 @@
 import "server-only";
-import { clientNextStepLines } from "@/server/next-steps";
 import type { PacingResult, PacingSeriesPoint } from "@/lib/pacing/engine";
 import { reportResults, type ClientReport } from "../client-report";
 import { contextInput } from "../ai/context";
@@ -254,7 +253,14 @@ function drawAtAGlance(doc: Doc, rep: ClientReport) {
 export async function renderClientReportPdf(
   rep: ClientReport,
   brand: Brand,
-  opts: { internal: boolean; compress?: boolean; generatedAt?: Date; executiveSummary?: ExecSummary },
+  opts: {
+    internal: boolean;
+    compress?: boolean;
+    generatedAt?: Date;
+    executiveSummary?: ExecSummary;
+    /** Client copies: the agency-approved next steps (clientNextStepLines). AI-drafted steps are never shown. */
+    clientNextSteps?: string[];
+  },
 ) {
   const { client, pacing, perf, cmpPerf, range, cmpRange, preset, history, template } = rep;
   const on = template.sections;
@@ -282,7 +288,7 @@ export async function renderClientReportPdf(
   if (on.executive && opts.executiveSummary) {
     sectionTitle(doc, "Executive summary");
     // The client's copy lists only next steps a person approved, never the AI's drafts.
-    const es = opts.internal ? opts.executiveSummary : { ...opts.executiveSummary, nextSteps: await clientNextStepLines(rep.client.id, rep.client.timezone) };
+    const es = opts.internal ? opts.executiveSummary : { ...opts.executiveSummary, nextSteps: opts.clientNextSteps ?? [] };
     for (const para of es.overview.split(/\n{2,}/)) {
       paragraph(doc, para, { size: 10, color: C.text });
       doc.moveDown(0.5);

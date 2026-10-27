@@ -62,8 +62,9 @@ export async function OpportunitiesList({ user, clients, status = "open", client
   const counts = Object.fromEntries(TABS.map((t) => [t.key, all.filter((x) => (t.states as readonly string[]).includes(x.state)).length]));
   const items = all.filter((x) => (tab.states as readonly string[]).includes(x.state));
   items.sort((a, b) => RANK[a.priority] - RANK[b.priority] || b.createdAt.getTime() - a.createdAt.getTime());
-  const editable = new Set<string>();
-  for (const id of new Set(items.map((i) => i.clientId))) if (await userCanEditClient(user, id)) editable.add(id);
+  const ids2 = [...new Set(items.map((i) => i.clientId))];
+  const can = await Promise.all(ids2.map((id) => userCanEditClient(user, id)));
+  const editable = new Set(ids2.filter((_, i) => can[i]));
   const reviewed = new Set(latest.map((l) => l.clientId));
   const notReviewed = scope.filter((c) => !reviewed.has(c.id));
   const base = clientId ? `/clients/${clientId}?tab=insights` : "/insights?view=opportunities";

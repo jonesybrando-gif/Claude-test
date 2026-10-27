@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/server/db";
 import { requireClientEdit } from "@/server/access";
 import { assertIsoDate, isoToDate, todayInTimeZone } from "@/lib/pacing/dates";
-import { claimsDone, draftFromRecommendation, insightFingerprint, isInsightState } from "@/lib/next-steps";
+import { claimsDone, draftFromRecommendation, insightFingerprint, isInsightState, readsAsPlan } from "@/lib/next-steps";
 
 // Agency-only actions on AI recommendations and the next steps a client sees.
 // Every action checks the user may edit this client.
@@ -36,14 +36,19 @@ export async function setInsightStatusAction(clientId: string, title: string, st
 /** "Plan it": marks the recommendation planned and creates a draft next step the agency then edits and approves. */
 export async function planRecommendationAction(clientId: string, title: string): Promise<void> {
   const user = await requireClientEdit(clientId);
-  const fingerprint = insightFingerprint(title);
+  const clean = title.trim();
+  const fingerprint = insightFingerprint(clean);
+  if (!fingerprint) throw new Error("Recommendation has no title");
+  const sourceText = clean.slice(0, 500);
+  // Planning the same recommendation twice reuses the open step instead of adding another.
+  const open = await prisma.nextStep.findFirst({ where: { clientId, source: "recommendation", sourceText, status: { in: ["DRAFT", "PLANNED"] } }, select: { id: true } });
   await prisma.$transaction([
     prisma.insightStatus.upsert({
       where: { clientId_fingerprint: { clientId, fingerprint } },
-      create: { clientId, fingerprint, title: title.slice(0, 300), status: "PLANNED", updatedById: user.id },
-      update: { status: "PLANNED", updatedById: user.id },
+      create: { clientId, fingerprint, title: clean.slice(0, 300), status: "PLANNED", updatedById: user.id },
+      update: { status: "PLANNED", reason: null, updatedById: user.id },
     }),
-    prisma.nextStep.create({ data: { clientId, text: draftFromRecommendation(title), status: "DRAFT", source: "recommendation", sourceText: title.slice(0, 500), createdById: user.id } }),
+    ...(open ? [] : [prisma.nextStep.create({ data: { clientId, text: draftFromRecommendation(clean).slice(0, 400), status: "DRAFT", source: "recommendation", sourceText, createdById: user.id } })]),
   ]);
   refresh(clientId);
 }
@@ -52,7 +57,7 @@ export async function planRecommendationAction(clientId: string, title: string):
 export async function addDraftStepsAction(clientId: string, texts: string[]): Promise<void> {
   const user = await requireClientEdit(clientId);
   const existing = new Set((await prisma.nextStep.findMany({ where: { clientId }, select: { sourceText: true, text: true } })).flatMap((s) => [s.sourceText, s.text]));
-  const fresh = texts.map((t) => t.trim()).filter((t) => t && !existing.has(t)).slice(0, 8);
+  const fresh = texts.map((t) => t.trim().slice(0, 400)).filter((t) => t && !existing.has(t)).slice(0, 8);
   if (fresh.length) await prisma.nextStep.createMany({ data: fresh.map((t) => ({ clientId, text: t, status: "DRAFT", source: "ai_summary", sourceText: t, createdById: user.id })) });
   refresh(clientId);
 }
@@ -81,7 +86,8 @@ export async function saveNextStepAction(clientId: string, stepId: string | null
   const data = {
     text,
     targetDate: target ? isoToDate(target) : null,
-    ...(approve && step?.status !== "DONE" ? { status: "PLANNED", approvedById: user.id, approvedAt: new Date() } : {}),
+    // Approving, or rewording a step the client already sees, records who signed off on the wording.
+    ...(step?.status !== "DONE" && (approve || step?.status === "PLANNED") ? { status: "PLANNED", approvedById: user.id, approvedAt: new Date() } : {}),
   };
   if (step) await prisma.nextStep.update({ where: { id: step.id }, data });
   else await prisma.nextStep.create({ data: { clientId, source: "manual", createdById: user.id, status: "DRAFT", ...data } });
@@ -101,7 +107,15 @@ export async function markStepDoneAction(clientId: string, stepId: string, prev:
     return { error: "Choose the date it was done." };
   }
   if (on > today) return { error: "A step can't be done in the future." };
-  const res = await prisma.nextStep.updateMany({ where: { id: stepId, clientId, status: { in: ["PLANNED", "DRAFT"] } }, data: { status: "DONE", doneOn: isoToDate(on), doneById: user.id, approvedById: user.id, approvedAt: new Date() } });
+  const step = await prisma.nextStep.findFirst({ where: { id: stepId, clientId }, select: { status: true, text: true } });
+  if (!step) return { error: "That step no longer exists." };
+  // A draft was never agreed with anyone, so it can't jump straight to done.
+  if (step.status !== "PLANNED") return { error: "Approve the step first; only planned steps can be marked done." };
+  const said = String(form.get("doneText") ?? "").trim();
+  const text = said || step.text;
+  if (text.length > 400) return { error: "Keep it to 400 characters." };
+  if (readsAsPlan(text)) return { error: "Say what was done (for example “Moved $300 into search”), since the client will read it as finished work." };
+  const res = await prisma.nextStep.updateMany({ where: { id: stepId, clientId, status: "PLANNED" }, data: { text, status: "DONE", doneOn: isoToDate(on), doneById: user.id } });
   if (!res.count) return { error: "That step can't be marked done." };
   refresh(clientId);
   return { ok: "Marked done." };

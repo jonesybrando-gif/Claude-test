@@ -124,7 +124,7 @@ export async function draftReportSummary(data: string, opts: { agencyName: strin
   const out = await generate(
     SummarySchema,
     `Write the written summary that opens this client's performance report, from ${opts.agencyName} to the client.
-80 to 150 words, two short paragraphs, friendly and plain-spoken. Lead with the results (leads, calls, sales, bookings or clicks, and what each cost) versus the comparison period, then budget pacing, then one or two things the agency will do next ("We'll…"). No jargon or abbreviations.`,
+80 to 150 words, two short paragraphs, friendly and plain-spoken. Lead with the results (leads, calls, sales, bookings or clicks, and what each cost) versus the comparison period, then budget pacing, then one or two things the agency will do next ("We'll…"). Never say anything has already been done. No jargon or abbreviations.`,
     data,
   );
   return out.summary.trim();
@@ -154,7 +154,7 @@ recommendations: ${short ? "3 to 4" : "4 to 6"} strategic recommendations, most 
 
 nextSteps: the same recommendations, in the same order, rewritten as what ${opts.agencyName} will do next, in the agency's voice and plain English ("We'll review…", "We'll move…", "We'll check…"). The client reads these, so leave out internal detail and keep each to one sentence.
 
-If there aren't enough results to judge something, say so in the relevant list rather than inventing a finding. Write to the client ("your ads" is fine), without greetings or a sign-off. Each list item is one or two sentences of plain text with no leading bullet or number.`,
+If there aren't enough results to judge something, say so in the relevant list rather than inventing a finding. Never say or imply that the agency has already changed anything; describe causes only where the figures show them, otherwise use "may". Write to the client ("your ads" is fine), without greetings or a sign-off. Each list item is one or two sentences of plain text with no leading bullet or number.`,
     data,
     "medium",
   );
