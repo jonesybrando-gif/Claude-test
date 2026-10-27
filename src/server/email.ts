@@ -27,6 +27,22 @@ export interface SendResult {
 
 let cached: Transporter | null | undefined;
 
+/**
+ * Resend API key, when email goes through Resend. Sent over HTTPS rather than
+ * SMTP because hosts such as Railway block outbound SMTP on most plans.
+ * Taken from RESEND_API_KEY, or from an SMTP_URL that points at smtp.resend.com.
+ */
+export function resendApiKey(env: Record<string, string | undefined> = process.env): string | null {
+  if (env.RESEND_API_KEY) return env.RESEND_API_KEY;
+  if (!env.SMTP_URL) return null;
+  try {
+    const u = new URL(env.SMTP_URL);
+    return u.hostname === "smtp.resend.com" && u.password ? decodeURIComponent(u.password) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** SMTP transport from SMTP_URL (e.g. smtps://user:pass@smtp.example.com:465), or null when not configured. */
 function transport(): Transporter | null {
   if (cached !== undefined) return cached;
@@ -35,7 +51,29 @@ function transport(): Transporter | null {
 }
 
 export function emailConfigured(): boolean {
-  return !!process.env.SMTP_URL && !!process.env.EMAIL_FROM;
+  return (!!process.env.SMTP_URL || !!process.env.RESEND_API_KEY) && !!process.env.EMAIL_FROM;
+}
+
+async function sendViaResend(key: string, msg: OutgoingEmail, from: string): Promise<SendResult> {
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from,
+      to: [msg.to],
+      subject: msg.subject,
+      text: msg.text,
+      ...(msg.html ? { html: msg.html } : {}),
+      ...(msg.replyTo ? { reply_to: msg.replyTo } : {}),
+      ...(msg.attachments?.length
+        ? { attachments: msg.attachments.map((a) => ({ filename: a.filename, content: a.content.toString("base64"), content_type: a.contentType })) }
+        : {}),
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (res.ok) return { status: "SENT" };
+  const body = (await res.json().catch(() => null)) as { message?: string } | null;
+  return { status: "FAILED", error: `Resend ${res.status}: ${body?.message ?? res.statusText}`.slice(0, 500) };
 }
 
 /** Test hook */
@@ -43,15 +81,22 @@ export function setTransportForTests(t: Transporter | null) {
   cached = t;
 }
 
-/** Sends an email (when SMTP is configured) and always records it in the outbox. */
+/** Sends an email (through Resend or SMTP, when configured) and always records it in the outbox. */
 export async function sendEmail(msg: OutgoingEmail): Promise<SendResult> {
-  const t = transport();
+  const key = cached === undefined ? resendApiKey() : null; // a test transport takes precedence
+  const t = key ? null : transport();
   let result: SendResult;
-  if (!t || !process.env.EMAIL_FROM) {
+  if ((!key && !t) || !process.env.EMAIL_FROM) {
     result = { status: "NOT_CONFIGURED" };
+  } else if (key) {
+    try {
+      result = await sendViaResend(key, msg, process.env.EMAIL_FROM);
+    } catch (e) {
+      result = { status: "FAILED", error: (e as Error).message.slice(0, 500) };
+    }
   } else {
     try {
-      await t.sendMail({ from: process.env.EMAIL_FROM, to: msg.to, replyTo: msg.replyTo, subject: msg.subject, text: msg.text, html: msg.html, attachments: msg.attachments });
+      await t!.sendMail({ from: process.env.EMAIL_FROM, to: msg.to, replyTo: msg.replyTo, subject: msg.subject, text: msg.text, html: msg.html, attachments: msg.attachments });
       result = { status: "SENT" };
     } catch (e) {
       result = { status: "FAILED", error: (e as Error).message.slice(0, 500) };

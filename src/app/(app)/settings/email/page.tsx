@@ -22,8 +22,8 @@ export default async function EmailLogPage() {
         <CardTitle>Email log</CardTitle>
         <CardDescription>
           {emailConfigured()
-            ? "Email is sent through the SMTP server in SMTP_URL, from EMAIL_FROM."
-            : "No email provider is configured (set SMTP_URL and EMAIL_FROM). Emails are recorded here but not delivered."}{" "}
+            ? "Email is sent through Resend or the SMTP server in SMTP_URL, from EMAIL_FROM."
+            : "No email provider is configured (set RESEND_API_KEY or SMTP_URL, and EMAIL_FROM). Emails are recorded here but not delivered."}{" "}
           One-time links are removed from stored copies.
         </CardDescription>
       </CardHeader>
