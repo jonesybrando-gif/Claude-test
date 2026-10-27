@@ -7,6 +7,8 @@ import { requireClientView, userCanEditClient, visibleClientsWhere } from "@/ser
 import { withRememberedRange } from "@/server/remembered-range";
 import { shortRangeLabel, withReportQuery } from "@/lib/client-nav";
 import { ClientSwitcher } from "@/components/client-switcher";
+import { LinkPending } from "@/components/link-pending";
+import { loadOnHover } from "@/lib/link-hover";
 import { prisma } from "@/server/db";
 import { completeClientReport, loadClientReportHead, type ClientReport } from "@/server/client-report";
 import { rangeLabel } from "@/lib/date-ranges";
@@ -66,16 +68,27 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const sp = await withRememberedRange(await searchParams);
   const user = await requireClientView(id);
   const staff = user.role !== "CLIENT_USER";
-  // Same rule as requireClientEdit, which the template save actions enforce.
-  const canEdit = await userCanEditClient(user, id);
 
   // The header needs only the quick part of the report. The heavy figures load
   // in the background and stream into the in-page <Suspense> boundaries below
   // (not a route loading.tsx: those made value-returning server actions hang).
+  // Independent lookups run together rather than one after another.
   const now = new Date();
-  const rep = await loadClientReportHead(id, sp, now);
-  const full = completeClientReport(rep, now);
-  full.catch(() => {}); // Each <WithReport> awaits it and surfaces any error; this only avoids an unhandled rejection.
+  const [canEdit, rep, switchable] = await Promise.all([
+    // Same rule as requireClientEdit, which the template save actions enforce.
+    userCanEditClient(user, id),
+    loadClientReportHead(id, sp, now),
+    staff ? prisma.client.findMany({ where: visibleClientsWhere(user), select: { id: true, name: true }, orderBy: { name: "asc" } }) : Promise.resolve([]),
+  ]);
+  // The full figures are loaded only by tabs that show them (SEO and Analytics don't), once per page.
+  let fullReport: Promise<ClientReport> | null = null;
+  const loadFull = () => {
+    if (!fullReport) {
+      fullReport = completeClientReport(rep, now);
+      fullReport.catch(() => {}); // Each <WithReport> awaits it and surfaces any error; this only avoids an unhandled rejection.
+    }
+    return fullReport;
+  };
   const { client, preset, compareMode, range, cmpRange, pacing } = rep;
   const isDemo = client.accounts.some((a) => a.isDemo);
   const asked = sp.tab ? LEGACY_TAB[sp.tab] ?? sp.tab : "overview";
@@ -92,7 +105,6 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
   // Sub-pages get the range and tab so their back links return to the same view.
   const keep = (href: string) => withReportQuery(href, { ...sp, tab: sp.tab ?? "overview" });
-  const switchable = staff ? await prisma.client.findMany({ where: visibleClientsWhere(user), select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
 
   const header = (
     <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
@@ -158,7 +170,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
         {header}
         <Suspense fallback={<SectionSkeleton tiles={6} cards={2} />}>
-          <WithReport report={full}>
+          <WithReport report={loadFull()}>
             {(rep) => {
               // Client logins also see their client-visible custom dashboards after the KPI and summary sections.
               const dashboards = <ClientFacingDashboards dashboards={listClientDashboards(user, id)} rep={rep} staff={false} basePath={base} query={sp} />;
@@ -182,10 +194,12 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               <Link
                 href={tabHref(t.key)}
                 scroll={false}
+                {...loadOnHover}
                 aria-current={tab === t.key ? "page" : undefined}
                 className={`inline-flex min-h-10 items-center border-b-2 px-3 py-2 text-sm whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/60 ${tab === t.key ? "border-brand font-medium text-text" : "border-transparent text-text-2 hover:text-text"}`}
               >
                 {t.label}
+                <LinkPending className="ml-1.5" />
               </Link>
             </span>
           ))}
@@ -199,7 +213,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
       {tab === "overview" && client.accounts.length === 0 && (
         <Suspense fallback={<SectionSkeleton cards={2} tallFirst={false} />}>
-          <WithReport report={full}>
+          <WithReport report={loadFull()}>
             {(rep) => (
               <>
                 <NoAccountsState rep={rep} staff />
@@ -213,7 +227,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
       {tab === "overview" && client.accounts.length > 0 && (
         <Suspense fallback={<SectionSkeleton tiles={6} cards={2} tallFirst={false} />}>
-          <WithReport report={full}>
+          <WithReport report={loadFull()}>
             {(rep) => (
               <>
                 <AtAGlance rep={rep} />
@@ -231,7 +245,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       {tab === "paid" && client.accounts.length === 0 && (
         <>
           <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
-            <WithReport report={full}>{(rep) => <NoAccountsState rep={rep} staff />}</WithReport>
+            <WithReport report={loadFull()}>{(rep) => <NoAccountsState rep={rep} staff />}</WithReport>
           </Suspense>
           {/* Notes on the data work without ad accounts too (SEO- or analytics-only clients). */}
           <NotesCard clientId={id} agencyId={user.agencyId} defaultDate={rep.range.to} />
@@ -241,7 +255,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       {tab === "paid" && client.accounts.length > 0 && (
         <>
           <Suspense fallback={<SectionSkeleton cards={1} />}>
-            <WithReport report={full}>
+            <WithReport report={loadFull()}>
               {(rep) => (
                 <>
                   <CampaignsSection rep={rep} staff basePath={base} marker={mark("campaigns")} />
@@ -251,12 +265,12 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             </WithReport>
           </Suspense>
           <Suspense fallback={<SectionSkeleton cards={1} />}>
-            <WithReport report={full}>{(rep) => <TrendsSection rep={rep} marker={mark("trends")} staff />}</WithReport>
+            <WithReport report={loadFull()}>{(rep) => <TrendsSection rep={rep} marker={mark("trends")} staff />}</WithReport>
           </Suspense>
           {/* The note form stays outside the suspended sections. */}
           <NotesCard clientId={id} agencyId={user.agencyId} defaultDate={rep.range.to} />
           <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
-            <WithReport report={full}>{(rep) => <HistorySection rep={rep} marker={mark("history")} />}</WithReport>
+            <WithReport report={loadFull()}>{(rep) => <HistorySection rep={rep} marker={mark("history")} />}</WithReport>
           </Suspense>
         </>
       )}
@@ -268,7 +282,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       {tab === "budgets" && (
         <>
           <Suspense fallback={<SectionSkeleton cards={1} />}>
-            <WithReport report={full}>{(rep) => <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />}</WithReport>
+            <WithReport report={loadFull()}>{(rep) => <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />}</WithReport>
           </Suspense>
           <Link href={keep(`${base}/budgets`)} className="flex min-h-10 flex-col gap-1 self-start rounded-xl border border-border bg-surface px-5 py-4 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60">
             <span className="flex items-center gap-2 text-sm font-semibold"><Wallet className="h-4 w-4 text-text-2" aria-hidden /> Set up budgets</span>
@@ -280,7 +294,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       {tab === "reports" && (
         <>
           <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
-            <WithReport report={full}>{(rep) => <NextStepsSection rep={rep} canEdit={canEdit} />}</WithReport>
+            <WithReport report={loadFull()}>{(rep) => <NextStepsSection rep={rep} canEdit={canEdit} />}</WithReport>
           </Suspense>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
@@ -296,7 +310,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             ))}
           </div>
           <Suspense fallback={<SectionSkeleton tiles={6} cards={2} tallFirst={false} />}>
-            <WithReport report={full}>{(rep) => <ClientDashboardsTab rep={rep} user={user} canEdit={canEdit} query={sp} />}</WithReport>
+            <WithReport report={loadFull()}>{(rep) => <ClientDashboardsTab rep={rep} user={user} canEdit={canEdit} query={sp} />}</WithReport>
           </Suspense>
         </>
       )}
@@ -315,7 +329,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                 <ClientVisibilityToggle clientId={id} section="executive" visible={rep.template.sections.executive} label="Executive summary" />
               </div>
               <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
-                <WithReport report={full}>{(rep) => <ExecutiveSummary rep={rep} copyable bare />}</WithReport>
+                <WithReport report={loadFull()}>{(rep) => <ExecutiveSummary rep={rep} copyable bare />}</WithReport>
               </Suspense>
             </section>
             <div className="flex flex-col gap-4 border-t border-border pt-5">
@@ -331,7 +345,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       {tab === "settings" && (
         <>
           <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
-            <WithReport report={full}>{(rep) => <PlatformSection rep={rep} staff status title="Ad accounts and data" />}</WithReport>
+            <WithReport report={loadFull()}>{(rep) => <PlatformSection rep={rep} staff status title="Ad accounts and data" />}</WithReport>
           </Suspense>
           {/* The one place to configure this client. Sending and downloading live in the Share button. */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

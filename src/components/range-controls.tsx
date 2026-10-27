@@ -1,5 +1,6 @@
 "use client";
 
+import { startNavigationProgress } from "@/components/navigation-progress";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
@@ -35,6 +36,7 @@ export function RangeControls({ preset, compare, from, to }: { preset: RangePres
     });
     // Keep the range explicit in the URL so the page doesn't depend on the cookie.
     if (!next.get("range")) next.set("range", preset);
+    startNavigationProgress();
     router.push(`${pathname}?${next.toString()}`, { scroll: false });
   };
   return (

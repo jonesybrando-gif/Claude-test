@@ -1,3 +1,4 @@
+import { loadOnHover } from "@/lib/link-hover";
 import Link from "next/link";
 import { AlertOctagon, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import type { PacingRow } from "@/server/pacing-service";
@@ -41,7 +42,7 @@ export function ActionCenter({ rows, limit = 8 }: { rows: PacingRow[]; limit?: n
           const under = r.action.headline.startsWith("Projected to underspend");
           const cls = under && r.action.severity === "critical" ? "text-warning-ink" : base;
           return (
-            <Link key={r.key} href={`/clients/${r.clientId}`} className="flex gap-3 px-5 py-2.5 hover:bg-surface-2">
+            <Link {...loadOnHover} key={r.key} href={`/clients/${r.clientId}`} className="flex gap-3 px-5 py-2.5 hover:bg-surface-2">
               <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${cls}`} aria-label={label} />
               <div className="min-w-0">
                 <p className="text-sm">
