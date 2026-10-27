@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = "https://marketingnexus.us";
+  const base = "https://www.marketingnexus.us";
   return [
     { url: `${base}/`, changeFrequency: "monthly", priority: 1 },
     { url: `${base}/privacy`, changeFrequency: "yearly", priority: 0.3 },
