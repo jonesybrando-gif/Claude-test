@@ -13,14 +13,14 @@ import { CTA_COOKIE, isCtaVariant, type CtaVariant } from "./signup-copy";
 export const dynamic = "force-dynamic";
 
 const DESCRIPTION =
-  "Marketing Nexus brings paid ads, Google Analytics 4, Search Console and keyword rankings together, then uses AI to explain what changed, why it matters and what to do next.";
+  "Go beyond traditional reporting. Marketing Nexus analyzes your advertising, SEO and analytics data to uncover opportunities, find what's holding you back and recommend the next steps to generate more leads, customers and revenue.";
 
 export const metadata: Metadata = {
-  title: { absolute: `${site.appName}: all your marketing data, with answers you can act on` },
+  title: { absolute: `${site.appName}: AI marketing intelligence that shows agencies how to grow results` },
   description: DESCRIPTION,
   alternates: { canonical: "https://www.marketingnexus.us/" },
   openGraph: {
-    title: "All your marketing data. Finally, answers you can act on.",
+    title: "Don’t just see your results. Know how to grow them.",
     description: DESCRIPTION,
     url: "https://www.marketingnexus.us/",
     siteName: site.appName,
@@ -75,11 +75,14 @@ export default async function HomePage() {
   return (
     <>
       <section className="mn-hero mn-wrap" aria-labelledby="hero-title">
-        <p className="mn-eyebrow">AI-Powered Marketing Intelligence for Agencies</p>
-        <h1 id="hero-title">All your marketing data. Finally, answers you can act on.</h1>
+        <p className="mn-eyebrow mn-eyebrow-caps">AI-Powered Marketing Intelligence for Agencies</p>
+        <h1 id="hero-title">
+          <span className="mn-h1-line">Don&rsquo;t just see your results.</span>{" "}
+          <span className="mn-h1-line mn-h1-accent">Know how to grow them.</span>
+        </h1>
         <p className="mn-lede">
-          {site.appName} brings your paid ads, Google Analytics 4, Search Console and keyword rankings together, then uses AI to explain what changed,
-          why it matters and exactly what to do next.
+          Go beyond traditional reporting. {site.appName} analyzes your advertising, SEO, and analytics data to uncover opportunities, identify what&rsquo;s
+          holding you back, and recommend the next steps to generate more leads, win more customers, and drive more revenue.
         </p>
         <EarlyAccessForm position="hero" variant={variant} />
       </section>
