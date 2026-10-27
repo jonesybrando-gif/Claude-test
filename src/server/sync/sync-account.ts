@@ -48,14 +48,22 @@ export function chunkRange(from: IsoDate, to: IsoDate, maxDays = CHUNK_DAYS): { 
   return out;
 }
 
+/** Once a day the re-fetch reaches this far back, to pick up conversions credited weeks after the click. */
+export const DEEP_RESTATEMENT_DAYS = 35;
+/** UTC hour of the daily deep re-fetch (quiet time for US agencies). */
+export const DEEP_RESTATEMENT_UTC_HOUR = 9;
+
 /**
  * Which dates to (re)fetch. First sync or backfill: the adapter's full history
  * window. Otherwise: from `restatementWindowDays` before the last complete
  * date, through today (today's partial numbers are stored but never paced on).
+ * With `deep` (once a day) the window is at least DEEP_RESTATEMENT_DAYS, because
+ * platforms keep adding conversions to older clicks after the normal window.
  */
-export function syncRange(adapter: PlatformAdapter, today: IsoDate, kind: SyncKind, dataCompleteThrough: IsoDate | null): { from: IsoDate; to: IsoDate } {
+export function syncRange(adapter: PlatformAdapter, today: IsoDate, kind: SyncKind, dataCompleteThrough: IsoDate | null, deep = false): { from: IsoDate; to: IsoDate } {
   if (kind === "backfill" || !dataCompleteThrough) return { from: addDays(today, -adapter.initialBackfillDays), to: today };
-  return { from: addDays(minDate(dataCompleteThrough, today), -adapter.restatementWindowDays), to: today };
+  const days = deep ? Math.max(adapter.restatementWindowDays, DEEP_RESTATEMENT_DAYS) : adapter.restatementWindowDays;
+  return { from: addDays(minDate(dataCompleteThrough, today), -days), to: today };
 }
 
 async function upsertCampaigns(accountId: string, campaigns: RemoteCampaign[], includeNew = true): Promise<Map<string, string>> {
@@ -90,7 +98,7 @@ export async function syncAccount(accountId: string, kind: SyncKind, deps: SyncD
 
   const tz = account.timezone ?? account.client.timezone;
   const today = todayInTimeZone(tz, now);
-  const range = syncRange(adapter, today, kind, account.dataCompleteThrough ? dateToIso(account.dataCompleteThrough) : null);
+  const range = syncRange(adapter, today, kind, account.dataCompleteThrough ? dateToIso(account.dataCompleteThrough) : null, now.getUTCHours() === DEEP_RESTATEMENT_UTC_HOUR);
   const run = await prisma.syncRun.create({ data: { accountId, kind, status: "RUNNING", rangeStart: isoToDate(range.from), rangeEnd: isoToDate(range.to), startedAt: now } });
   await prisma.adAccount.update({ where: { id: accountId }, data: { lastSyncAttemptAt: now } });
 

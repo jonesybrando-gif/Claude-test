@@ -361,7 +361,7 @@ export async function renderClientReportPdf(
             { header: "Spent", width: 0.1, align: "right" },
             { header: "Pace (of plan)", width: 0.08, align: "right" },
             { header: "Estimated end", width: 0.11, align: "right" },
-            { header: "Needed per day", width: 0.09, align: "right" },
+            { header: "Avg. needed/day", width: 0.09, align: "right" },
             { header: "Recommendation", width: 0.16 },
           ]
         : [
