@@ -126,3 +126,26 @@ export function spendForUnit(unit: PacingUnit, rows: SpendRow[]): Record<string,
   }
   return out;
 }
+
+/**
+ * Spend in accounts that are budgeted campaign by campaign but falls outside those campaigns
+ * (unbudgeted campaigns and account-level rows such as Local Services), per account, for
+ * dates in [start, end]. Without it, budget-line spend would silently run below ad spend.
+ */
+export function spendOutsideCampaignBudgets(
+  campaignBudgetedAccountIds: Iterable<string>,
+  units: PacingUnit[],
+  rows: SpendRow[],
+  start: string,
+  end: string,
+): Map<string, number> {
+  const budgeted = new Set(units.filter((u) => u.scope === "CAMPAIGN").flatMap((u) => u.campaignIds));
+  const accounts = new Set(campaignBudgetedAccountIds);
+  const out = new Map<string, number>();
+  for (const r of rows) {
+    if (!accounts.has(r.accountId) || r.date < start || r.date > end) continue;
+    if (r.campaignId !== null && budgeted.has(r.campaignId)) continue;
+    out.set(r.accountId, (out.get(r.accountId) ?? 0) + r.costMinor);
+  }
+  return out;
+}

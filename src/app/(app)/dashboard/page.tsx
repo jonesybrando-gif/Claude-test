@@ -19,6 +19,7 @@ import { PageSkeleton } from "@/components/ui/skeleton";
 import { Banner } from "@/components/ui/banner";
 import { InsightCard } from "@/components/insight-card";
 import { HomeSummary } from "@/components/dashboard/home-summary";
+import { stillCounting } from "@/lib/results";
 import { NeedsAttention, type AttentionClient } from "@/components/dashboard/needs-attention";
 import { BudgetHealth } from "@/components/dashboard/budget-health";
 
@@ -100,7 +101,7 @@ async function Home({ user }: { user: Awaited<ReturnType<typeof requireAgencySta
   const insights = homeInsights({
     currency: main,
     totals: mtd.totals,
-    clients: inMain.map((c) => ({ id: c.client.id, name: c.client.name, current: mtd.byClient.get(c.client.id)?.current ?? { spendMinor: 0, results: 0 }, previous: mtd.byClient.get(c.client.id)?.previous ?? { spendMinor: 0, results: 0 } })),
+    clients: inMain.map((c) => ({ id: c.client.id, name: c.client.name, goal: mtd.byClient.get(c.client.id)?.goal, current: mtd.byClient.get(c.client.id)?.current ?? { spendMinor: 0, results: 0 }, previous: mtd.byClient.get(c.client.id)?.previous ?? { spendMinor: 0, results: 0 } })),
     budgets: inMain
       .filter((c) => c.connectedTotal && c.connectedTotal.phase === "ACTIVE")
       .map((c) => ({ id: c.client.id, name: c.client.name, varianceMinor: c.connectedTotal!.projectedVarianceMinor, off: forecastOffBudget(c.connectedTotal!.budgetMinor, c.connectedTotal!.projectedVarianceMinor) })),
@@ -134,7 +135,7 @@ async function Home({ user }: { user: Awaited<ReturnType<typeof requireAgencySta
         {showChecklist && <SetupChecklist steps={checklist.steps} compact />}
       </div>
 
-      <HomeSummary r={mtd} vs={vs} attention={attention.length} critical={critical} total={clients.length} />
+      <HomeSummary r={mtd} vs={vs} attention={attention.length} critical={critical} total={clients.length} counting={stillCounting(month.to, today)} />
 
       <div className="grid items-start gap-6 lg:grid-cols-2 [&>*]:min-w-0">
         <NeedsAttention clients={attention} total={clients.length} />

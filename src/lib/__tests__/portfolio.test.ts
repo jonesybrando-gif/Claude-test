@@ -113,3 +113,15 @@ describe("forecastSplit", () => {
     expect(s).toEqual({ currency: "USD", overMinor: 400000, overLines: 1, underMinor: 410000, underLines: 2, netMinor: -9500, otherCurrencies: ["CAD"] });
   });
 });
+
+describe("describeChange and changeVerdict agree", () => {
+  it("holds back better/worse on results while they are still being counted", () => {
+    const fmt = (n: number) => String(n);
+    const c = describeChange({ current: 80, previous: 100, better: "up", format: fmt, counts: { current: 80, previous: 100 }, stillCounting: true });
+    expect(c.verdict).toBe("counting");
+    expect(c.text).toBe("Down 20% from 100, still counting");
+    expect(describeChange({ current: 80, previous: 100, better: "up", format: fmt, counts: { current: 80, previous: 100 } }).verdict).toBe("worse");
+    // Spend is never judged, counting or not.
+    expect(describeChange({ current: 80, previous: 100, better: "neutral", format: fmt, stillCounting: true }).verdict).toBe("neutral");
+  });
+});

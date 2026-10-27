@@ -16,6 +16,12 @@ export interface MetricTotals {
   hasEstimatedCost: boolean;
   /** A platform that reports leads (Meta, LSA) contributed, so 0 leads means none, not unknown. */
   leadsReported?: boolean;
+  /**
+   * Spend on platforms that report leads (Meta, Local Services). Cost per lead
+   * divides this, not all spend, by leads: Google Ads and Microsoft spend buys
+   * conversions, not reported leads. Kept by `addInto`; absent on a single line.
+   */
+  leadCostMinor?: number;
 }
 
 export const emptyTotals = (): MetricTotals => ({
@@ -27,6 +33,7 @@ export const emptyTotals = (): MetricTotals => ({
   leads: 0,
   hasEstimatedCost: false,
   leadsReported: false,
+  leadCostMinor: 0,
 });
 
 export function addInto(t: MetricTotals, r: Omit<MetricTotals, "hasEstimatedCost"> & { hasEstimatedCost?: boolean }): MetricTotals {
@@ -38,6 +45,8 @@ export function addInto(t: MetricTotals, r: Omit<MetricTotals, "hasEstimatedCost
   t.leads += r.leads;
   t.hasEstimatedCost ||= !!r.hasEstimatedCost;
   t.leadsReported ||= !!r.leadsReported;
+  // A total carries its own lead-platform spend (possibly 0); a single platform line falls back to its cost.
+  t.leadCostMinor = (t.leadCostMinor ?? 0) + (r.leadCostMinor ?? (r.leadsReported ? r.costMinor : 0));
   return t;
 }
 
@@ -58,7 +67,8 @@ export function derive(t: MetricTotals): DerivedMetrics {
     cpcMinor: div(t.costMinor, t.clicks),
     cpmMinor: t.impressions > 0 ? (t.costMinor / t.impressions) * 1000 : null,
     costPerConversionMinor: div(t.costMinor, t.conversions),
-    costPerLeadMinor: div(t.costMinor, t.leads),
+    // Lead-platform spend ÷ leads. Leads that cost nothing (e.g. unpriced Local Services leads) have no cost per lead.
+    costPerLeadMinor: t.leadCostMinor === undefined ? div(t.costMinor, t.leads) : t.leadCostMinor > 0 ? div(t.leadCostMinor, t.leads) : null,
     conversionRate: t.clicks > 0 ? (t.conversions / t.clicks) * 100 : null,
     // No conversion value reported (e.g. lead-gen or LSA) means ROAS is unknown, not zero.
     roas: t.conversionValueMinor > 0 ? div(t.conversionValueMinor, t.costMinor) : null,

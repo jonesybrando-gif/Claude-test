@@ -3,6 +3,7 @@
 // Pure: no database access.
 
 import type { PlatformKey } from "./platforms";
+import type { ResultsGoal } from "./results";
 import { formatMoney, formatNumber } from "./money";
 
 // ---------------------------------------------------------------------------
@@ -29,11 +30,21 @@ export function resultCount(platform: PlatformKey, m: { conversions: number; lea
 export interface PeriodResults {
   spendMinor: number;
   results: number;
+  /**
+   * Spend behind `results` when it differs from `spendMinor`: agency totals leave
+   * awareness clients (whose results are clicks) out of results when goals are
+   * mixed, but their spend still counts as ad spend.
+   */
+  resultSpendMinor?: number;
 }
 
 export interface ClientResults {
   clientId: string;
   currency: string;
+  /** The client's goal (or the one guessed from its data): decides what a result is. */
+  goal?: ResultsGoal;
+  /** "lead", "click", "result"…, for labels. */
+  unit?: string;
   current: PeriodResults;
   previous: PeriodResults;
 }
@@ -42,7 +53,7 @@ export const MIN_RESULTS_TO_COMPARE = 10;
 /** Changes smaller than this (in %) are "about the same". */
 export const NEUTRAL_CHANGE_PCT = 5;
 
-export const costPerResult = (p: PeriodResults): number | null => (p.results > 0 ? p.spendMinor / p.results : null);
+export const costPerResult = (p: PeriodResults): number | null => (p.results > 0 ? (p.resultSpendMinor ?? p.spendMinor) / p.results : null);
 
 export function pctChange(current: number, previous: number): number | null {
   return previous > 0 ? ((current - previous) / previous) * 100 : null;
@@ -52,7 +63,7 @@ export function pctChange(current: number, previous: number): number | null {
 // Change in words
 // ---------------------------------------------------------------------------
 
-export type ChangeVerdict = "better" | "worse" | "same" | "too_few" | "none" | "neutral";
+export type ChangeVerdict = "better" | "worse" | "same" | "too_few" | "none" | "neutral" | "counting";
 
 export interface ChangeWords {
   pct: number | null;
@@ -62,10 +73,13 @@ export interface ChangeWords {
 }
 
 /**
- * Describes a change in plain words. Changes under 5% are "about the same";
- * results-based figures with fewer than 10 results in either period are "too
- * few to compare". Spend gets no verdict: more or less spend is neither good
- * nor bad on its own.
+ * Describes a change in plain words, with the same rules as `changeVerdict`
+ * (src/lib/change.ts) used on client pages, KPI tiles and reports: changes
+ * under 5% are "about the same"; results-based figures with fewer than 10
+ * results in either period are "too few to compare"; spend gets no verdict
+ * (more or less spend is neither good nor bad on its own); and while the
+ * platforms may still add late results (`stillCounting`), results-based
+ * figures get no better/worse verdict.
  */
 export function describeChange(o: {
   current: number | null;
@@ -74,6 +88,8 @@ export function describeChange(o: {
   format: (n: number) => string;
   /** Result counts behind the figure, when it depends on results. */
   counts?: { current: number; previous: number };
+  /** The range ends within the late-counting window (see `stillCounting` in ./results.ts). Applies to results-based figures. */
+  stillCounting?: boolean;
 }): ChangeWords {
   if (o.counts && (o.counts.current < MIN_RESULTS_TO_COMPARE || o.counts.previous < MIN_RESULTS_TO_COMPARE)) {
     return { pct: null, verdict: "too_few", text: "Too few results to compare" };
@@ -84,6 +100,7 @@ export function describeChange(o: {
   const dir = pct > 0 ? "Up" : "Down";
   const base = `${dir} ${Math.round(Math.abs(pct))}% from ${o.format(o.previous)}`;
   if (o.better === "neutral") return { pct, verdict: "neutral", text: base };
+  if (o.stillCounting && o.counts) return { pct, verdict: "counting", text: `${base}, still counting` };
   const good = (pct > 0) === (o.better === "up");
   return { pct, verdict: good ? "better" : "worse", text: `${base}, ${good ? "better" : "worse"}` };
 }
@@ -99,7 +116,8 @@ export const HIGH_CPR_MULTIPLE = 1.3;
 export function medianCostPerResult(clients: ClientResults[]): Map<string, number> {
   const by = new Map<string, number[]>();
   for (const c of clients) {
-    if (c.current.results < MIN_RESULTS_TO_COMPARE) continue;
+    // Awareness clients' "results" are clicks; a cost per click is no benchmark for cost per lead.
+    if (c.current.results < MIN_RESULTS_TO_COMPARE || c.goal === "AWARENESS") continue;
     by.set(c.currency, [...(by.get(c.currency) ?? []), c.current.spendMinor / c.current.results]);
   }
   const out = new Map<string, number>();
@@ -114,7 +132,8 @@ export function medianCostPerResult(clients: ClientResults[]): Map<string, numbe
 
 /** Cost per result ≥1.3× the client's previous period, or ≥1.3× the agency median (≥10 results). */
 export function costPerResultHigh(c: ClientResults, medians: Map<string, number>): boolean {
-  if (c.current.results < MIN_RESULTS_TO_COMPARE) return false;
+  // Awareness clients' results are clicks: a high cost per click isn't an efficiency problem to fix first.
+  if (c.current.results < MIN_RESULTS_TO_COMPARE || c.goal === "AWARENESS") return false;
   const cpr = c.current.spendMinor / c.current.results;
   const prev = c.previous.results >= MIN_RESULTS_TO_COMPARE ? c.previous.spendMinor / c.previous.results : null;
   const median = medians.get(c.currency);
@@ -191,11 +210,12 @@ export function attentionReasons(i: AttentionInput): AttentionReason[] {
   const r = i.results;
   if (r && r.current.results >= MIN_RESULTS_TO_COMPARE && r.previous.results >= MIN_RESULTS_TO_COMPARE) {
     const up = pctChange(costPerResult(r.current)!, costPerResult(r.previous)!);
-    if (up !== null && up >= CPR_UP_PCT) out.push({ kind: "cpr_up", label: `Cost per result up ${Math.round(up)}%`, tone: "warning" });
+    if (up !== null && up >= CPR_UP_PCT) out.push({ kind: "cpr_up", label: `Cost per ${r.unit ?? "result"} up ${Math.round(up)}%`, tone: "warning" });
   }
   if (r && r.previous.results >= MIN_RESULTS_TO_COMPARE) {
     const ch = pctChange(r.current.results, r.previous.results);
-    if (ch !== null && ch <= -RESULTS_DOWN_PCT) out.push({ kind: "results_down", label: `Results down ${Math.round(-ch)}% (${formatNumber(r.current.results, 0)} vs ${formatNumber(r.previous.results, 0)})`, tone: "warning" });
+    const noun = r.unit ? `${r.unit[0].toUpperCase()}${r.unit.slice(1)}s` : "Results";
+    if (ch !== null && ch <= -RESULTS_DOWN_PCT) out.push({ kind: "results_down", label: `${noun} down ${Math.round(-ch)}% (${formatNumber(r.current.results, 0)} vs ${formatNumber(r.previous.results, 0)})`, tone: "warning" });
   }
   if (!i.disconnected && i.oldestSyncHours !== null && i.oldestSyncHours > STALE_ATTENTION_HOURS) {
     out.push({ kind: "stale", label: Number.isFinite(i.oldestSyncHours) ? `Data ${Math.round(i.oldestSyncHours)} hours old` : "Data never synced", tone: "warning" });

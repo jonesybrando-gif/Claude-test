@@ -16,12 +16,13 @@ function ChangeLine({ c, short }: { c: ChangeWords; short: string }) {
   );
 }
 
-/** "Down 24% vs Sep 1–25", "About the same as Sep 1–25", "Too few to compare". */
+/** "Down 24% vs Sep 1–25", "About the same as Sep 1–25", "Too few to compare", "Up 8% vs Sep 1–25 · still counting". */
 function shortChange(c: ChangeWords, vs: string): string {
   if (c.verdict === "too_few") return "Too few to compare";
   if (c.verdict === "none" || c.pct === null) return "No earlier data";
   if (c.verdict === "same") return `About the same as ${vs}`;
-  return `${c.pct > 0 ? "Up" : "Down"} ${Math.round(Math.abs(c.pct))}% vs ${vs}`;
+  const base = `${c.pct > 0 ? "Up" : "Down"} ${Math.round(Math.abs(c.pct))}% vs ${vs}`;
+  return c.verdict === "counting" ? `${base} · still counting` : base;
 }
 
 /**
@@ -29,7 +30,7 @@ function shortChange(c: ChangeWords, vs: string): string {
  * days last month: spend, results, cost per result, and how many clients
  * need attention.
  */
-export function HomeSummary({ r, vs, attention, critical, total }: { r: PortfolioResults; vs: string; attention: number; critical: number; total: number }) {
+export function HomeSummary({ r, vs, attention, critical, total, counting = false }: { r: PortfolioResults; vs: string; attention: number; critical: number; total: number; counting?: boolean }) {
   const c = r.currency;
   const { current: cur, previous: prev } = r.totals;
   const money = (m: number) => formatMoney(m, c, { whole: true });
@@ -37,12 +38,12 @@ export function HomeSummary({ r, vs, attention, critical, total }: { r: Portfoli
   const cpr = costPerResult(cur);
   const prevCpr = costPerResult(prev);
   const spend = describeChange({ current: cur.spendMinor, previous: prev.spendMinor, better: "neutral", format: money });
-  const results = describeChange({ current: cur.results, previous: prev.results, better: "up", format: (n) => formatNumber(n, 0), counts });
-  const cost = describeChange({ current: cpr, previous: prevCpr, better: "down", format: (n) => formatMoney(n, c), counts });
+  const results = describeChange({ current: cur.results, previous: prev.results, better: "up", format: (n) => formatNumber(n, 0), counts, stillCounting: counting });
+  const cost = describeChange({ current: cpr, previous: prevCpr, better: "down", format: (n) => formatMoney(n, c), counts, stillCounting: counting });
   return (
     <section aria-label="Agency performance this month" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <MetricCard label="Ad spend" info="Total ad spend across your clients this month so far. More or less spend is neither good nor bad on its own." value={money(cur.spendMinor)} change={<ChangeLine c={spend} short={shortChange(spend, vs)} />} />
-      <MetricCard label="Results" info="Conversions or leads reported by the ad platforms, each counted once." value={formatNumber(cur.results, 0)} change={<ChangeLine c={results} short={shortChange(results, vs)} />} />
+      <MetricCard label="Results" info="Each client's main result, as set by its goal: leads, calls, sales or bookings reported by the ad platforms, each counted once. Clicks for awareness clients aren't added in when other goals are present." value={formatNumber(cur.results, 0)} change={<ChangeLine c={results} short={shortChange(results, vs)} />} />
       <MetricCard label="Cost per result" info="Ad spend divided by results: what one result cost on average. Lower is better." value={cpr === null ? "—" : formatMoney(cpr, c)} change={<ChangeLine c={cost} short={shortChange(cost, vs)} />} />
       <MetricCard
         label="Clients needing attention"

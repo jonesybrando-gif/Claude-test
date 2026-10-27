@@ -1,6 +1,6 @@
 import { formatMoney, formatNumber } from "./money";
 import { pctChange } from "./metrics";
-import { MIN_RESULTS_TO_COMPARE, type PeriodResults } from "./portfolio";
+import { costPerResult, MIN_RESULTS_TO_COMPARE, type PeriodResults } from "./portfolio";
 
 export interface HomeInsight {
   eyebrow: string;
@@ -14,7 +14,7 @@ export interface HomeInsightInput {
   /** Agency totals, same currency only. */
   totals: { current: PeriodResults; previous: PeriodResults };
   /** Per client, in the agency currency only. */
-  clients: { id: string; name: string; current: PeriodResults; previous: PeriodResults }[];
+  clients: { id: string; name: string; goal?: string; current: PeriodResults; previous: PeriodResults }[];
   /** Budget forecasts per client for the current period (negative = under). */
   budgets: { id: string; name: string; varianceMinor: number; off: boolean }[];
   /** "last month" or similar, for the sentences. */
@@ -40,7 +40,10 @@ export function homeInsights(i: HomeInsightInput): HomeInsight[] {
   if (resultsPct !== null && Math.abs(resultsPct) >= 5) {
     const down = resultsPct < 0;
     const net = cur.results - prev.results;
+    // When goals are mixed, awareness clients' clicks aren't in the results total, so they can't be its driver.
+    const mixed = new Set(i.clients.map((c) => c.goal)).size > 1;
     const driver = [...i.clients]
+      .filter((c) => !(mixed && c.goal === "AWARENESS"))
       .map((c) => ({ ...c, delta: c.current.results - c.previous.results }))
       .filter((c) => (down ? c.delta < 0 : c.delta > 0))
       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0];
@@ -59,8 +62,8 @@ export function homeInsights(i: HomeInsightInput): HomeInsight[] {
 
   // 2. Cost per result, and whether spend or results moved it.
   if (enough) {
-    const cpr = cur.spendMinor / cur.results;
-    const prevCpr = prev.spendMinor / prev.results;
+    const cpr = costPerResult(cur)!;
+    const prevCpr = costPerResult(prev)!;
     const cprPct = pctChange(cpr, prevCpr);
     const spendPct = pctChange(cur.spendMinor, prev.spendMinor);
     if (cprPct !== null && Math.abs(cprPct) >= 10) {

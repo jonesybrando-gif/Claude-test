@@ -17,7 +17,7 @@ let clientId = "";
 let agencyId = "";
 let calls = 0;
 let fail = false;
-const AI_REPLY = { overview: "AI wrote this.", working: ["- Search did well."], notWorking: ["Display spent with no leads."], recommendations: ["1. Move budget to Search."] };
+const AI_REPLY = { overview: "AI wrote this.", working: ["- Search did well."], notWorking: ["Display spent with no leads."], recommendations: ["1. Move budget to Search."], nextSteps: ["- We'll move budget to Search."] };
 
 describe.skipIf(!hasDb)("executive summary (database)", () => {
   beforeAll(async () => {
@@ -54,7 +54,7 @@ describe.skipIf(!hasDb)("executive summary (database)", () => {
     expect(calls).toBe(0);
     const [a, b] = await Promise.all([getExecutiveSummary(rep, { generate: true }), getExecutiveSummary(rep, { generate: true })]);
     // List markers the model adds are stripped.
-    expect(a).toEqual({ overview: "AI wrote this.", working: ["Search did well."], notWorking: ["Display spent with no leads."], recommendations: ["Move budget to Search."], source: "ai" });
+    expect(a).toEqual({ overview: "AI wrote this.", working: ["Search did well."], notWorking: ["Display spent with no leads."], recommendations: ["Move budget to Search."], nextSteps: ["We'll move budget to Search."], source: "ai" });
     expect(b.overview).toBe("AI wrote this.");
     expect(calls).toBe(1); // concurrent viewers share one request
     expect(await getExecutiveSummary(rep, { generate: true })).toEqual(a); // served from the cache
@@ -73,7 +73,7 @@ describe.skipIf(!hasDb)("executive summary (database)", () => {
     const rep = await loadClientReport(clientId, { range: "last_30" });
     const s = await getExecutiveSummary(rep, { generate: true });
     expect(s.source).toBe("auto");
-    expect(s.overview).toContain("Exec Client's ads earned");
+    expect(s.overview).toContain("Exec Client's ads were shown");
     expect(s.recommendations.length).toBeGreaterThan(0);
     fail = false;
     await saveTemplate(agencyId, clientId, { ...DEFAULT_TEMPLATE, executiveAi: false });

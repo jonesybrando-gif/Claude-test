@@ -28,6 +28,8 @@ export interface PortfolioRow {
   spendMinor: number;
   spendChangePct: number | null;
   results: number;
+  /** Set when this client's results aren't conversions, e.g. "clicks" for an awareness goal. */
+  resultUnit?: string | null;
   resultsChange: ChangeWords | null;
   costPerResultMinor: number | null;
   costPerResultChange: ChangeWords | null;
@@ -70,7 +72,7 @@ const FILTERS: { key: FilterKey; label: string; test: (r: PortfolioRow) => boole
   { key: "over", label: "Over budget", test: (r) => OVER.has(r.pacing) },
   { key: "under", label: "Under budget", test: (r) => UNDER.has(r.pacing) },
   // Nothing flagged and cost per result steady or better.
-  { key: "well", label: "Performing well", test: (r) => r.reasons.length === 0 && r.results > 0 && (r.costPerResultChange?.verdict === "better" || r.costPerResultChange?.verdict === "same") },
+  { key: "well", label: "Performing well", test: (r) => r.reasons.length === 0 && r.results > 0 && (r.costPerResultChange?.verdict === "better" || r.costPerResultChange?.verdict === "same" || (r.costPerResultChange?.verdict === "counting" && (r.costPerResultChange.pct ?? 0) < 0)) },
   { key: "missing", label: "Missing data", test: (r) => r.pacing === "NOT_CONNECTED" || r.platforms.length === 0 || r.stale },
 ];
 
@@ -303,7 +305,7 @@ export function PortfolioTable({ rows, totals, labels, initialFilter, combinedHr
               </span>
               <span className="grid grid-cols-3 gap-2 text-sm tabular">
                 <span><span className="block text-xs text-text-3">Ad spend</span>{formatMoney(r.spendMinor, r.currency, { whole: true })}<Delta pct={r.spendChangePct} /></span>
-                <span><span className="block text-xs text-text-3">Results</span>{formatNumber(r.results, 0)}<Delta c={r.resultsChange} /></span>
+                <span><span className="block text-xs text-text-3">Results</span>{formatNumber(r.results, 0)}{r.resultUnit && <span className="text-text-3"> {r.resultUnit}</span>}<Delta c={r.resultsChange} /></span>
                 <span><span className="block text-xs text-text-3">Cost / result</span>{r.costPerResultMinor === null ? "—" : formatMoney(r.costPerResultMinor, r.currency)}<Delta c={r.costPerResultChange} /></span>
               </span>
               {r.reasons.length > 0 && <span className="text-xs text-text-2">{r.reasons.map((x) => x.label).join(" · ")}</span>}
@@ -356,7 +358,7 @@ export function PortfolioTable({ rows, totals, labels, initialFilter, combinedHr
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{formatMoney(r.spendMinor, r.currency, { whole: true })}<Delta pct={r.spendChangePct} /></td>
-                    <td className="px-4 py-3 whitespace-nowrap">{formatNumber(r.results, 0)}<Delta c={r.resultsChange} /></td>
+                    <td className="px-4 py-3 whitespace-nowrap">{formatNumber(r.results, 0)}{r.resultUnit && <span className="text-text-3"> {r.resultUnit}</span>}<Delta c={r.resultsChange} /></td>
                     <td className="px-4 py-3 whitespace-nowrap">{r.costPerResultMinor === null ? <span className="text-text-3">—</span> : formatMoney(r.costPerResultMinor, r.currency)}<Delta c={r.costPerResultChange} /></td>
                     <td className="px-4 py-3 text-right"><BudgetStatus state={r.pacing} varianceMinor={r.varianceMinor} currency={r.currency} /></td>
                     <td className="px-4 py-3 text-left"><Sparkline values={r.dailySpend} width={96} height={24} /></td>
@@ -432,7 +434,7 @@ export function PortfolioTable({ rows, totals, labels, initialFilter, combinedHr
           {visible.length} of {rows.length} clients.{" "}
           <span className="inline-flex items-center gap-1 align-middle"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-critical" /> critical</span>,{" "}
           <span className="inline-flex items-center gap-1 align-middle"><span aria-hidden className="inline-block h-2 w-2 rounded-full border-2 border-dot-watch" /> watch</span>
-          , judged on the last 30 complete days. Results are conversions or leads reported by the ad platforms, each counted once. Budget status is for the current budget period.
+          , judged on the last 30 complete days. Results follow each client’s goal (leads, calls, sales or bookings from the ad platforms, each counted once; clicks for awareness clients). Ad platforms can still add results for the last 14 days, so recent changes in results show in grey, without better or worse. Budget status is for the current budget period.
         </p>
         {combinedHref && <Link href={combinedHref} className="shrink-0 text-[13px] font-medium text-brand-text hover:underline">All clients combined →</Link>}
       </div>

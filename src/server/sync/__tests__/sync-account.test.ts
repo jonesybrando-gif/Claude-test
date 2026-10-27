@@ -74,6 +74,8 @@ describe("sync helpers", () => {
     expect(syncRange(a, "2026-10-17", "scheduled", null)).toEqual({ from: "2026-10-07", to: "2026-10-17" });
     expect(syncRange(a, "2026-10-17", "scheduled", "2026-10-16")).toEqual({ from: "2026-10-13", to: "2026-10-17" });
     expect(syncRange(a, "2026-10-17", "backfill", "2026-10-16")).toEqual({ from: "2026-10-07", to: "2026-10-17" });
+    // Once a day the window reaches back far enough for late-credited conversions.
+    expect(syncRange(a, "2026-10-17", "scheduled", "2026-10-16", true)).toEqual({ from: "2026-09-11", to: "2026-10-17" });
   });
 });
 

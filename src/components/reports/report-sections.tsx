@@ -299,7 +299,7 @@ export function BudgetLinesCard({ rep, staff }: { rep: ClientReport; staff: bool
           <tr>
             <TH className="pl-5">{staff ? "Line" : "Budget"}</TH><TH>Status</TH><TH className="text-right">Amount</TH><TH className="text-right">Spent</TH>
             {staff ? (
-              <><TH className="text-right">Spending pace</TH><TH className="text-right">Estimated end</TH><TH className="text-right">Needed per day</TH><TH className="pr-5">Recommendation</TH></>
+              <><TH className="text-right">Spending pace</TH><TH className="text-right">Estimated end</TH><TH className="text-right" title="Remaining budget ÷ remaining days in the period, including today. An average: weighted budgets plan more on some days.">Avg. needed per day</TH><TH className="pr-5">Recommendation</TH></>
             ) : (
               <><TH className="text-right">Left</TH><TH className="pr-5 text-right">Estimated end</TH></>
             )}
