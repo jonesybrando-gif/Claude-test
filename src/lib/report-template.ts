@@ -5,7 +5,7 @@
 import { DEFAULT_KPIS, isKpiKey, type KpiKey } from "./kpis";
 import type { CompareMode, RangePreset } from "./date-ranges";
 
-export const SECTION_KEYS = ["executive", "summary", "kpis", "trends", "pacing", "platforms", "campaigns", "history", "notes"] as const;
+export const SECTION_KEYS = ["executive", "summary", "kpis", "trends", "pacing", "platforms", "campaigns", "history", "notes", "search", "website"] as const;
 export type SectionKey = (typeof SECTION_KEYS)[number];
 
 export const SECTION_LABEL: Record<SectionKey, string> = {
@@ -18,6 +18,8 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   campaigns: "Campaign table",
   history: "Budget history",
   notes: "Notes and definitions",
+  search: "Google search (Search Console clicks)",
+  website: "Website goals (Google Analytics)",
 };
 
 export interface ReportTemplate {
@@ -41,7 +43,7 @@ export const DEFAULT_TEMPLATE: ReportTemplate = {
   title: "Advertising performance report",
   kpis: DEFAULT_KPIS,
   trendKpis: ["spend", "conversions"],
-  sections: { executive: true, summary: true, kpis: true, trends: true, pacing: true, platforms: true, campaigns: true, history: true, notes: true },
+  sections: { executive: true, summary: true, kpis: true, trends: true, pacing: true, platforms: true, campaigns: true, history: true, notes: true, search: true, website: true },
   summary: "",
   executiveAi: true,
   defaultRange: "last_month",

@@ -3,6 +3,7 @@ import type { ClientReport } from "@/server/client-report";
 import { automaticSummary, getExecutiveSummary, wantsAiSummary, type ExecSummary } from "@/server/exec-summary";
 import { summaryAsHtml, summaryAsText, summarySections } from "@/lib/exec-summary";
 import { formatDate } from "@/lib/time";
+import { clientNextStepLines } from "@/server/next-steps";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopySummaryButton } from "./copy-summary-button";
 
@@ -68,8 +69,13 @@ function FullText({ summary, clientFacing }: { summary: ExecSummary; clientFacin
   );
 }
 
-async function AiSummary({ rep, heading, copyable, compact, clientFacing }: { rep: ClientReport; heading: string; copyable: boolean; compact?: boolean; clientFacing?: boolean }) {
-  return <SummaryText summary={await getExecutiveSummary(rep, { generate: true })} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} />;
+async function AiSummary({ rep, heading, copyable, compact, clientFacing, steps }: { rep: ClientReport; heading: string; copyable: boolean; compact?: boolean; clientFacing?: boolean; steps?: string[] }) {
+  return <SummaryText summary={withSteps(await getExecutiveSummary(rep, { generate: true }), steps)} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} />;
+}
+
+/** For client-facing copies, "What we're doing next" is the agency's approved steps, never the AI's drafts. */
+function withSteps(s: ExecSummary, steps: string[] | undefined): ExecSummary {
+  return steps === undefined ? s : { ...s, nextSteps: steps };
 }
 
 /**
@@ -78,12 +84,14 @@ async function AiSummary({ rep, heading, copyable, compact, clientFacing }: { re
  * AI-written one streams in when the layout asks for it.
  */
 /** `clientFacing` (client logins, shared links): "What we're doing next" in agency voice replaces Recommendations. */
-export function ExecutiveSummary({ rep, marker, copyable = false, compact = false, title = "Executive summary", actions, bare = false, clientFacing = false }: { rep: ClientReport; marker?: ReactNode; copyable?: boolean; compact?: boolean; title?: string; actions?: ReactNode; bare?: boolean; clientFacing?: boolean }) {
-  const auto = automaticSummary(rep);
+export async function ExecutiveSummary({ rep, marker, copyable = false, compact = false, title = "Executive summary", actions, bare = false, clientFacing = false }: { rep: ClientReport; marker?: ReactNode; copyable?: boolean; compact?: boolean; title?: string; actions?: ReactNode; bare?: boolean; clientFacing?: boolean }) {
+  // Clients only ever read next steps a person approved; AI-drafted ones stay with the agency.
+  const steps = clientFacing ? await clientNextStepLines(rep.client.id, rep.client.timezone) : undefined;
+  const auto = withSteps(automaticSummary(rep), steps);
   const heading = `${rep.client.name}: performance summary, ${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })}`;
   const body = wantsAiSummary(rep) ? (
     <Suspense fallback={<SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} pending />}>
-      <AiSummary rep={rep} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} />
+      <AiSummary rep={rep} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} steps={steps} />
     </Suspense>
   ) : (
     <SummaryText summary={auto} heading={heading} copyable={copyable} compact={compact} clientFacing={clientFacing} />

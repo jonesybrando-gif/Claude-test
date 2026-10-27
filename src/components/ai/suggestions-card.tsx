@@ -1,6 +1,6 @@
 import { Sparkles } from "lucide-react";
 import { prisma } from "@/server/db";
-import { aiConfigured, SuggestionsSchema } from "@/server/ai/assistant";
+import { aiConfigured, StoredSuggestionsSchema } from "@/server/ai/assistant";
 import { formatDate, relativeTime } from "@/lib/time";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,9 +10,9 @@ import { AskPanel } from "./ask-panel";
 const PRIORITY = { high: "critical", medium: "warning", low: "neutral" } as const;
 
 /** Staff-only: the latest AI suggestions for a client, with a button to refresh them. `bare` drops the card frame. */
-export async function AiSuggestionsCard({ clientId, query, bare = false }: { clientId: string; query: Record<string, string | undefined>; bare?: boolean }) {
+export async function AiSuggestionsCard({ clientId, query, bare = false, hideList = false }: { clientId: string; query: Record<string, string | undefined>; bare?: boolean; hideList?: boolean }) {
   const latest = await prisma.aiInsight.findFirst({ where: { clientId, kind: "suggestions" }, orderBy: { createdAt: "desc" } });
-  const parsed = latest ? SuggestionsSchema.safeParse(latest.content) : null;
+  const parsed = latest ? StoredSuggestionsSchema.safeParse(latest.content) : null;
   const items = parsed?.success ? parsed.data.suggestions : [];
   const configured = aiConfigured();
   const header = (
@@ -36,7 +36,7 @@ export async function AiSuggestionsCard({ clientId, query, bare = false }: { cli
     <>
       {!configured ? (
         <p className="text-sm text-text-2">The AI assistant is off. To turn it on, add an Anthropic API key as <code className="rounded bg-surface-2 px-1">ANTHROPIC_API_KEY</code> in the server environment. Usage is billed by Anthropic separately.</p>
-      ) : items.length === 0 ? (
+      ) : hideList ? null : items.length === 0 ? (
         <p className="text-sm text-text-3">No suggestions yet. Choose “Generate suggestions” to analyse the selected period.</p>
       ) : (
         <ol className="flex flex-col divide-y divide-border">

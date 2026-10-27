@@ -31,6 +31,8 @@ import { listClientDashboards } from "@/server/dashboards/access";
 import { AdvertisingDetail, CampaignsSection, DataFreshness, hiddenMarker, HistorySection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
 import { AtAGlance } from "@/components/reports/at-a-glance";
 import { SeoTab } from "@/components/seo/seo-tab";
+import { NextStepsSection } from "@/components/next-steps/next-steps-section";
+import { OpportunitiesList } from "@/app/(app)/insights/opportunities";
 import { AnalyticsTab } from "@/components/analytics/analytics-tab";
 
 export const dynamic = "force-dynamic";
@@ -277,6 +279,9 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
       {tab === "reports" && (
         <>
+          <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
+            <WithReport report={full}>{(rep) => <NextStepsSection rep={rep} canEdit={canEdit} />}</WithReport>
+          </Suspense>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { href: keep(`${base}/share`), Icon: Link2, title: "Share link", body: "A link the client opens without signing in." },
@@ -313,8 +318,11 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                 <WithReport report={full}>{(rep) => <ExecutiveSummary rep={rep} copyable bare />}</WithReport>
               </Suspense>
             </section>
-            <div className="border-t border-border pt-5">
-              <AiSuggestionsCard clientId={id} query={sp} bare />
+            <div className="flex flex-col gap-4 border-t border-border pt-5">
+              <AiSuggestionsCard clientId={id} query={sp} bare hideList />
+              <Suspense fallback={<SectionSkeleton cards={1} tallFirst={false} />}>
+                <OpportunitiesList user={user} clientId={id} status={sp.status} clients={[{ id, name: client.name }]} />
+              </Suspense>
             </div>
           </CardContent>
         </Card>
