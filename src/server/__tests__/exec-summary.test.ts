@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { PrismaClient } from "@prisma/client";
 import { setAiClientForTests } from "../ai/assistant";
 import { loadClientReport } from "../client-report";
-import { getExecutiveSummary } from "../exec-summary";
+import { clientFacingSummary, getExecutiveSummary, setSummaryApproval } from "../exec-summary";
 import { saveTemplate } from "../report-templates";
 import { DEFAULT_TEMPLATE } from "@/lib/report-template";
 import { addDays, eachDay, isoToDate, todayInTimeZone } from "@/lib/pacing/dates";
@@ -57,7 +57,7 @@ describe.skipIf(!hasDb)("executive summary (database)", () => {
     expect(a).toEqual({ overview: "AI wrote this.", working: ["Search did well."], notWorking: ["Display spent with no leads."], recommendations: ["Move budget to Search."], nextSteps: ["We'll move budget to Search."], source: "ai" });
     expect(b.overview).toBe("AI wrote this.");
     expect(calls).toBe(1); // concurrent viewers share one request
-    expect(await getExecutiveSummary(rep, { generate: true })).toEqual(a); // served from the cache
+    expect(await getExecutiveSummary(rep, { generate: true })).toMatchObject({ ...a, approved: false }); // served from the cache
     expect(calls).toBe(1);
     // A different comparison is a different summary.
     await getExecutiveSummary(await loadClientReport(clientId, { range: "last_7", compare: "none" }), { generate: true });
@@ -66,6 +66,27 @@ describe.skipIf(!hasDb)("executive summary (database)", () => {
     const later = new Date(Date.now() + 25 * 3600_000);
     await getExecutiveSummary(rep, { generate: true, now: later });
     expect(calls).toBe(3);
+  });
+  it("shows clients AI-written text only after the agency approves it", async () => {
+    const rep = await loadClientReport(clientId, { range: "last_month", compare: "previous_period" });
+    const agency = await getExecutiveSummary(rep, { generate: true });
+    expect(agency.source).toBe("ai");
+    // Not approved yet: clients get the summary built from the figures, and no AI call is made for them.
+    const before = calls;
+    expect(await clientFacingSummary(rep)).toMatchObject({ source: "auto" });
+    expect(calls).toBe(before);
+    const saved = await getExecutiveSummary(rep, { generate: false });
+    expect(saved).toMatchObject({ source: "ai", approved: false });
+    const user = await prisma.user.create({ data: { agencyId, email: `approver-${Date.now()}@example.test`, name: "Approver", role: "AGENCY_ADMIN", passwordHash: "x" } });
+    expect(await setSummaryApproval(clientId, saved.insightId!, user.id, true)).toBe(true);
+    expect(await clientFacingSummary(rep)).toMatchObject({ source: "ai", overview: "AI wrote this." });
+    // Still approved after the day-long cache has expired (a past month keeps its approved wording).
+    expect(await getExecutiveSummary(rep, { generate: false })).toMatchObject({ approved: true });
+    // Withdrawn: back to the automatic summary.
+    await setSummaryApproval(clientId, saved.insightId!, user.id, false);
+    expect(await clientFacingSummary(rep)).toMatchObject({ source: "auto" });
+    // Another client's id can't be approved through this client.
+    expect(await setSummaryApproval("someone-else", saved.insightId!, user.id, true)).toBe(false);
   });
 
   it("falls back to the automatic summary when the AI fails or the layout says so", async () => {

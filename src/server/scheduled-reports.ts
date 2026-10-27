@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "./db";
 import { loadClientReport } from "./client-report";
-import { getExecutiveSummary } from "./exec-summary";
+import { clientFacingSummary } from "./exec-summary";
 import { renderClientReportPdf } from "./pdf/reports";
 import { agencyBrand } from "./pdf/brand";
 import { emailConfigured, sendEmail } from "./email";
@@ -99,7 +99,7 @@ export async function sendScheduledReport(clientId: string, range: ScheduleRange
   const brand = await agencyBrand(client.agencyId);
   // Clients only read next steps the agency approved, in the PDF and the email body alike.
   const steps = await clientNextStepLines(rep.client.id, rep.client.timezone, now);
-  const summary = { ...(await getExecutiveSummary(rep, { generate: true, now })), nextSteps: steps };
+  const summary = { ...(await clientFacingSummary(rep)), nextSteps: steps };
   const pdf = await renderClientReportPdf(rep, brand, { internal: false, executiveSummary: summary, generatedAt: now, clientNextSteps: steps });
   const period = `${rangeLabel(rep.preset, rep.range)} (${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })})`;
   const heading = `${rep.client.name}: performance summary, ${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })}`;

@@ -1,5 +1,6 @@
 import "server-only";
 import { after } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import type { ClientReport } from "./client-report";
 import { aiContextForReport, contextInput } from "./ai/context";
@@ -28,21 +29,73 @@ export const wantsAiSummary = (rep: ClientReport) => rep.template.executiveAi &&
 
 const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
 
-async function cached(rep: ClientReport, now: Date): Promise<ExecutiveSummaryContent | null> {
+type StoredContent = { v?: unknown; compare?: unknown; approvedAt?: unknown; summary?: Partial<Record<keyof ExecutiveSummaryContent, unknown>> };
+
+function parseStored(c: StoredContent, rep: ClientReport): ExecutiveSummaryContent | null {
+  const s = c.summary;
+  if (c.v !== VERSION || c.compare !== compareKey(rep) || !s) return null;
+  if (typeof s.overview === "string" && strings(s.working) && strings(s.notWorking) && strings(s.recommendations)) {
+    return { overview: s.overview, working: s.working, notWorking: s.notWorking, recommendations: s.recommendations, nextSteps: strings(s.nextSteps) ? s.nextSteps : [] };
+  }
+  return null;
+}
+
+/** The latest saved AI summary for this range (kept a day), with its id and whether it's approved for clients. */
+async function cached(rep: ClientReport, now: Date): Promise<{ id: string; approved: boolean; content: ExecutiveSummaryContent } | null> {
   const rows = await prisma.aiInsight.findMany({
     where: { clientId: rep.client.id, kind: KIND, rangeFrom: rep.range.from, rangeTo: rep.range.to, createdAt: { gt: new Date(now.getTime() - TTL_MS) } },
     orderBy: { createdAt: "desc" },
     take: 5,
   });
   for (const r of rows) {
-    const c = r.content as { v?: unknown; compare?: unknown; summary?: Partial<Record<keyof ExecutiveSummaryContent, unknown>> };
-    const s = c.summary;
-    if (c.v !== VERSION || c.compare !== compareKey(rep) || !s) continue;
-    if (typeof s.overview === "string" && strings(s.working) && strings(s.notWorking) && strings(s.recommendations)) {
-      return { overview: s.overview, working: s.working, notWorking: s.notWorking, recommendations: s.recommendations, nextSteps: strings(s.nextSteps) ? s.nextSteps : [] };
-    }
+    const c = r.content as StoredContent;
+    const content = parseStored(c, rep);
+    if (content) return { id: r.id, approved: typeof c.approvedAt === "string", content };
   }
   return null;
+}
+
+/**
+ * The summary clients read (client logins, shared links, client PDFs and
+ * scheduled emails). AI-written text reaches a client only after someone at
+ * the agency approved it; otherwise it's the automatic summary built directly
+ * from the figures. Approved summaries don't expire, so a report for a past
+ * month keeps the wording that was approved. Never calls the AI.
+ */
+export async function clientFacingSummary(rep: ClientReport): Promise<ExecSummary> {
+  if (!rep.template.executiveAi) return automaticSummary(rep);
+  try {
+    const rows = await prisma.aiInsight.findMany({
+      where: { clientId: rep.client.id, kind: KIND, rangeFrom: rep.range.from, rangeTo: rep.range.to },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+    });
+    for (const r of rows) {
+      const c = r.content as StoredContent;
+      if (typeof c.approvedAt !== "string") continue;
+      const content = parseStored(c, rep);
+      if (content) return { ...content, source: "ai" };
+    }
+  } catch (e) {
+    console.error("Executive summary: approved summary lookup failed, using the automatic version", e);
+  }
+  return automaticSummary(rep);
+}
+
+/** Approves (or withdraws approval of) one saved AI summary for client-facing reports. */
+export async function setSummaryApproval(clientId: string, insightId: string, userId: string, approve: boolean): Promise<boolean> {
+  const row = await prisma.aiInsight.findFirst({ where: { id: insightId, clientId, kind: KIND }, select: { content: true } });
+  if (!row) return false;
+  const c = { ...(row.content as Record<string, unknown>) };
+  if (approve) {
+    c.approvedAt = new Date().toISOString();
+    c.approvedById = userId;
+  } else {
+    delete c.approvedAt;
+    delete c.approvedById;
+  }
+  await prisma.aiInsight.update({ where: { id: insightId }, data: { content: c as Prisma.InputJsonValue } });
+  return true;
 }
 
 // Kept on globalThis: Next bundles pages and API routes separately, and the
@@ -99,13 +152,13 @@ export const summaryPending = (key: string) => isQueued(key) || inFlight.has(key
  *    automatic one at once with `pending: true` while the AI version is written
  *    in the background, so a page never waits on the AI.
  */
-export async function getExecutiveSummary(rep: ClientReport, opts: { generate: boolean | "background"; now?: Date }): Promise<ExecSummary & { pending?: boolean }> {
+export async function getExecutiveSummary(rep: ClientReport, opts: { generate: boolean | "background"; now?: Date }): Promise<ExecSummary & { pending?: boolean; insightId?: string; approved?: boolean }> {
   if (!wantsAiSummary(rep)) return automaticSummary(rep);
   const now = opts.now ?? new Date();
   const key = summaryKey(rep);
   try {
     const hit = await cached(rep, now);
-    if (hit) return { ...hit, source: "ai" };
+    if (hit) return { ...hit.content, source: "ai", insightId: hit.id, approved: hit.approved };
     if (!opts.generate) return automaticSummary(rep);
     if (opts.generate === "background") {
       const failed = failedAt.get(key);
