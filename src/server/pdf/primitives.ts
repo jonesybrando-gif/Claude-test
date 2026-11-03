@@ -86,7 +86,8 @@ export function ensureSpace(doc: Doc, needed: number) {
 }
 
 /** Brand bar, header text and page footer on every page (call once at the end). */
-export function decoratePages(doc: Doc, brand: Brand, footerLeft: string) {
+/** `firstPageHeader: false` leaves page 1's top to a report that draws its own header there. */
+export function decoratePages(doc: Doc, brand: Brand, footerLeft: string, opts: { firstPageHeader?: boolean } = {}) {
   const range = doc.bufferedPageRange();
   for (let i = range.start; i < range.start + range.count; i++) {
     doc.switchToPage(i);
@@ -97,7 +98,9 @@ export function decoratePages(doc: Doc, brand: Brand, footerLeft: string) {
     doc.page.margins.bottom = 0;
     doc.rect(0, 0, doc.page.width, 6).fill(brand.color);
     let x = left;
-    if (brand.logo) {
+    if (i === range.start && opts.firstPageHeader === false) {
+      // Page 1 already opens with the report's own header.
+    } else if (brand.logo) {
       try {
         doc.image(brand.logo, left, 18, { fit: [28, 28] });
         x = left + 36;
@@ -105,7 +108,7 @@ export function decoratePages(doc: Doc, brand: Brand, footerLeft: string) {
         /* unsupported image: skip the logo */
       }
     }
-    doc.font("Helvetica-Bold").fontSize(10).fillColor(C.text).text(pdfText(brand.name), x, 22, { width: w / 2, lineBreak: false });
+    if (!(i === range.start && opts.firstPageHeader === false)) doc.font("Helvetica-Bold").fontSize(10).fillColor(C.text).text(pdfText(brand.name), x, 22, { width: w / 2, lineBreak: false });
     if (brand.header) doc.font("Helvetica").fontSize(8).fillColor(C.text3).text(pdfText(brand.header), left + w / 2, 24, { width: w / 2, align: "right", lineBreak: false });
     const fy = doc.page.height - 36;
     doc.moveTo(left, fy - 6).lineTo(left + w, fy - 6).lineWidth(0.5).strokeColor(C.border).stroke();
