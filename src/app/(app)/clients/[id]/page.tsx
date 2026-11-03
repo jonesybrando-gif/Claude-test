@@ -32,7 +32,8 @@ import { ClientFacingDashboards } from "@/components/dashboards/dashboard-sectio
 import { ConnectedDataSection } from "@/components/dashboards/connected-data-section";
 import { listClientDashboards } from "@/server/dashboards/access";
 import { AdvertisingDetail, CampaignsSection, DataFreshness, hiddenMarker, HistorySection, NoAccountsState, NoteSection, PacingSection, PlatformSection, TrendsSection } from "@/components/reports/report-sections";
-import { AtAGlance } from "@/components/reports/at-a-glance";
+import { BudgetCard, CampaignPerformance, DailyCard, ReportBand, ReportKpiTiles, SpendShare, SummaryRow } from "@/components/reports/report-dashboard";
+import { ClientLogo } from "@/components/client-logo";
 import { SeoTab } from "@/components/seo/seo-tab";
 import { NextStepsSection } from "@/components/next-steps/next-steps-section";
 import { OpportunitiesList } from "@/app/(app)/insights/opportunities";
@@ -120,6 +121,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           </nav>
         )}
         <div className="flex items-center gap-1">
+          <ClientLogo name={client.name} logoUrl={client.logoUrl} size="md" className="mr-2" />
           <h1 className="truncate text-2xl font-semibold tracking-tight">{client.name}</h1>
           {staff && <ClientSwitcher clientId={id} clients={switchable.map((c) => ({ value: c.id, label: c.name }))} />}
           {isDemo && <DemoBadge />}
@@ -254,12 +256,24 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           <WithReport report={loadFull()}>
             {(rep) => (
               <>
-                <AtAGlance rep={rep} />
-                <AdvertisingDetail rep={rep} marker={mark("kpis")} editable={canEdit} />
-                <ConnectedDataSection rep={rep} canEdit={canEdit} query={sp} />
-                <ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand-text hover:underline">Open AI Insights</Link>} />
+                {/* The same dashboard the client sees, plus the team's tools (summary approval, KPI editor, pacing detail). */}
+                <SummaryRow
+                  summary={<ExecutiveSummary rep={rep} marker={mark("executive")} copyable compact actions={<Link href={tabHref("insights")} className="text-sm font-medium text-brand-text hover:underline">Open AI Insights</Link>} />}
+                  budget={<BudgetCard rep={rep} />}
+                />
+                <ReportKpiTiles rep={rep} />
                 <NoteSection rep={rep} marker={mark("summary")} />
+                <ReportBand title="Spend and results" note="Day by day, and where the budget went" />
+                <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+                  <DailyCard rep={rep} />
+                  <SpendShare rep={rep} />
+                </div>
+                <ReportBand title="Campaigns" note={rep.cmpRange ? "Change shown against the previous period" : undefined} />
+                <CampaignPerformance rep={rep} />
+                <ConnectedDataSection rep={rep} canEdit={canEdit} query={sp} />
+                <ReportBand title="Budget and report figures" note="Pacing detail and the figures shown in the client's report" />
                 <PacingSection rep={rep} staff basePath={base} query={sp} marker={mark("pacing")} />
+                <AdvertisingDetail rep={rep} marker={mark("kpis")} editable={canEdit} />
               </>
             )}
           </WithReport>
