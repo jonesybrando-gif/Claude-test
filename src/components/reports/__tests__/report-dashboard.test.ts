@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Pure rendering: no database needed.
+vi.mock("@/server/db", () => ({ prisma: {} }));
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ClientReport } from "@/server/client-report";
