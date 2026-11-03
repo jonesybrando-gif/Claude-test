@@ -67,7 +67,7 @@ export async function setupChecklist(agencyId: string): Promise<SetupChecklistSt
     },
     { key: "budgets", title: "Set a monthly budget", body: "Pacing, the Daily Action Center and alerts start here.", href: needsBudget ? `/clients/${needsBudget.id}/budgets` : "/clients", done: clients.some((c) => c.budgets.length > 0) },
     { key: "share", title: "Share your first report", body: "Send a client a live report link or schedule a monthly email.", href: shareClient ? `/clients/${shareClient.id}/share` : "/clients", done: shares + schedules > 0 },
-    { key: "branding", title: "Add your branding", body: "Logo and colour for client reports and shared links.", href: "/settings", done: !!agency.logoUrl || agency.brandColor.toLowerCase() !== "#4f46e5" },
+    { key: "branding", title: "Add your branding", body: "Your logo and colour for the app and report emails. Each client's report shows the client's own logo.", href: "/settings", done: !!agency.logoUrl || agency.brandColor.toLowerCase() !== "#4f46e5" },
     { key: "team", title: "Invite your team", body: "Add account managers and client logins.", href: "/settings/team", done: team > 1 },
   ];
   return { steps, dismissed: !!agency.setupChecklistDismissedAt };

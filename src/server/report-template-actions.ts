@@ -7,6 +7,7 @@ import { prisma } from "./db";
 import { getClientTemplate, resetClientTemplate, saveTemplate } from "./report-templates";
 import { parseKpiOrder, SECTION_KEYS, templateFromForm, withKpis, type SectionKey } from "@/lib/report-template";
 import { isClientGoal } from "@/lib/results";
+import { logoUrlSchema } from "@/lib/logo";
 
 export type TemplateFormState = { ok?: string; errors?: string[] } | undefined;
 
@@ -88,4 +89,19 @@ export async function saveClientGoalAction(clientId: string, _prev: GoalFormStat
   revalidatePath(`/clients/${clientId}`, "layout");
   revalidatePath("/r/[token]", "page");
   return { ok: raw === "" ? "Saved. Marketing Nexus will choose from the data." : "Saved. The report now counts results for this goal." };
+}
+
+export type LogoFormState = { ok?: string; error?: string } | undefined;
+
+/** The client's own logo, shown on their report, shared links and PDF. Empty removes it. */
+export async function saveClientLogoAction(clientId: string, _prev: LogoFormState, form: FormData): Promise<LogoFormState> {
+  const user = await requireClientEdit(clientId);
+  const parsed = logoUrlSchema.safeParse(String(form.get("logoUrl") ?? ""));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "That logo can't be used." };
+  const client = await prisma.client.findUniqueOrThrow({ where: { id: clientId }, select: { agencyId: true } });
+  if (client.agencyId !== user.agencyId) return { error: "Client not found." };
+  await prisma.client.update({ where: { id: clientId }, data: { logoUrl: parsed.data || null } });
+  revalidatePath(`/clients/${clientId}`, "layout");
+  revalidatePath("/r/[token]", "page");
+  return { ok: parsed.data ? "Saved. The client's report now shows this logo." : "Logo removed. The report shows the client's initials." };
 }

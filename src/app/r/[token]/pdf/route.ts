@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { loadClientReport } from "@/server/client-report";
 import { renderClientReportPdf } from "@/server/pdf/reports";
 import { clientFacingSummary } from "@/server/exec-summary";
-import { agencyBrand } from "@/server/pdf/brand";
+import { clientReportBrand } from "@/server/pdf/brand";
 import { resolveShareToken, shareAccessGranted, shareCookieName } from "@/server/share-links";
 import { slug } from "@/lib/csv";
 import { clientNextStepLines } from "@/server/next-steps";
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   if (!link) return NextResponse.redirect(new URL(`/r/${token}`, process.env.APP_URL || req.url));
   if (!shareAccessGranted(link, req.cookies.get(shareCookieName(link.id))?.value)) return NextResponse.redirect(new URL(`/r/${token}`, process.env.APP_URL || req.url));
   const report = await loadClientReport(link.clientId, { range: link.range ?? undefined, compare: link.compare ?? undefined });
-  const pdf = await renderClientReportPdf(report, await agencyBrand(link.client.agencyId), { internal: false, executiveSummary: await clientFacingSummary(report), clientNextSteps: await clientNextStepLines(report.client.id, report.client.timezone) });
+  const pdf = await renderClientReportPdf(report, await clientReportBrand(link.client.agencyId, report.client), { internal: false, executiveSummary: await clientFacingSummary(report), clientNextSteps: await clientNextStepLines(report.client.id, report.client.timezone) });
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",

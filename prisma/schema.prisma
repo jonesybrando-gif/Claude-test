@@ -164,6 +164,8 @@ model Client {
   /// Alert types muted for this client (not raised, shown or emailed; open ones close).
   mutedAlertTypes AlertType[] @default([])
   currency  String  @default("USD") @db.Char(3)
+  /// The client's own logo for their report, shared links and PDF: an https URL or an inline PNG/JPEG data URL (resized to 256 px). Null = initials.
+  logoUrl   String?
   primaryManagerId String?
   primaryManager   User?  @relation("PrimaryManager", fields: [primaryManagerId], references: [id], onDelete: SetNull)
   // Per-client threshold overrides (null = use agency defaults)

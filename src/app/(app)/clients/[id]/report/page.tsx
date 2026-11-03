@@ -4,7 +4,8 @@ import { ChevronLeft } from "lucide-react";
 import { prisma } from "@/server/db";
 import { requireClientEdit } from "@/server/access";
 import { getClientTemplate } from "@/server/report-templates";
-import { resetClientTemplateAction, saveClientGoalAction, saveClientTemplateAction } from "@/server/report-template-actions";
+import { resetClientTemplateAction, saveClientGoalAction, saveClientLogoAction, saveClientTemplateAction } from "@/server/report-template-actions";
+import { ClientLogoForm } from "@/components/reports/client-logo-form";
 import { reportResults } from "@/server/client-report";
 import { GoalForm } from "@/components/reports/goal-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +25,7 @@ export default async function ClientReportBuilderPage({ params, searchParams }: 
   const { reset } = q;
   const back = clientBackHref(id, q, "settings");
   const user = await requireClientEdit(id);
-  const client = await prisma.client.findUniqueOrThrow({ where: { id }, select: { name: true, goal: true } });
+  const client = await prisma.client.findUniqueOrThrow({ where: { id }, select: { name: true, goal: true, logoUrl: true } });
   const [{ template, custom }, rep] = await Promise.all([getClientTemplate(user.agencyId, id), loadClientReport(id, {})]);
   // Real figures for the live preview, for the report's default range.
   const sample: PreviewSample = {
@@ -52,6 +53,15 @@ export default async function ClientReportBuilderPage({ params, searchParams }: 
           <ExportButtons base={`/api/reports/clients/${id}`} internalPdf />
         </div>
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Client logo</CardTitle>
+          <CardDescription>Shown at the top of {client.name}&apos;s report, on shared links and on the PDF, in place of your agency&apos;s branding.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ClientLogoForm name={client.name} logoUrl={client.logoUrl} action={saveClientLogoAction.bind(null, id)} />
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>Goal</CardTitle>

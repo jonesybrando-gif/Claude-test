@@ -51,6 +51,15 @@
   --serious-ink: #9a4220;
   --critical-ink: #a52a2a;
   --info-ink: #1c5cab;
+
+  /* Client report: navy KPI tiles and dark section bands (white text: 13.6:1 and 17.3:1). */
+  --tile: #14304a;
+  --tile-ink: #ffffff;
+  --tile-muted: #c4d2e0;
+  --tile-track: #2b4b69;
+  --band: #17191c;
+  --band-ink: #ffffff;
+  --band-muted: #b9bec6;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -85,6 +94,11 @@
     --serious-ink: #f2a483;
     --critical-ink: #f08a8a;
     --info-ink: #86b6ef;
+    --tile: #1d3a57;
+    --tile-track: #34587b;
+    --band: #2a2a28;
+    --band-ink: #f0efec;
+    --band-muted: #b3b2ab;
   }
 }
 :root[data-theme="dark"] {
@@ -116,6 +130,11 @@
   --serious-ink: #f2a483;
   --critical-ink: #f08a8a;
   --info-ink: #86b6ef;
+  --tile: #1d3a57;
+  --tile-track: #34587b;
+  --band: #2a2a28;
+  --band-ink: #f0efec;
+  --band-muted: #b3b2ab;
 }
 
 @theme inline {
@@ -151,6 +170,13 @@
   --color-serious-ink: var(--serious-ink);
   --color-critical-ink: var(--critical-ink);
   --color-info-ink: var(--info-ink);
+  --color-tile: var(--tile);
+  --color-tile-ink: var(--tile-ink);
+  --color-tile-muted: var(--tile-muted);
+  --color-tile-track: var(--tile-track);
+  --color-band: var(--band);
+  --color-band-ink: var(--band-ink);
+  --color-band-muted: var(--band-muted);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
