@@ -4,7 +4,7 @@ import { userCanViewClient } from "@/server/access";
 import { loadClientReport } from "@/server/client-report";
 import { renderClientReportPdf } from "@/server/pdf/reports";
 import { clientFacingSummary, getExecutiveSummary } from "@/server/exec-summary";
-import { agencyBrand } from "@/server/pdf/brand";
+import { agencyBrand, clientReportBrand } from "@/server/pdf/brand";
 import { slug } from "@/lib/csv";
 import { clientNextStepLines } from "@/server/next-steps";
 
@@ -19,7 +19,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const report = await loadClientReport(id, q);
   // Internal recommendations only for agency staff who ask for them.
   const internal = user.role !== "CLIENT_USER" && q.internal === "1";
-  const pdf = await renderClientReportPdf(report, await agencyBrand(user.agencyId), { internal, executiveSummary: internal ? await getExecutiveSummary(report, { generate: true }) : await clientFacingSummary(report), clientNextSteps: internal ? undefined : await clientNextStepLines(report.client.id, report.client.timezone) });
+  // The client's copy carries the client's logo and name; the internal copy stays agency-branded.
+  const brand = internal ? await agencyBrand(user.agencyId) : await clientReportBrand(user.agencyId, report.client);
+  const pdf = await renderClientReportPdf(report, brand, { internal, executiveSummary: internal ? await getExecutiveSummary(report, { generate: true }) : await clientFacingSummary(report), clientNextSteps: internal ? undefined : await clientNextStepLines(report.client.id, report.client.timezone) });
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",

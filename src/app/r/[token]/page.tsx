@@ -10,7 +10,7 @@ import { SharePasswordForm } from "./password-form";
 import { rangeLabel } from "@/lib/date-ranges";
 import { formatDate } from "@/lib/time";
 import { buttonVariants } from "@/components/ui/button";
-import { DemoBadge } from "@/components/status-badge";
+import { ClientReportHeader } from "@/components/reports/client-report-header";
 import { ClientReportView } from "@/components/reports/client-report-view";
 import { DataFreshness, NoAccountsState } from "@/components/reports/report-sections";
 import { ClientFacingDashboards } from "@/components/dashboards/dashboard-section";
@@ -47,7 +47,7 @@ export default async function SharedReportPage({ params, searchParams }: { param
   }
   const [rep, agency] = await Promise.all([
     loadClientReport(link.clientId, { range: link.range ?? undefined, compare: link.compare ?? undefined }),
-    prisma.agency.findUniqueOrThrow({ where: { id: link.client.agencyId }, select: { name: true, brandColor: true, logoUrl: true, reportHeader: true, reportFooter: true } }),
+    prisma.agency.findUniqueOrThrow({ where: { id: link.client.agencyId }, select: { brandColor: true, reportHeader: true, reportFooter: true } }),
   ]);
   await recordShareView(link.id);
   const { client, preset, range, cmpRange, template } = rep;
@@ -56,37 +56,27 @@ export default async function SharedReportPage({ params, searchParams }: { param
   return (
     <div className="min-h-screen" style={brandStyle(agency.brandColor)}>
       <div className="h-1.5 bg-brand" />
-      <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6">
-          <div className="flex items-center gap-2">
-            {agency.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={agency.logoUrl} alt="" className="h-8 w-8 rounded" />
-            ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded bg-brand text-sm font-bold text-brand-ink">{agency.name.slice(0, 1)}</div>
-            )}
-            <span className="text-sm font-semibold">{agency.name}</span>
-          </div>
-          {agency.reportHeader && <p className="text-xs text-text-2">{agency.reportHeader}</p>}
-        </div>
-      </header>
-      <main className="mx-auto flex max-w-[1400px] flex-col gap-6 px-4 py-6 md:px-6">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight">{client.name}</h1>
-              {isDemo && <DemoBadge />}
-            </div>
-            <p className="text-sm text-text-2">
-              {template.title} · {rangeLabel(preset, range)}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
+      <main className="mx-auto flex max-w-[1400px] flex-col gap-6 px-4 py-6 md:px-6 md:py-8">
+        {/* The client's own logo and name lead; the agency's branding stays off client-facing reports. */}
+        <ClientReportHeader
+          name={client.name}
+          logoUrl={client.logoUrl}
+          kicker={template.title}
+          isDemo={isDemo}
+          period={
+            <>
+              {rangeLabel(preset, range)}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
               {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
-            </p>
-            <div className="mt-1.5"><DataFreshness rep={rep} staff={false} /></div>
-          </div>
-          <a href={`/r/${token}/pdf`} download className={buttonVariants({ variant: "outline" })}>
-            <Download className="h-4 w-4" aria-hidden /> Download PDF
-          </a>
-        </div>
+            </>
+          }
+          below={<DataFreshness rep={rep} staff={false} />}
+          actions={
+            <a href={`/r/${token}/pdf`} download className={buttonVariants({ variant: "outline" })}>
+              <Download className="h-4 w-4" aria-hidden /> Download PDF
+            </a>
+          }
+        />
+        {agency.reportHeader && <p className="-mt-2 text-sm text-text-2">{agency.reportHeader}</p>}
         {/* Only the link client's client-visible dashboards, after the KPI and summary sections. */}
         {client.accounts.length === 0 ? (
           <><NoAccountsState rep={rep} staff={false} /><ClientFacingDashboards dashboards={sharedReportDashboards(link.clientId)} rep={rep} staff={false} basePath={`/r/${token}`} query={{ line: sp.line }} /></>
@@ -95,7 +85,7 @@ export default async function SharedReportPage({ params, searchParams }: { param
         )}
         <footer className="border-t border-border pt-4 text-xs text-text-3">
           {agency.reportFooter && <p className="mb-1">{agency.reportFooter}</p>}
-          <p>Prepared by {agency.name}. Figures are as reported by each ad platform; today&apos;s partial data is excluded.</p>
+          <p>Figures are as reported by each ad platform; today&apos;s partial data is excluded.</p>
         </footer>
       </main>
     </div>

@@ -19,6 +19,7 @@ import { CompactRangeControls, RangeControls } from "@/components/range-controls
 import { ExportButtons, exportHref } from "@/components/export-buttons";
 import { Menu } from "@/components/ui/menu";
 import { ClientReportView } from "@/components/reports/client-report-view";
+import { ClientReportHeader } from "@/components/reports/client-report-header";
 import { ClientVisibilityToggle } from "@/components/reports/visibility-toggle";
 import { ActionButton } from "@/components/action-button";
 import { ChartNoteForm } from "./notes-form";
@@ -166,9 +167,32 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   );
 
   if (!staff) {
+    // Client logins see their own logo and name at the top, never the agency's.
+    const clientHeader = (
+      <ClientReportHeader
+        name={client.name}
+        logoUrl={client.logoUrl}
+        kicker={rep.template.title}
+        isDemo={isDemo}
+        period={
+          <>
+            {rangeLabel(preset, range)}: {formatDate(range.from)} – {formatDate(range.to, { month: "short", day: "numeric", year: "numeric" })}
+            {cmpRange && <> · compared with {formatDate(cmpRange.from)} – {formatDate(cmpRange.to)}</>}
+          </>
+        }
+        below={<DataFreshness rep={rep} staff={false} />}
+        actions={
+          <>
+            <div className="hidden md:block"><RangeControls preset={preset} compare={compareMode} from={range.from} to={range.to} /></div>
+            <div className="md:hidden"><CompactRangeControls label={shortRangeLabel(range.from, range.to)} preset={preset} compare={compareMode} from={range.from} to={range.to} /></div>
+            <ExportButtons base={exportBase} query={sp} />
+          </>
+        }
+      />
+    );
     return (
       <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
-        {header}
+        {clientHeader}
         <Suspense fallback={<SectionSkeleton tiles={6} cards={2} />}>
           <WithReport report={loadFull()}>
             {(rep) => {
@@ -354,7 +378,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               { href: "/integrations", Icon: Database, title: "Connected data sources", body: "Link CallRail, Google Analytics, Search Console, Business Profile and social pages to this client (in Settings › Connections)." },
               { href: keep(`${base}/campaigns`), Icon: ListChecks, title: "Campaigns included", body: "Choose which campaigns count in reports, pacing and alerts." },
               { href: keep(`${base}/budgets`), Icon: Wallet, title: "Budgets", body: "Monthly budgets, how they're split and when pacing warns you." },
-              { href: keep(`${base}/report`), Icon: FileSliders, title: "Report layout & goal", body: "The client's goal, the figures and sections they see, and the default date range." },
+              { href: keep(`${base}/report`), Icon: FileSliders, title: "Report layout, logo & goal", body: "The client's logo and goal, the figures and sections they see, and the default date range." },
               { href: keep(`${base}/rankings`), Icon: Search, title: "Keyword rankings", body: "Daily Google positions for the client's keywords." },
             ].map(({ href, Icon, title, body }) => (
               <Link key={title} href={href} className="flex min-h-10 flex-col gap-1 rounded-xl border border-border bg-surface px-5 py-4 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60">

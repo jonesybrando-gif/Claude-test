@@ -3,7 +3,7 @@ import { prisma } from "./db";
 import { loadClientReport } from "./client-report";
 import { clientFacingSummary } from "./exec-summary";
 import { renderClientReportPdf } from "./pdf/reports";
-import { agencyBrand } from "./pdf/brand";
+import { agencyBrand, clientReportBrand } from "./pdf/brand";
 import { emailConfigured, sendEmail } from "./email";
 import { rangeLabel } from "@/lib/date-ranges";
 import { summaryAsHtml, summaryAsText } from "@/lib/exec-summary";
@@ -100,7 +100,8 @@ export async function sendScheduledReport(clientId: string, range: ScheduleRange
   // Clients only read next steps the agency approved, in the PDF and the email body alike.
   const steps = await clientNextStepLines(rep.client.id, rep.client.timezone, now);
   const summary = { ...(await clientFacingSummary(rep)), nextSteps: steps };
-  const pdf = await renderClientReportPdf(rep, brand, { internal: false, executiveSummary: summary, generatedAt: now, clientNextSteps: steps });
+  // The PDF carries the client's logo and name; the email itself comes from the agency.
+  const pdf = await renderClientReportPdf(rep, await clientReportBrand(client.agencyId, rep.client), { internal: false, executiveSummary: summary, generatedAt: now, clientNextSteps: steps });
   const period = `${rangeLabel(rep.preset, rep.range)} (${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })})`;
   const heading = `${rep.client.name}: performance summary, ${formatDate(rep.range.from)} – ${formatDate(rep.range.to, { month: "short", day: "numeric", year: "numeric" })}`;
   const email = scheduledReportEmail(

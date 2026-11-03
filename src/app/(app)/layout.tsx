@@ -10,12 +10,13 @@ import { CommandPalette, type PaletteItem } from "@/components/command-palette";
 import { MobileShell, NavLinks, type NavItem } from "@/components/app-nav";
 import { NavigationProgress } from "@/components/navigation-progress";
 import { Suspense } from "react";
+import { ClientLogo } from "@/components/client-logo";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const [agency, clients, unread] = await Promise.all([
     prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId }, select: { name: true, brandColor: true, logoUrl: true } }),
-    prisma.client.findMany({ where: visibleClientsWhere(user), select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.client.findMany({ where: visibleClientsWhere(user), select: { id: true, name: true, logoUrl: user.role === "CLIENT_USER" }, orderBy: { name: "asc" } }),
     // Integrator: swap for openAlertIssueCount() from src/server/alerts.ts once merged.
     user.role === "CLIENT_USER" ? Promise.resolve(0) : openAlertIssueCount(user.agencyId, user.id).then((r) => r.issues).catch(() => 0),
   ]);
@@ -58,7 +59,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ]
     : [];
 
-  const brand = (
+  // Client logins are branded as their own business, not the agency.
+  const own = staff ? null : clients.find((c) => c.id === user.clientId) ?? clients[0] ?? null;
+  const brand = own ? (
+    <>
+      <ClientLogo name={own.name} logoUrl={own.logoUrl} size="sm" />
+      <span className="truncate text-sm font-semibold">{own.name}</span>
+    </>
+  ) : (
     <>
       {agency.logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
