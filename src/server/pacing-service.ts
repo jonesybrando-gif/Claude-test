@@ -10,6 +10,7 @@ import { resolveBudgetHierarchy, spendForUnit, spendOutsideCampaignBudgets, type
 import { DEFAULT_THRESHOLDS, needsAttention, type PacingThresholds } from "@/lib/pacing/status";
 import { recommendAction, type Action } from "@/lib/action-center";
 import { isNotConnected } from "@/lib/pacing/connection";
+import { googleAdsSpendCap } from "@/lib/pacing/spend-cap";
 import { formatDate } from "@/lib/time";
 import type { PlatformKey } from "@/lib/platforms";
 import { rollForwardBudgets } from "./budget-rollover";
@@ -20,7 +21,7 @@ export const STALE_AFTER_MS = 26 * 60 * 60 * 1000;
 const clientInclude = {
   primaryManager: { select: { id: true, name: true } },
   // Removed campaigns are left out of pacing, reports and alerts entirely.
-  accounts: { include: { campaigns: { where: { excludedAt: null }, select: { id: true, accountId: true, name: true, status: true } } } },
+  accounts: { include: { campaigns: { where: { excludedAt: null }, select: { id: true, accountId: true, name: true, status: true, platformDailyBudgetMinor: true } } } },
   agency: { select: { thresholdUnder: true, thresholdSlightlyUnder: true, thresholdSlightlyOver: true, thresholdOver: true } },
 } satisfies Prisma.ClientInclude;
 
@@ -153,8 +154,13 @@ function paceUnit(unit: PacingUnit, budget: BudgetWithRevisions, ctx: UnitContex
   const warnings: string[] = [];
 
   // Never pace past the last day every involved account has complete data for.
+  // Retired accounts (replaced or stopped: no connection) never sync again, so
+  // they must not hold the date back; their past spend still counts below.
+  // If every account is retired, fall back to all of them.
+  const live = accts.filter((a) => a.monitored);
+  const dateAccts = live.length ? live : accts;
   let asOf = ctx.yesterday;
-  for (const a of accts) {
+  for (const a of dateAccts) {
     if (!a.dataCompleteThrough) {
       warnings.push(`${a.name}: no reporting data received yet`);
       asOf = addDays(periodStart, -1);
@@ -189,6 +195,14 @@ function paceUnit(unit: PacingUnit, budget: BudgetWithRevisions, ctx: UnitContex
     pauses: (budget.pauses as DateRange[] | null) ?? undefined,
     forecastModel: budget.forecastModel,
     thresholds: ctx.thresholds,
+    spendCapMinor: googleAdsSpendCap(
+      periodStart,
+      periodEnd,
+      accts,
+      ctx.client.accounts
+        .flatMap((a) => a.campaigns)
+        .filter((c) => (unit.scope === "CAMPAIGN" ? unit.campaignIds.includes(c.id) : live.some((a) => a.id === c.accountId))),
+    ),
   });
   const hasEstimatedSpend = ctx.rows.some(
     (r) => r.costIsEstimated && (unit.scope === "CAMPAIGN" ? unit.campaignIds.includes(r.campaignId ?? "") : unit.accountIds.includes(r.accountId)),
@@ -208,9 +222,13 @@ function makeRow(
   hasEstimatedSpend: boolean,
   unbudgetedSpendMinor = 0,
 ): PacingRow {
-  const stale = accts.some((a) => a.stale);
+  // Retired accounts (no connection) are history, not a sync problem: freshness
+  // follows the accounts still being tracked, unless none are.
+  const live = accts.filter((a) => a.monitored);
+  const freshness = live.length ? live : accts;
+  const stale = freshness.some((a) => a.stale);
   const disconnected = accts.some(isAccountDisconnected);
-  const syncs = accts.map((a) => a.lastSuccessfulSyncAt).filter((s): s is string => !!s);
+  const syncs = freshness.map((a) => a.lastSuccessfulSyncAt).filter((s): s is string => !!s);
   const notConnected = isNotConnected(level, accts);
   const action = notConnected
     ? accts.length === 0

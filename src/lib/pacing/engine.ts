@@ -42,6 +42,13 @@ export interface PacingInput {
   pauses?: DateRange[];
   forecastModel?: ForecastModel;
   thresholds?: PacingThresholds;
+  /**
+   * Most the ad platform can charge in the whole period, when known (e.g. Google
+   * Ads bills at most 30.4 × the daily budget in a calendar month). The forecast
+   * is never projected above it, so early-month over-delivery is not reported as
+   * an overspend the platform would never bill.
+   */
+  spendCapMinor?: number;
 }
 
 export interface PacingSeriesPoint {
@@ -218,6 +225,13 @@ export function computePacing(input: PacingInput): PacingResult {
     projected = elapsedDays > 0 ? (actualToDate / elapsedDays) * totalDays : actualToDate;
   }
 
+  // Never forecast more than the platform can bill (but never below what is already spent).
+  const uncappedRemaining = projected - actualToDate;
+  if (asOf && input.spendCapMinor !== undefined && input.spendCapMinor >= 0) {
+    projected = Math.min(projected, Math.max(input.spendCapMinor, actualToDate));
+  }
+  const projectionScale = uncappedRemaining > 0 ? (projected - actualToDate) / uncappedRemaining : 1;
+
   // --- Status --------------------------------------------------------------
   let pacingPct: number | null = null;
   let status: PacingStatus;
@@ -257,8 +271,9 @@ export function computePacing(input: PacingInput): PacingResult {
     let projectedPoint: number | null = null;
     if (asOf && d === asOf) projectedPoint = actualToDate;
     if (asOf && d > asOf) {
-      projectedCum +=
-        ratePerWeight !== null ? ratePerWeight * weights.get(d)! : (projected - actualToDate) / remainingDays;
+      projectedCum += ratePerWeight !== null
+        ? ratePerWeight * weights.get(d)! * projectionScale
+        : (projected - actualToDate) / remainingDays;
       projectedPoint = projectedCum;
     }
     series.push({
